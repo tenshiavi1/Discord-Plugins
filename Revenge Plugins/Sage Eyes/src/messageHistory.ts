@@ -96,7 +96,7 @@ function handleDispatch(args: unknown[]) {
 		const key = getMessageKey(channelId, messageId);
 		const original = getStoredMessage(channelId, messageId) ?? deletedMessages.get(key)?.original;
 		if (!original || shouldIgnore(original.author)) return;
-		if (original.author?.bot && (Number(original.flags) & 64) !== 0) return;
+		if ((Number(original.flags) & 64) !== 0) return;
 		if (!original.content && !original.attachments?.length && !original.embeds?.length) return;
 
 		if (deletedMessages.has(key)) return;
@@ -156,13 +156,14 @@ function createActionRow(
 	destructive = false,
 ) {
 	const icon = getAssetIDByName(iconName);
+	const iconComponent = ActionSheetRow.Icon;
 	return React.createElement(ActionSheetRow, {
 		key: `sage-eyes-${label.toLowerCase().replaceAll(" ", "-")}`,
 		sageEyesActionFor: messageKey,
 		label,
 		subLabel,
 		isDestructive: destructive,
-		...(icon ? { icon: React.createElement(ActionSheetRow.Icon, { source: icon }) } : {}),
+		...(icon && iconComponent ? { icon: React.createElement(iconComponent, { source: icon }) } : {}),
 		onPress,
 	});
 }
