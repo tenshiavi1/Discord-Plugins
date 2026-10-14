@@ -1,29 +1,26 @@
 import { findByProps } from "@vendetta/metro";
 import { instead } from "@vendetta/patcher";
 
-let typingUnpatches: (() => void)[] = [];
+let typingUnpatch: (() => void) | undefined;
+let typingStatusHidden = false;
 
 export function setTypingStatusHidden(enabled: boolean) {
-	for (const unpatch of typingUnpatches.splice(0)) unpatch();
-	if (!enabled) return;
+	typingStatusHidden = enabled;
+	if (typingUnpatch) return;
 
 	const typingActions = findByProps("startTyping", "stopTyping") ?? findByProps("startTyping");
-	if (!typingActions) {
-		console.warn("[Ephemeral Entity] Discord's typing actions were not found; typing status will not be hidden.");
+	if (typeof typingActions?.startTyping !== "function") {
+		console.warn("[Ephemeral Entity] Discord's typing-start action was not found; Silent Typing is unavailable.");
 		return;
 	}
 
-	for (const method of ["startTyping", "stopTyping"]) {
-		if (typeof typingActions[method] === "function") {
-			typingUnpatches.push(instead(method, typingActions, () => {}));
-		}
-	}
-
-	if (typingUnpatches.length === 0) {
-		console.warn("[Ephemeral Entity] Discord's typing actions could not be patched; typing status will not be hidden.");
-	}
+	typingUnpatch = instead("startTyping", typingActions, (args, original) => {
+		if (!typingStatusHidden) return original(...args);
+	});
 }
 
 export function clearTypingStatusPatch() {
-	setTypingStatusHidden(false);
+	typingStatusHidden = false;
+	typingUnpatch?.();
+	typingUnpatch = undefined;
 }

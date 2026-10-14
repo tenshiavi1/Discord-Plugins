@@ -14,9 +14,9 @@ The **Remove tracking parameters from sent URLs** switch is enabled by default. 
 
 The **Enable /leave silent command** switch registers a `/leave silent` command for group DMs. Running it asks Discord to close the current group DM with the `silent=true` request parameter. Discord's server behavior for silent leaving can change independently of the plugin.
 
-The **Hide typing status** switch prevents the client from sending typing-start and typing-stop events while enabled. Both options can be changed independently in the plugin settings.
+The **Silent Typing** switch prevents typing-start events from being sent while enabled and leaves normal typing-stop behavior unchanged. It is enabled by default and can be toggled in the Privacy settings or with the mobile-compatible `/silenttype` command.
 
-These features only change attachment names and message URL text. They do not alter file contents or remove metadata embedded in images, documents, or other files. Review attachments for sensitive information before sharing them.
+File-name anonymization and URL cleaning only change attachment names and message URL text; they do not alter file contents or remove metadata embedded in images, documents, or other files. Silent Typing controls the client's outgoing typing-start events, while `/leave silent` submits a silent-leave request to Discord. Review attachments for sensitive information before sharing them.
 
 ## Source
 

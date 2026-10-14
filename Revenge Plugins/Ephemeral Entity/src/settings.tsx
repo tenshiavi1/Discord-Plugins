@@ -62,8 +62,8 @@ export default function Settings() {
 					onValueChange={(value: boolean) => { storage.enableSilentLeave = value; }}
 				/>
 				<FormSwitchRow
-					label="Hide typing status"
-					subLabel="Prevent Revenge from sending typing-start and typing-stop events while this is enabled."
+					label="Silent Typing"
+					subLabel="Suppress typing-start events while enabled; normal typing-stop behavior is preserved. Toggle here or with /silenttype."
 					value={Boolean(storage.hideTypingStatus)}
 					onValueChange={(value: boolean) => {
 						storage.hideTypingStatus = value;

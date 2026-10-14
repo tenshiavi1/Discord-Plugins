@@ -1,7 +1,7 @@
 import { findByProps } from "@vendetta/metro";
 import { instead } from "@vendetta/patcher";
 import { storage } from "@vendetta/plugin";
-import { registerCommand, unregisterAllCommands } from "@vendetta/commands";
+import { registerCommand } from "@vendetta/commands";
 import { showToast } from "@vendetta/ui/toasts";
 import { anonymizeUploadFiles, METHODS, type AnonymizationMethod } from "./filenames";
 import { clearTrackingUrlsInMessage } from "./urls";
@@ -19,8 +19,15 @@ const defaults = {
 };
 
 const unpatches: (() => void)[] = [];
+const unregisterCommands: (() => void)[] = [];
 const channelStore = findByProps("getChannel");
 const apiUtils = findByProps("getAPIBaseURL", "del");
+
+function setSilentTyping(enabled: boolean) {
+	storage.hideTypingStatus = enabled;
+	setTypingStatusHidden(enabled);
+	showToast(`Silent Typing ${enabled ? "enabled" : "disabled"}.`);
+}
 
 function normalizeSettings() {
 	const method = METHODS.some((option) => option.value === storage.method)
@@ -49,7 +56,7 @@ export default {
 
 		if (typeof channelStore?.getChannel === "function" && typeof apiUtils?.del === "function") {
 			try {
-				registerCommand({
+				unregisterCommands.push(registerCommand({
 					name: "leave silent",
 					description: "Leave the current Group DM silently.",
 					options: [],
@@ -75,12 +82,26 @@ export default {
 							showToast("Failed to leave Group DM.");
 						}
 					},
-				});
+				}));
 			} catch (error) {
 				console.error("[Ephemeral Entity] Could not register the silent-leave command.", error);
 			}
 		} else {
 			console.warn("[Ephemeral Entity] Discord's channel or API module was not found; silent leave is unavailable.");
+		}
+
+		try {
+			unregisterCommands.push(registerCommand({
+				name: "silenttype",
+				displayName: "Silent Typing",
+				description: "Toggle whether your typing status is sent.",
+				options: [],
+				execute: () => {
+					setSilentTyping(!Boolean(storage.hideTypingStatus));
+				},
+			}));
+		} catch (error) {
+			console.error("[Ephemeral Entity] Could not register the silent-typing command.", error);
 		}
 
 		const uploadModule = findByProps("uploadFiles");
@@ -125,7 +146,7 @@ export default {
 	onUnload() {
 		for (const unpatch of unpatches.splice(0)) unpatch();
 		clearTypingStatusPatch();
-		unregisterAllCommands();
+		for (const unregister of unregisterCommands.splice(0)) unregister();
 	},
 	settings: Settings,
 };
