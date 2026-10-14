@@ -1,6 +1,6 @@
 {
     "name": "Oracle's Ledger",
-    "description": "Organize pinned direct messages into categories.",
+    "description": "Organize direct messages into collapsible categories in plugin settings.",
     "authors": [
         {
             "name": "tenshiavi"

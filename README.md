@@ -28,7 +28,7 @@ After GitHub Pages finishes deploying, add this URL in Revenge:
 
 ## Oracle's Ledger
 
-Organizes pinned direct messages into collapsible categories. Long-press a DM to pin it to a category or move/unpin it. Create and manage categories in the plugin settings. Made by tenshiavi.
+Organizes direct messages into collapsible categories in the plugin settings. Add and move conversations from the organizer, and tap a conversation to open it. This works independently of Discord's native DM-list UI. Made by tenshiavi.
 
 Source and plugin metadata are in `Revenge Plugin/Oracle's Ledger`.
 

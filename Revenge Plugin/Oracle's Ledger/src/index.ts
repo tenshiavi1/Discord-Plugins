@@ -1,7 +1,6 @@
 import { storage } from "@vendetta/plugin";
 import { getCategories } from "./data";
 import { patchChannelActions } from "./contextMenu";
-import { patchPrivateChannels } from "./PrivateChannels";
 import Settings from "./settings";
 
 const unpatches: (() => void)[] = [];
@@ -18,7 +17,6 @@ export default {
 			}];
 		}
 
-		unpatches.push(patchPrivateChannels());
 		unpatches.push(patchChannelActions());
 	},
 	onUnload() {
