@@ -1,0 +1,13 @@
+{
+    "name": "Oracle's Ledger",
+    "description": "Organize pinned direct messages into categories.",
+    "authors": [
+        {
+            "name": "tenshiavi"
+        }
+    ],
+    "main": "src/index.ts",
+    "vendetta": {
+        "icon": "ic_pin"
+    }
+}
