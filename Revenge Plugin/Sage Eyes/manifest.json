@@ -1,0 +1,13 @@
+{
+    "name": "Hidden Channels",
+    "description": "Show and inspect hidden channels in Revenge.",
+    "authors": [
+        {
+            "name": "tenshiavi"
+        }
+    ],
+    "main": "src/index.ts",
+    "vendetta": {
+        "icon": "ic_lock"
+    }
+}

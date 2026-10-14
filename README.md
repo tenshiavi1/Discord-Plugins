@@ -16,6 +16,16 @@ After GitHub Pages finishes deploying, add this URL in Revenge:
 
 GitHub Actions builds and publishes the plugin to Pages whenever `main` is updated.
 
+## Sage Eyes (Hidden Channels)
+
+Shows hidden-channel details in Revenge. The plugin credits tenshiavi.
+
+Source and plugin metadata are in `Revenge Plugin/Sage Eyes`.
+
+After GitHub Pages finishes deploying, add this URL in Revenge:
+
+`https://tenshiavi1.github.io/Plugins/Revenge%20Plugin/Sage%20Eyes/`
+
 ## License
 
 The project is released under CC0 1.0 Universal. See [LICENSE](LICENSE).
