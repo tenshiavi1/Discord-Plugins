@@ -12,6 +12,7 @@ const SelectedChannelStore = findByStoreName("SelectedChannelStore");
 const RowHeightModule = findByProps("getPrivateChannelRowHeightWithoutPadding");
 const ConnectedPrivateChannels = findByName("ConnectedPrivateChannels", false);
 const CategoryChannel = findByName("CategoryChannel", false);
+const FastList = findByName("FastList", false);
 const unpatches: (() => void)[] = [];
 let patchedPrototypes = new WeakSet<object>();
 const { View, Text, Pressable } = RN;
@@ -97,7 +98,7 @@ function PinnedPrivateChannelList({ list }: { list: any }) {
 		: React.createElement(View, { style: { minHeight: 32, justifyContent: "center", paddingHorizontal: 16 } },
 			React.createElement(Text, { style: { fontWeight: "600" } }, name));
 
-	return React.createElement(list.type, {
+	return React.createElement(FastList ?? list.type, {
 		...props,
 		sections: [1, props.sections?.[0] ?? 0],
 		renderItem: (sectionIndex: number, itemIndex: number) => {
@@ -131,7 +132,9 @@ export function patchPrivateChannels(): () => void {
 				return;
 			}
 
-			const listIndex = rows.findIndex((row: any) =>
+			const listIndex = rows[2]?.props?.renderItem && rows[2]?.props?.itemSize
+				? 2
+				: rows.findIndex((row: any) =>
 				row?.props?.renderItem && row?.props?.itemSize && Array.isArray(row?.props?.sections),
 			);
 			if (listIndex < 0) {
