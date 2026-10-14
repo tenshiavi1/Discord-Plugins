@@ -12,6 +12,7 @@ const extensions = [".js", ".jsx", ".mjs", ".ts", ".tsx", ".cts", ".mts"];
 const pluginDirectories = [
   ["Revenge Plugin", "Omniscience"],
   ["Revenge Plugin", "Sage Eyes"],
+  ["Revenge Plugin", "Aura Control"],
 ];
 
 for (const pluginParts of pluginDirectories) {

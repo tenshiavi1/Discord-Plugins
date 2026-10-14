@@ -26,6 +26,16 @@ After GitHub Pages finishes deploying, add this URL in Revenge:
 
 `https://tenshiavi1.github.io/Plugins/Revenge%20Plugin/Sage%20Eyes/`
 
+## Aura Control
+
+Creates and publishes a customizable Rich Presence activity from Revenge mobile, including activity type, text, elapsed time, image asset keys, buttons, and party size. Maintained by tenshiavi.
+
+Source and plugin metadata are in `Revenge Plugin/Aura Control`.
+
+After GitHub Pages finishes deploying, add this URL in Revenge:
+
+`https://tenshiavi1.github.io/Plugins/Revenge%20Plugin/Aura%20Control/`
+
 ## License
 
 The project is released under CC0 1.0 Universal. See [LICENSE](LICENSE).

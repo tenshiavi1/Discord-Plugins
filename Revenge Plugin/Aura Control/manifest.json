@@ -1,0 +1,13 @@
+{
+    "name": "Aura Control",
+    "description": "Configure custom Discord Rich Presence from Revenge mobile.",
+    "authors": [
+        {
+            "name": "tenshiavi"
+        }
+    ],
+    "main": "src/index.ts",
+    "vendetta": {
+        "icon": "GameControllerIcon"
+    }
+}
