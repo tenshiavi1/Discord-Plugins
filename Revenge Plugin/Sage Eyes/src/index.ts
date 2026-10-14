@@ -39,20 +39,55 @@ const privateChannelHidingMarker = "2026-02-private-channel-hiding";
 const privateChannelHidingFlags = ["enableObfuscation", "enableIntegrityCheck"];
 
 function disablePrivateChannelObfuscation(value: any, depth = 0, seen = new Set<any>()) {
-	if (value === null || typeof value !== "object" || depth > 4 || seen.has(value)) return value;
+	if (value === null || (typeof value !== "object" && typeof value !== "function") || depth > 8 || seen.has(value)) return value;
 	seen.add(value);
 
 	for (const flag of privateChannelHidingFlags) {
+		const descriptor = Object.getOwnPropertyDescriptor(value, flag);
+		if (descriptor?.value !== true && !descriptor?.get) continue;
+
 		try {
-			if (value[flag] === true) value[flag] = false;
-		} catch {}
+			if (descriptor.configurable) {
+				Object.defineProperty(value, flag, { configurable: true, enumerable: descriptor.enumerable, writable: true, value: false });
+			} else if (descriptor.writable) {
+				value[flag] = false;
+			} else {
+				console.warn(`[Sage Eyes] ${flag} is not writable.`);
+			}
+		} catch (error) {
+			console.warn(`[Sage Eyes] Could not disable ${flag}.`, error);
+		}
 	}
 
-	for (const child of Object.values(value)) {
-		disablePrivateChannelObfuscation(child, depth + 1, seen);
+	for (const key of Reflect.ownKeys(value)) {
+		const descriptor = Object.getOwnPropertyDescriptor(value, key);
+		if (descriptor && "value" in descriptor) {
+			disablePrivateChannelObfuscation(descriptor.value, depth + 1, seen);
+		}
 	}
 
 	return value;
+}
+
+function patchObfuscationMethod(method: string, module: any) {
+	const originalMethod = module[method];
+	if (typeof originalMethod !== "function") return;
+
+	const source = Function.prototype.toString.call(originalMethod);
+	const isObfuscationMethod = source.includes(privateChannelHidingMarker)
+		|| privateChannelHidingFlags.every((flag) => source.includes(flag));
+	if (!isObfuscationMethod) return;
+
+	unpatches.push(instead(method, module, (args, original) => {
+		const result = original(...args.map((arg) => disablePrivateChannelObfuscation(arg)));
+		const normalize = (value: any) => {
+			if (value === true && isObfuscationMethod) return false;
+			return disablePrivateChannelObfuscation(value);
+		};
+
+		if (result && typeof result.then === "function") return result.then(normalize);
+		return normalize(result);
+	}));
 }
 
 function patchPrivateChannelObfuscation() {
@@ -75,19 +110,11 @@ function patchPrivateChannelObfuscation() {
 	let patchedMethods = 0;
 	if (sourceModule && (typeof sourceModule === "object" || typeof sourceModule === "function")) {
 		disablePrivateChannelObfuscation(sourceModule);
-		for (const [method, value] of Object.entries(sourceModule)) {
-			if (typeof value !== "function") continue;
-			const source = Function.prototype.toString.call(value);
-			if (!source.includes(privateChannelHidingMarker) && !privateChannelHidingFlags.every((flag) => source.includes(flag))) continue;
-
-			unpatches.push(instead(method, sourceModule, (args, original) => {
-				const result = original(...args.map((arg) => disablePrivateChannelObfuscation(arg)));
-				if (result && typeof result.then === "function") {
-					return result.then((resolved: any) => disablePrivateChannelObfuscation(resolved));
-				}
-				return disablePrivateChannelObfuscation(result);
-			}));
-			patchedMethods++;
+		for (const method of Reflect.ownKeys(sourceModule)) {
+			if (typeof method !== "string") continue;
+			const previousUnpatchCount = unpatches.length;
+			patchObfuscationMethod(method, sourceModule);
+			if (unpatches.length > previousUnpatchCount) patchedMethods++;
 		}
 	}
 
@@ -97,12 +124,22 @@ function patchPrivateChannelObfuscation() {
 	}
 	if (typeof guildChannelStore?.getChannels === "function") {
 		unpatches.push(instead("getChannels", guildChannelStore, (args, original) => {
-			return original(args[0], true, ...args.slice(2));
+			const normalizedArgs = args.map((arg) => disablePrivateChannelObfuscation(arg));
+			const result = original(normalizedArgs[0], true, ...normalizedArgs.slice(2));
+			if (result && typeof result.then === "function") {
+				return result.then((channels: any) => disablePrivateChannelObfuscation(channels));
+			}
+			return disablePrivateChannelObfuscation(result);
 		}));
 	}
 
+	const channelStore = findByProps("getChannel", "getChannels") || findByProps("getChannel");
+	if (typeof channelStore?.getChannel === "function") {
+		unpatches.push(after("getChannel", channelStore, (_args, channel) => disablePrivateChannelObfuscation(channel)));
+	}
+
 	if (!flagModule && !patchedMethods) {
-		console.warn("[Sage Eyes] Discord's private-channel name protection module was not found.");
+		console.warn("[Sage Eyes] Discord's private-channel name protection module was not found or could not be patched.");
 	}
 }
 
