@@ -126,6 +126,30 @@ function withBackgroundHighlight(content: string, enabled: boolean) {
 	return content.split("\n").map((line) => `> ${line}`).join("\n");
 }
 
+function retainDeletedMessage(
+	event: Record<string, any>,
+	channelId: string,
+	messageId: string,
+	original: MessageRecord,
+) {
+	event.type = "MESSAGE_UPDATE";
+	event.channelId = original.channel_id ?? channelId;
+	const indicator = settings.deletedIndicatorText.trim() || "This message is deleted";
+	const displayContent = settings.minimalisticMode
+		? `${indicator} ${original.content ?? ""}`.trim()
+		: `${indicator}\n${original.content ?? ""}`;
+	event.message = {
+		...original,
+		id: messageId,
+		channel_id: original.channel_id ?? channelId,
+		content: withBackgroundHighlight(displayContent, settings.useBackgroundHighlight),
+		was_deleted: true,
+	};
+	event.optimistic = false;
+	event.sendMessageOptions = {};
+	event.isPushNotification = false;
+}
+
 function handleDispatch(args: unknown[]) {
 	const event = args[0] as Record<string, any> | undefined;
 	if (!event || typeof event.type !== "string" || event.otherPluginBypass) return;
@@ -136,27 +160,20 @@ function handleDispatch(args: unknown[]) {
 		if (typeof channelId !== "string" || typeof messageId !== "string") return;
 
 		const key = getMessageKey(channelId, messageId);
+		const existingRecord = deletedMessages.get(key);
+		if (existingRecord) {
+			if (shouldIgnore(existingRecord.original.author) || (Number(existingRecord.original.flags) & 64) !== 0) return;
+			retainDeletedMessage(event, channelId, messageId, existingRecord.original);
+			return;
+		}
+
 		const original = getStoredMessage(channelId, messageId) ?? deletedMessages.get(key)?.original;
 		if (!original || shouldIgnore(original.author)) return;
 		if ((Number(original.flags) & 64) !== 0) return;
 		if (!original.content && !original.attachments?.length && !original.embeds?.length) return;
 
-		if (deletedMessages.has(key)) return;
 		rememberMessage(deletedMessages, key, { channelId, original });
-		event.type = "MESSAGE_UPDATE";
-		event.channelId = original.channel_id ?? channelId;
-		const indicator = settings.deletedIndicatorText.trim() || "This message is deleted";
-		const displayContent = settings.minimalisticMode
-			? `${indicator} ${original.content ?? ""}`.trim()
-			: `${indicator}\n${original.content ?? ""}`;
-		event.message = {
-			...original,
-			id: messageId,
-			channel_id: original.channel_id ?? channelId,
-			content: withBackgroundHighlight(displayContent, settings.useBackgroundHighlight),
-			was_deleted: true,
-		};
-		event.optimistic = false;
+		retainDeletedMessage(event, channelId, messageId, original);
 		return;
 	}
 
@@ -167,24 +184,30 @@ function handleDispatch(args: unknown[]) {
 	const channelId = message.channel_id ?? event.channelId;
 	const messageId = message.id ?? event.id;
 	if (typeof channelId !== "string" || typeof messageId !== "string") return;
-	const original = getStoredMessage(channelId, messageId);
+	const key = getMessageKey(channelId, messageId);
+	let record = editHistory.get(key);
+	const storedMessage = getStoredMessage(channelId, messageId);
+	const original = record && storedMessage?.was_edited
+		? { ...storedMessage, content: record.currentContent }
+		: storedMessage;
 	if (!original || typeof original.content !== "string" || shouldIgnore(original.author)) return;
 
-	const key = getMessageKey(channelId, messageId);
-	if (original.content === message.content) return;
+	if (!record) {
+		record = {
+			previous: [],
+			currentContent: original.content,
+			currentEditedAt: getMessageTimestamp(original),
+		};
+	}
 
-	const record = editHistory.get(key) ?? {
-		previous: [],
-		currentContent: original.content,
-		currentEditedAt: getMessageTimestamp(original),
-	};
-	if (record.currentContent === message.content) return;
-	record.previous = [...record.previous, {
-		content: record.currentContent,
-		editedAt: record.currentEditedAt,
-	}].slice(-MAX_EDIT_VERSIONS);
-	record.currentContent = message.content;
-	record.currentEditedAt = message.edited_timestamp;
+	if (record.currentContent !== message.content) {
+		record.previous = [...record.previous, {
+			content: record.currentContent,
+			editedAt: record.currentEditedAt,
+		}].slice(-MAX_EDIT_VERSIONS);
+		record.currentContent = message.content;
+		record.currentEditedAt = message.edited_timestamp;
+	}
 	rememberMessage(editHistory, key, record);
 
 	const previousVersions = record.previous.map(({ content, editedAt }) => {
