@@ -26,6 +26,7 @@ export const TIMESTAMP_MODES = [
 
 const SOCKET_ID = "AuraControl@tenshiavi";
 const PROCESS_ID = 1616;
+const DEFAULT_APPLICATION_ID = "896771305108553788";
 const MAX_TEXT_LENGTH = 128;
 const dispatcher = FluxDispatcher ?? findByProps("dispatch", "subscribe");
 const applicationAssets = findByProps("fetchAssetIds");
@@ -104,9 +105,6 @@ export function validateConfiguration(config: ActivityConfiguration): string[] {
 	if ((partySize || partyMaxSize) && (!partySize || !partyMaxSize || partySize > partyMaxSize)) {
 		errors.push("Enter both party sizes, and make sure the current size does not exceed the maximum.");
 	}
-	if ((config.largeImageKey || config.smallImageKey || config.buttonOneLabel || config.buttonTwoLabel) && !config.applicationId) {
-		errors.push("An Application ID is required to use image asset keys or buttons.");
-	}
 	if (config.timestampMode === "custom" && !parseDate(config.timestampCustomStart)) {
 		errors.push("Enter a valid custom timestamp start using YYYY-MM-DD HH:MM.");
 	}
@@ -129,7 +127,8 @@ export async function createActivity(config: ActivityConfiguration): Promise<Rec
 		type: config.activityType,
 		flags: 1,
 	};
-	if (config.applicationId) activity.application_id = config.applicationId;
+	const applicationId = config.applicationId || DEFAULT_APPLICATION_ID;
+	activity.application_id = applicationId;
 	if (config.details) activity.details = config.details;
 	if (config.detailsUrl) activity.details_url = config.detailsUrl;
 	if (config.state) activity.state = config.state;
@@ -140,10 +139,10 @@ export async function createActivity(config: ActivityConfiguration): Promise<Rec
 	if (timestamp) activity.timestamps = timestamp;
 
 	const assets: Record<string, string> = {};
-	if (config.largeImageKey) assets.large_image = await resolveAssetKey(config.largeImageKey, config.applicationId);
+	if (config.largeImageKey) assets.large_image = await resolveAssetKey(config.largeImageKey, applicationId);
 	if (config.largeImageText) assets.large_text = config.largeImageText;
 	if (config.largeImageUrl) assets.large_url = config.largeImageUrl;
-	if (config.smallImageKey) assets.small_image = await resolveAssetKey(config.smallImageKey, config.applicationId);
+	if (config.smallImageKey) assets.small_image = await resolveAssetKey(config.smallImageKey, applicationId);
 	if (config.smallImageText) assets.small_text = config.smallImageText;
 	if (config.smallImageUrl) assets.small_url = config.smallImageUrl;
 	if (Object.keys(assets).length > 0) activity.assets = assets;

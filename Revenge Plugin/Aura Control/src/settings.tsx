@@ -85,7 +85,10 @@ export default function Settings() {
 	return (
 		<RN.ScrollView style={{ flex: 1 }} contentContainerStyle={{ paddingBottom: 24 }}>
 			<FormSection title="Application" titleStyleType="no_border">
-				<TextSetting label="Application ID" storageKey="applicationId" placeholder="Discord Developer Portal application ID" limit={21} />
+				<TextSetting label="Application ID (optional)" storageKey="applicationId" placeholder="Defaults to Discord-CustomRP's public application" limit={21} />
+				<RN.Text style={{ color: "#b5bac1", paddingHorizontal: 16, paddingTop: 8 }}>
+					Leave blank to connect with the public default application. Enter your own ID to use assets uploaded to your application.
+				</RN.Text>
 				<TextSetting label="Name" storageKey="applicationName" />
 			</FormSection>
 			<FormSection title="Activity type" titleStyleType="no_border">
