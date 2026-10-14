@@ -1,5 +1,5 @@
 import { createHash } from "node:crypto";
-import { mkdir, readFile, writeFile } from "node:fs/promises";
+import { copyFile, mkdir, readFile, writeFile } from "node:fs/promises";
 import { extname, resolve } from "node:path";
 
 import commonjs from "@rollup/plugin-commonjs";
@@ -9,16 +9,12 @@ import { rollup } from "rollup";
 import esbuild from "rollup-plugin-esbuild";
 
 const extensions = [".js", ".jsx", ".mjs", ".ts", ".tsx", ".cts", ".mts"];
-const pluginDirectories = [
-  ["Revenge Plugin", "Omniscience"],
-  ["Revenge Plugin", "Sage Eyes"],
-  ["Revenge Plugin", "Aura Control"],
-  ["Revenge Plugin", "Ephemeral Entity"],
-];
+const pluginDirectories = ["Omniscience", "Sage Eyes", "Aura Control", "Ephemeral Entity"];
 
-for (const pluginParts of pluginDirectories) {
-  const pluginPath = resolve(...pluginParts);
-  const outputPath = resolve("dist", ...pluginParts);
+for (const pluginName of pluginDirectories) {
+  const pluginPath = resolve("Revenge Plugins", pluginName);
+  const outputPath = resolve("dist", "Revenge Plugins", pluginName);
+  const legacyOutputPath = resolve("dist", "Revenge Plugin", pluginName);
   const manifestPath = resolve(pluginPath, "manifest.json");
   const manifest = JSON.parse(await readFile(manifestPath, "utf8"));
 
@@ -76,7 +72,13 @@ for (const pluginParts of pluginDirectories) {
 
   manifest.main = "index.js";
   manifest.hash = createHash("sha256").update(await readFile(builtEntry)).digest("hex");
-  await writeFile(resolve(outputPath, "manifest.json"), JSON.stringify(manifest));
+  const builtManifest = JSON.stringify(manifest);
+  await writeFile(resolve(outputPath, "manifest.json"), builtManifest);
+
+  // Keep existing Revenge integration URLs working after the source tree is reorganized.
+  await mkdir(legacyOutputPath, { recursive: true });
+  await copyFile(builtEntry, resolve(legacyOutputPath, "index.js"));
+  await writeFile(resolve(legacyOutputPath, "manifest.json"), builtManifest);
 
   console.log(`Built ${manifest.name} to ${outputPath}`);
 }

@@ -1,51 +1,35 @@
-# Plugins
+# Plugins by tenshiavi
 
-Revenge plugins maintained by tenshiavi.
+This repository groups plugins by client platform.
 
-## Omniscience
+## Revenge Plugins
 
-Tracks configured words in Discord messages and sends notifications to a channel or webhook.
+Mobile plugins compatible with Revenge:
 
-Source and plugin metadata are in `Revenge Plugin/Omniscience`.
+- [Omniscience](./Revenge%20Plugins/Omniscience/README.md) — Track configured keywords and optionally notify a channel or webhook.
+- [Sage Eyes](./Revenge%20Plugins/Sage%20Eyes/README.md) — Show and inspect hidden or obscured channels.
+- [Aura Control](./Revenge%20Plugins/Aura%20Control/README.md) — Configure a custom Rich Presence.
+- [Ephemeral Entity](./Revenge%20Plugins/Ephemeral%20Entity/README.md) — Anonymize attachment filenames and optionally clean tracking parameters from sent URLs.
 
-## Install
+Add a plugin's integration URL in Revenge:
 
-After GitHub Pages finishes deploying, add this URL in Revenge:
+| Plugin | Integration URL |
+| --- | --- |
+| Omniscience | `https://tenshiavi1.github.io/Plugins/Revenge%20Plugins/Omniscience/` |
+| Sage Eyes | `https://tenshiavi1.github.io/Plugins/Revenge%20Plugins/Sage%20Eyes/` |
+| Aura Control | `https://tenshiavi1.github.io/Plugins/Revenge%20Plugins/Aura%20Control/` |
+| Ephemeral Entity | `https://tenshiavi1.github.io/Plugins/Revenge%20Plugins/Ephemeral%20Entity/` |
 
-`https://tenshiavi1.github.io/Plugins/Revenge%20Plugin/Omniscience/`
+The previous `Revenge%20Plugin` integration URLs remain available for compatibility.
 
-GitHub Actions builds and publishes the plugin to Pages whenever `main` is updated.
+## Vencord Plugins
 
-## Sage Eyes
+The [`Vencord Plugins`](./Vencord%20Plugins/README.md) folder is reserved for desktop Vencord plugins and their documentation. These will be maintained separately from the Revenge mobile build.
 
-Shows hidden channels in Revenge, including channels omitted by the channel-list store and names obscured by Discord's private-channel protections. Selecting a hidden channel can show its details before opening it. The plugin credits tenshiavi.
+## Build and deployment
 
-Source and plugin metadata are in `Revenge Plugin/Sage Eyes`.
-
-After GitHub Pages finishes deploying, add this URL in Revenge:
-
-`https://tenshiavi1.github.io/Plugins/Revenge%20Plugin/Sage%20Eyes/`
-
-## Aura Control
-
-Creates and publishes a customizable Rich Presence activity from Revenge mobile, including activity type, text, elapsed time, image asset keys, buttons, and party size. Maintained by tenshiavi.
-
-Source and plugin metadata are in `Revenge Plugin/Aura Control`.
-
-After GitHub Pages finishes deploying, add this URL in Revenge:
-
-`https://tenshiavi1.github.io/Plugins/Revenge%20Plugin/Aura%20Control/`
-
-## Ephemeral Entity
-
-Anonymizes file names before uploads and removes common tracking parameters from sent URLs in Revenge mobile. Choose random characters, a consistent replacement name, or a timestamp while retaining the original file extension. URL cleaning is separately toggleable. Maintained by tenshiavi.
-
-Source and plugin metadata are in `Revenge Plugin/Ephemeral Entity`.
-
-After GitHub Pages finishes deploying, add this URL in Revenge:
-
-`https://tenshiavi1.github.io/Plugins/Revenge%20Plugin/Ephemeral%20Entity/`
+The root build script bundles Revenge plugins, and GitHub Actions publishes them to GitHub Pages after changes to `main`. Vencord plugins are not included in the Revenge bundle build.
 
 ## License
 
-The project is released under CC0 1.0 Universal. See [LICENSE](LICENSE).
+The project is released under CC0 1.0 Universal. See [LICENSE](./LICENSE).
