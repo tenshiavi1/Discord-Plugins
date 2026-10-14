@@ -8,6 +8,34 @@ import { clearMessageHistory, updateMessageHistorySettings } from "./messageHist
 
 const { FormRow, FormSection, FormSwitchRow } = Forms;
 
+function TextSetting({ label, value, placeholder, onChangeText }: {
+	label: string;
+	value: string;
+	placeholder: string;
+	onChangeText: (value: string) => void;
+}) {
+	return (
+		<RN.View style={{ paddingHorizontal: 16, paddingVertical: 8 }}>
+			<RN.Text style={{ color: "#b5bac1", fontSize: 14, fontWeight: "600", marginBottom: 6 }}>
+				{label}
+			</RN.Text>
+			<RN.TextInput
+				value={value}
+				placeholder={placeholder}
+				placeholderTextColor="#949ba4"
+				onChangeText={onChangeText}
+				style={{
+					color: "#f2f3f5",
+					backgroundColor: "#1e1f22",
+					borderRadius: 8,
+					paddingHorizontal: 12,
+					paddingVertical: 10,
+				}}
+			/>
+		</RN.View>
+	);
+}
+
 export function Settings() {
 	useProxy(storage);
 	return (
@@ -28,9 +56,9 @@ export function Settings() {
 					value={storage.showPopup}
 				/>
 			</FormSection>
-			<FormSection title="Message history" titleStyleType="no_border">
+			<FormSection title="General Logger" titleStyleType="no_border">
 				<FormSwitchRow
-					label="Keep deleted message logs"
+					label="Log deleted messages"
 					subLabel="Show locally cached deleted messages in chat. Long-press a log and choose Remove Deleted Message to dismiss it in one action."
 					value={Boolean(storage.keepDeletedMessages)}
 					onValueChange={(value: boolean) => {
@@ -39,7 +67,7 @@ export function Settings() {
 					}}
 				/>
 				<FormSwitchRow
-					label="Keep edit history"
+					label="Log edited messages"
 					subLabel="Append earlier text to edited messages. Long-press a message and choose Remove Edit History to restore its current text."
 					value={Boolean(storage.keepEditHistory)}
 					onValueChange={(value: boolean) => {
@@ -75,9 +103,61 @@ export function Settings() {
 					}}
 				/>
 			</FormSection>
-			{Array.isArray(storage.ignoredUserIds) && storage.ignoredUserIds.length > 0 && (
-				<FormSection title={`Ignored users (${storage.ignoredUserIds.length})`} titleStyleType="no_border">
-					{storage.ignoredUserIds.map((userId: string) => (
+			<FormSection title="Styling & Appearance" titleStyleType="no_border">
+				<FormSwitchRow
+					label="Minimalistic mode"
+					subLabel="Use compact one-line deleted and edit-history labels."
+					value={Boolean(storage.minimalisticMode)}
+					onValueChange={(value: boolean) => {
+						storage.minimalisticMode = value;
+						updateMessageHistorySettings({ minimalisticMode: value });
+					}}
+				/>
+				<FormSwitchRow
+					label="Use background highlight"
+					subLabel="Render retained deleted-message content as a quote-style highlighted block."
+					value={Boolean(storage.useBackgroundHighlight)}
+					onValueChange={(value: boolean) => {
+						storage.useBackgroundHighlight = value;
+						updateMessageHistorySettings({ useBackgroundHighlight: value });
+					}}
+				/>
+				<FormSwitchRow
+					label="Add timestamp for edits"
+					subLabel="Show a relative timestamp beside each captured version."
+					value={Boolean(storage.timestampForEdits)}
+					onValueChange={(value: boolean) => {
+						storage.timestampForEdits = value;
+						updateMessageHistorySettings({ timestampForEdits: value });
+					}}
+				/>
+			</FormSection>
+			<FormSection title="Custom Buffers" titleStyleType="no_border">
+				<TextSetting
+					label="Deleted indicator text"
+					value={String(storage.deletedIndicatorText ?? "This message is deleted")}
+					placeholder="This message is deleted"
+					onChangeText={(value) => {
+						storage.deletedIndicatorText = value;
+						updateMessageHistorySettings({ deletedIndicatorText: value });
+					}}
+				/>
+				<TextSetting
+					label="Edited prefix tag"
+					value={String(storage.editedPrefixTag ?? "[ EDITED ]")}
+					placeholder="[ EDITED ]"
+					onChangeText={(value) => {
+						storage.editedPrefixTag = value;
+						updateMessageHistorySettings({ editedPrefixTag: value });
+					}}
+				/>
+			</FormSection>
+			<FormSection
+				title={`Ignored Users (${Array.isArray(storage.ignoredUserIds) ? storage.ignoredUserIds.length : 0})`}
+				titleStyleType="no_border"
+			>
+				{Array.isArray(storage.ignoredUserIds) && storage.ignoredUserIds.length > 0
+					? storage.ignoredUserIds.map((userId: string) => (
 						<FormRow
 							key={userId}
 							label={`User ${userId}`}
@@ -97,9 +177,9 @@ export function Settings() {
 								</RN.TouchableOpacity>
 							}
 						/>
-					))}
-				</FormSection>
-			)}
+					))
+					: <FormRow label="No users currently ignored." />}
+			</FormSection>
 		</RN.ScrollView>
 	);
 }

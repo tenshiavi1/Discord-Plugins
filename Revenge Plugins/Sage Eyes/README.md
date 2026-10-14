@@ -17,10 +17,14 @@ Sage Eyes changes client-side display and navigation behavior only. It does not 
 
 - **Show Lock Icon** adds or removes the hidden-channel indicator.
 - **Show Popup on Hidden Channels** controls the confirmation and information popup before opening a hidden channel.
-- **Keep deleted message logs** toggles deleted-message retention.
-- **Keep edit history** toggles inline display of earlier message content.
+- **Log deleted messages** toggles deleted-message retention.
+- **Log edited messages** toggles inline display of earlier message content.
 - **Ignore bot messages** and **Ignore your messages** skip those messages during history capture.
-- **Ignored users** lists users excluded through their profile menu and provides a Remove action for each.
+- **Minimalistic mode** selects compact one-line labels instead of the expanded multi-line history layout.
+- **Use background highlight** formats deleted-message logs as quote-style highlighted blocks.
+- **Add timestamp for edits** shows relative timestamps for captured versions.
+- **Custom Buffers** lets you edit the deleted indicator text and edited prefix tag.
+- **Ignored Users** lists users excluded through their profile menu and provides a Remove action for each.
 - **Clear message-history tracking** forgets retained edit versions and deleted-message records. Content already applied to the current channel's message store may remain visible until that channel is reloaded.
 
 Long-press a retained deleted log and choose **Remove Deleted Message** to remove it with one action. Long-press an edited message and choose **Remove Edit History** to show only its current text again. These actions are distinct from Discord's ephemeral-message dismissal; Sage Eyes does not mark its history rows as ephemeral.

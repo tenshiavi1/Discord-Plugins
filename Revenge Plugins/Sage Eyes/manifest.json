@@ -1,6 +1,6 @@
 {
     "name": "Sage Eyes",
-    "description": "Inspect hidden channels, retain deleted messages and edit history, and manage message logs with long-press actions.",
+    "description": "Inspect hidden channels and configure deleted-message and edit-history logs, styling, and cleanup actions.",
     "authors": [
         {
             "name": "tenshiavi"

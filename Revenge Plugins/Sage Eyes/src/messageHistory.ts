@@ -11,6 +11,7 @@ const messageStore = findByProps("getMessage", "getMessages");
 const actionSheet = findByProps("openLazy", "hideActionSheet");
 const ActionSheetRow = findByProps("ActionSheetRow")?.ActionSheetRow;
 const UserStore = findByStoreName("UserStore");
+const snowflakeUtils = findByProps("extractTimestamp");
 const PROFILE_MENU_NAMES = ["UserProfileOverflowMenu", "BotUserProfileOverflowMenu"];
 const MAX_RETAINED_MESSAGES = 500;
 const MAX_EDIT_VERSIONS = 10;
@@ -27,8 +28,9 @@ type MessageRecord = {
 };
 
 type EditRecord = {
-	previous: string[];
+	previous: { content: string; editedAt?: string | null }[];
 	currentContent: string;
+	currentEditedAt?: string | null;
 };
 
 type DeletedRecord = {
@@ -42,6 +44,11 @@ type MessageHistorySettings = {
 	ignoreBotMessages: boolean;
 	ignoreOwnMessages: boolean;
 	ignoredUserIds: string[];
+	minimalisticMode: boolean;
+	useBackgroundHighlight: boolean;
+	timestampForEdits: boolean;
+	deletedIndicatorText: string;
+	editedPrefixTag: string;
 };
 
 const deletedMessages = new Map<string, DeletedRecord>();
@@ -54,6 +61,11 @@ let settings: MessageHistorySettings = {
 	ignoreBotMessages: false,
 	ignoreOwnMessages: false,
 	ignoredUserIds: [],
+	minimalisticMode: true,
+	useBackgroundHighlight: false,
+	timestampForEdits: false,
+	deletedIndicatorText: "This message is deleted",
+	editedPrefixTag: "[ EDITED ]",
 };
 
 function getMessageKey(channelId: string, messageId: string) {
@@ -84,6 +96,36 @@ function shouldIgnore(author: MessageRecord["author"]) {
 	return settings.ignoredUserIds.includes(author.id ?? "");
 }
 
+function getRelativeTimestamp(value?: string | null) {
+	if (!value) return "time unknown";
+	const timestamp = Date.parse(value);
+	if (!Number.isFinite(timestamp)) return "time unknown";
+	const elapsedSeconds = Math.max(0, Math.floor((Date.now() - timestamp) / 1000));
+	if (elapsedSeconds < 60) return "just now";
+	if (elapsedSeconds < 3600) return `${Math.floor(elapsedSeconds / 60)}m ago`;
+	if (elapsedSeconds < 86400) return `${Math.floor(elapsedSeconds / 3600)}h ago`;
+	return `${Math.floor(elapsedSeconds / 86400)}d ago`;
+}
+
+function getMessageTimestamp(message: MessageRecord) {
+	if (typeof message.edited_timestamp === "string") return message.edited_timestamp;
+	if (typeof message.id !== "string" || typeof snowflakeUtils?.extractTimestamp !== "function") return null;
+	try {
+		const timestamp = snowflakeUtils.extractTimestamp(message.id);
+		if (timestamp instanceof Date) return timestamp.toISOString();
+		if (typeof timestamp === "number" && Number.isFinite(timestamp)) return new Date(timestamp).toISOString();
+		if (typeof timestamp === "string" && Number.isFinite(Date.parse(timestamp))) return timestamp;
+	} catch (error) {
+		console.warn("[Sage Eyes] Could not determine a message timestamp.", error);
+	}
+	return null;
+}
+
+function withBackgroundHighlight(content: string, enabled: boolean) {
+	if (!enabled) return content;
+	return content.split("\n").map((line) => `> ${line}`).join("\n");
+}
+
 function handleDispatch(args: unknown[]) {
 	const event = args[0] as Record<string, any> | undefined;
 	if (!event || typeof event.type !== "string" || event.otherPluginBypass) return;
@@ -103,11 +145,15 @@ function handleDispatch(args: unknown[]) {
 		rememberMessage(deletedMessages, key, { channelId, original });
 		event.type = "MESSAGE_UPDATE";
 		event.channelId = original.channel_id ?? channelId;
+		const indicator = settings.deletedIndicatorText.trim() || "This message is deleted";
+		const displayContent = settings.minimalisticMode
+			? `${indicator} ${original.content ?? ""}`.trim()
+			: `${indicator}\n${original.content ?? ""}`;
 		event.message = {
 			...original,
 			id: messageId,
 			channel_id: original.channel_id ?? channelId,
-			content: `Deleted message\n${original.content ?? ""}`,
+			content: withBackgroundHighlight(displayContent, settings.useBackgroundHighlight),
 			was_deleted: true,
 		};
 		event.optimistic = false;
@@ -127,16 +173,35 @@ function handleDispatch(args: unknown[]) {
 	const key = getMessageKey(channelId, messageId);
 	if (original.content === message.content) return;
 
-	const record = editHistory.get(key) ?? { previous: [], currentContent: original.content };
+	const record = editHistory.get(key) ?? {
+		previous: [],
+		currentContent: original.content,
+		currentEditedAt: getMessageTimestamp(original),
+	};
 	if (record.currentContent === message.content) return;
-	record.previous = [...record.previous, record.currentContent].slice(-MAX_EDIT_VERSIONS);
+	record.previous = [...record.previous, {
+		content: record.currentContent,
+		editedAt: record.currentEditedAt,
+	}].slice(-MAX_EDIT_VERSIONS);
 	record.currentContent = message.content;
+	record.currentEditedAt = message.edited_timestamp;
 	rememberMessage(editHistory, key, record);
 
+	const previousVersions = record.previous.map(({ content, editedAt }) => {
+		const timestamp = settings.timestampForEdits ? ` (${getRelativeTimestamp(editedAt)})` : "";
+		return `${content}${timestamp}`;
+	});
+	const currentTimestamp = settings.timestampForEdits
+		? ` (${getRelativeTimestamp(record.currentEditedAt)})`
+		: "";
+	const prefix = settings.editedPrefixTag.trim() || "[ EDITED ]";
+	const displayContent = settings.minimalisticMode
+		? `${prefix} ${[...previousVersions, `${message.content}${currentTimestamp}`].join(" | ")}`
+		: `${prefix}\n${previousVersions.join("\n\n---\n\n")}\n\nCurrent version\n${message.content}${currentTimestamp}`;
 	event.message = {
 		...original,
 		...message,
-		content: `Edited message history\n${record.previous.join("\n\n---\n\n")}\n\nCurrent version\n${message.content}`,
+		content: displayContent,
 		was_edited: true,
 	};
 }
@@ -325,6 +390,11 @@ export function initializeMessageHistory(pluginSettings: {
 	ignoreBotMessages?: boolean;
 	ignoreOwnMessages?: boolean;
 	ignoredUserIds?: unknown;
+	minimalisticMode?: boolean;
+	useBackgroundHighlight?: boolean;
+	timestampForEdits?: boolean;
+	deletedIndicatorText?: string;
+	editedPrefixTag?: string;
 }): boolean {
 	settings = {
 		keepDeletedMessages: pluginSettings.keepDeletedMessages,
@@ -334,6 +404,11 @@ export function initializeMessageHistory(pluginSettings: {
 		ignoredUserIds: Array.isArray(pluginSettings.ignoredUserIds)
 			? pluginSettings.ignoredUserIds.filter((id): id is string => typeof id === "string")
 			: [],
+		minimalisticMode: pluginSettings.minimalisticMode ?? true,
+		useBackgroundHighlight: pluginSettings.useBackgroundHighlight ?? false,
+		timestampForEdits: pluginSettings.timestampForEdits ?? false,
+		deletedIndicatorText: pluginSettings.deletedIndicatorText ?? "This message is deleted",
+		editedPrefixTag: pluginSettings.editedPrefixTag ?? "[ EDITED ]",
 	};
 
 	if (typeof FluxDispatcher?.dispatch !== "function") {

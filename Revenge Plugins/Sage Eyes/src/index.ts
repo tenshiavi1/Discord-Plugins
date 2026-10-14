@@ -161,6 +161,11 @@ export default {
 		storage.keepEditHistory ??= true;
 		storage.ignoreBotMessages ??= false;
 		storage.ignoreOwnMessages ??= false;
+		storage.minimalisticMode ??= true;
+		storage.useBackgroundHighlight ??= false;
+		storage.timestampForEdits ??= false;
+		storage.deletedIndicatorText ??= "This message is deleted";
+		storage.editedPrefixTag ??= "[ EDITED ]";
 		if (!Array.isArray(storage.ignoredUserIds)) storage.ignoredUserIds = [];
 		patchPrivateChannelObfuscation();
 
