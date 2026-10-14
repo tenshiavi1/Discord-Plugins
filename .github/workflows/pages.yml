@@ -30,7 +30,7 @@ jobs:
           node-version: 22
 
       - name: Install build dependencies
-        run: npm install --no-audit --no-fund
+        run: npm ci --no-audit --no-fund
 
       - name: Build plugin bundle
         run: npm run build
