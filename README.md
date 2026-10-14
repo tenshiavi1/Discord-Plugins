@@ -18,7 +18,7 @@ GitHub Actions builds and publishes the plugin to Pages whenever `main` is updat
 
 ## Sage Eyes
 
-Shows hidden-channel details in Revenge and displays as Sage Eyes. The plugin credits tenshiavi.
+Shows hidden channels in Revenge, including channels omitted by the channel-list store, and displays as Sage Eyes. Selecting a hidden channel can show its details before opening it. The plugin credits tenshiavi.
 
 Source and plugin metadata are in `Revenge Plugin/Sage Eyes`.
 

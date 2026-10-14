@@ -91,9 +91,14 @@ function patchPrivateChannelObfuscation() {
 		}
 	}
 
-	const guildChannelStore = findByProps("isChannelGated");
+	const guildChannelStore = findByProps("isChannelGated", "getChannels") || findByProps("isChannelGated");
 	if (typeof guildChannelStore?.isChannelGated === "function") {
 		unpatches.push(after("isChannelGated", guildChannelStore, () => false));
+	}
+	if (typeof guildChannelStore?.getChannels === "function") {
+		unpatches.push(instead("getChannels", guildChannelStore, (args, original) => {
+			return original(args[0], true, ...args.slice(2));
+		}));
 	}
 
 	if (!flagModule && !patchedMethods) {
