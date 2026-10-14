@@ -4,22 +4,15 @@ import { after } from "@vendetta/patcher";
 import { getAssetIDByName } from "@vendetta/ui/assets";
 import { Forms } from "@vendetta/ui/components";
 import { findInReactTree } from "@vendetta/utils";
+import { navigateToManager } from "./managerNavigation";
 import Settings from "./settings";
 
 const { FormSection, FormRow } = Forms;
-const tabsNavigationRef = findByProps("getRootNavigationRef");
 const settingConstants = findByProps("SETTING_RENDERER_CONFIG");
 const createListModule = findByProps("createList");
 const SettingsOverviewScreen = findByProps("SettingsOverviewScreen");
 const TableRowIcon = findByProps("TableRowIcon")?.TableRowIcon;
 let patchedOverviewTypes = new WeakSet<object>();
-
-function openManager(navigation: any) {
-	navigation.navigate("VendettaCustomPage", {
-		title: "Tenshi's Plugins",
-		render: () => React.createElement(Settings),
-	});
-}
 
 function patchMainSettingsPanel(unpatches: (() => void)[]) {
 	const overviewModule = findByProps("renderTitle", "sections");
@@ -48,9 +41,7 @@ function patchMainSettingsPanel(unpatches: (() => void)[]) {
 					leading: React.createElement(FormRow.Icon, { source: getAssetIDByName("ChatCheckIcon") }),
 					trailing: React.createElement(FormRow.Arrow),
 					onPress: () => {
-						const rootNavigation = tabsNavigationRef?.getRootNavigationRef?.();
-						if (rootNavigation) openManager(rootNavigation);
-						else console.warn("[Tenshi's Plugins] Main settings navigation is unavailable.");
+						if (!navigateToManager(Settings)) console.warn("[Tenshi's Plugins] Main settings navigation is unavailable.");
 					},
 				});
 				sections.push(row);
@@ -64,7 +55,7 @@ function patchMainSettingsPanel(unpatches: (() => void)[]) {
 }
 
 function patchSettingsCategory(unpatches: (() => void)[]) {
-	if (!settingConstants || !tabsNavigationRef) return;
+	if (!settingConstants) return;
 
 	const key = "tenshiPlugins";
 	const rowDefinition = {
@@ -77,9 +68,7 @@ function patchSettingsCategory(unpatches: (() => void)[]) {
 				? () => React.createElement(TableRowIcon, { source: getAssetIDByName("ChatCheckIcon") })
 				: undefined,
 			onPress: () => {
-				const navigation = tabsNavigationRef.getRootNavigationRef?.();
-				if (navigation) openManager(navigation);
-				else console.warn("[Tenshi's Plugins] Main settings navigation is unavailable.");
+				if (!navigateToManager(Settings)) console.warn("[Tenshi's Plugins] Main settings navigation is unavailable.");
 			},
 			withArrow: true,
 		},

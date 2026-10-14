@@ -8,6 +8,7 @@ import { getAssetIDByName } from "@vendetta/ui/assets";
 import { Forms } from "@vendetta/ui/components";
 import { showToast } from "@vendetta/ui/toasts";
 import { MANAGED_PLUGINS, type ManagedPlugin } from "./catalog";
+import { reloadAndReturnToManager } from "./managerNavigation";
 
 const { FormRow, FormSection } = Forms;
 const tabsNavigationRef = findByProps("getRootNavigationRef");
@@ -280,6 +281,41 @@ export default function Settings() {
 
 	return (
 		<RN.ScrollView style={{ flex: 1 }} contentContainerStyle={{ padding: 10 }}>
+			<RN.View
+				style={{
+					flexDirection: "row",
+					alignItems: "center",
+					justifyContent: "space-between",
+					marginBottom: 12,
+				}}
+			>
+				<RN.Text style={{ color: "#f2f3f5", fontSize: 20, fontWeight: "700" }}>
+					Tenshi's Plugins
+				</RN.Text>
+				<RN.TouchableOpacity
+					accessibilityLabel="Reload Revenge and return to Tenshi's Plugins"
+					accessibilityRole="button"
+					onPress={() => {
+						try {
+							reloadAndReturnToManager();
+						} catch (error) {
+							console.error("[Tenshi's Plugins] Could not reload Revenge.", error);
+							showToast("Could not reload Revenge", getAssetIDByName("Warning"));
+						}
+					}}
+					style={{
+						width: 40,
+						height: 40,
+						alignItems: "center",
+						justifyContent: "center",
+					}}
+				>
+					<RN.Image
+						source={getAssetIDByName("RetryIcon")}
+						style={{ width: 22, height: 22, tintColor: "#f2f3f5" }}
+					/>
+				</RN.TouchableOpacity>
+			</RN.View>
 			<RN.View
 				style={{
 					flexDirection: "row",
