@@ -14,6 +14,8 @@ After GitHub Pages finishes deploying, add this URL in Revenge:
 
 `https://tenshiavi1.github.io/Plugins/Revenge%20Plugin/Word%20Tracker/`
 
+GitHub Actions builds and publishes the plugin to Pages whenever `main` is updated.
+
 ## License
 
 The project is released under CC0 1.0 Universal. See [LICENSE](LICENSE).
