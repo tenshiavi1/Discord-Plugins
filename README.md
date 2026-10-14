@@ -15,12 +15,12 @@ Add a plugin's integration URL in Revenge:
 
 | Plugin | Integration URL |
 | --- | --- |
-| Omniscience | `https://tenshiavi1.github.io/Plugins/Revenge%20Plugins/Omniscience/` |
-| Sage Eyes | `https://tenshiavi1.github.io/Plugins/Revenge%20Plugins/Sage%20Eyes/` |
-| Aura Control | `https://tenshiavi1.github.io/Plugins/Revenge%20Plugins/Aura%20Control/` |
-| Ephemeral Entity | `https://tenshiavi1.github.io/Plugins/Revenge%20Plugins/Ephemeral%20Entity/` |
+| Omniscience | `https://tenshiavi1.github.io/Discord-Plugins/Revenge%20Plugins/Omniscience/` |
+| Sage Eyes | `https://tenshiavi1.github.io/Discord-Plugins/Revenge%20Plugins/Sage%20Eyes/` |
+| Aura Control | `https://tenshiavi1.github.io/Discord-Plugins/Revenge%20Plugins/Aura%20Control/` |
+| Ephemeral Entity | `https://tenshiavi1.github.io/Discord-Plugins/Revenge%20Plugins/Ephemeral%20Entity/` |
 
-The previous `Revenge%20Plugin` integration URLs remain available for compatibility.
+The build also publishes the previous singular `Revenge%20Plugin` category path beneath the new repository URL for compatibility.
 
 ## Vencord Plugins
 
