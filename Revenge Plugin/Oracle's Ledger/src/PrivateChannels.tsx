@@ -3,6 +3,7 @@ import { React, ReactNative as RN } from "@vendetta/metro/common";
 import { after } from "@vendetta/patcher";
 import { useProxy } from "@vendetta/storage";
 import { storage } from "@vendetta/plugin";
+import { ErrorBoundary, General } from "@vendetta/ui/components";
 import { getCategories, setCategoryCollapsed } from "./data";
 
 const getPrivateChannelRowHeight = findByProps("getPrivateChannelRowHeightWithoutPadding")?.getPrivateChannelRowHeight;
@@ -14,7 +15,7 @@ const SelectedChannelStore = findByStoreName("SelectedChannelStore");
 const ConnectedPrivateChannels = findByName("ConnectedPrivateChannels", false);
 const CategoryChannel = findByName("CategoryChannel");
 const FastList = findByName("FastList");
-const { Pressable } = RN;
+const { Pressable } = General;
 const unpatches: (() => void)[] = [];
 let nestedPatchInstalled = false;
 
@@ -75,11 +76,16 @@ function PinnedPrivateChannelList({ comp }: { comp: any }) {
 		visiblePinnedChannels += rows.filter((row) => !hideCollapsedRow(category, row)).length;
 	}
 
-	const getCategoryHeader = (name: string, collapsed = false, renderChevron = true) =>
-		React.createElement(CategoryChannel, { name, collapsed, renderChevron });
+	const getCategoryHeader = (name: string, collapsed = false, renderChevron = true) => CategoryChannel
+		? React.createElement(CategoryChannel, { name, collapsed, renderChevron })
+		: React.createElement(
+			RN.Text,
+			{ style: { color: "#b5bac1", fontSize: 12, fontWeight: "600", paddingVertical: 8, paddingHorizontal: 16 } },
+			`${renderChevron ? (collapsed ? "›" : "⌄") + " " : ""}${name}`,
+		);
 
 	function renderSectionHeader() {
-		return React.createElement(React.Fragment, null,
+		return React.createElement(ErrorBoundary, null, React.createElement(React.Fragment, null,
 			showMessageRequests ? comp.props.renderItem(0, 0) : null,
 			...categoryRows.flatMap(({ category, rows }) => [
 				React.createElement(
@@ -97,7 +103,7 @@ function PinnedPrivateChannelList({ comp }: { comp: any }) {
 					.map((row) => React.createElement(React.Fragment, { key: `oracle-channel-${row.id}` }, comp.props.renderItem(0, row.index))),
 			]),
 			getCategoryHeader("Direct Messages", false, false),
-		);
+		));
 	}
 
 	const sectionHeaderHeight = 32 * (1 + categories.length);
@@ -109,6 +115,7 @@ function PinnedPrivateChannelList({ comp }: { comp: any }) {
 	return React.createElement(FastList, {
 		...comp.props,
 		sections: [1, comp.props.sections?.[0] ?? 0],
+		onScroll: () => undefined,
 		renderItem: (sectionIndex: number, itemIndex: number) => {
 			if (sectionIndex === 0) return renderSectionHeader();
 			if ((showMessageRequests && itemIndex === 0) || categorizedIndices.has(itemIndex)) return null;
@@ -145,9 +152,23 @@ export function patchPrivateChannels(): () => void {
 				console.warn("[Oracle's Ledger] ConnectedPrivateChannels' list children changed; pinned categories were not attached.");
 				return;
 			}
+			if (children.some((child) => child?.type === PinnedPrivateChannelList)) return;
 
-			if (!children[2] || children[2].type === PinnedPrivateChannelList) return;
-			children[2] = React.createElement(PinnedPrivateChannelList, { comp: children[2] });
+			const isPrivateChannelList = (child: any) =>
+				child?.props
+				&& typeof child.props.renderItem === "function"
+				&& typeof child.props.itemSize === "function"
+				&& Array.isArray(child.props.sections);
+			const listIndex = isPrivateChannelList(children[2])
+				? 2
+				: children.findIndex(isPrivateChannelList);
+
+			if (listIndex < 0) {
+				console.warn("[Oracle's Ledger] Could not locate the private-channel FastList; pinned categories were not attached.");
+				return;
+			}
+			if (children[listIndex].type === PinnedPrivateChannelList) return;
+			children[listIndex] = React.createElement(PinnedPrivateChannelList, { comp: children[listIndex] });
 		}));
 	});
 
