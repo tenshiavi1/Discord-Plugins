@@ -1,19 +1,19 @@
-# Keyword Tracker
+# Plugins
 
-A Revenge plugin that watches messages for configured keywords and sends notifications to Discord channels or webhooks.
+Revenge plugins maintained by tenshiavi.
 
-## Repository Layout
+## Word Tracker
 
-- `manifest.json` contains the plugin metadata and entry point.
-- `src/index.ts` contains the message tracking and notification logic.
-- `src/settings.tsx` contains the plugin settings interface.
+Tracks configured words in Discord messages and sends notifications to a channel or webhook.
 
-Keep this layout intact when publishing so the `main` entry in `manifest.json` resolves correctly.
+Source and plugin metadata are in `Revenge Plugin/Word Tracker`.
 
-## Author
+## Install
 
-tenshiavi
+After GitHub Pages finishes deploying, add this URL in Revenge:
+
+`https://tenshiavi1.github.io/Plugins/Revenge%20Plugin/Word%20Tracker/`
 
 ## License
 
-This project is released under CC0 1.0 Universal. See [LICENSE](LICENSE).
+The project is released under CC0 1.0 Universal. See [LICENSE](LICENSE).
