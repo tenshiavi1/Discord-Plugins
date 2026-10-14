@@ -8,8 +8,8 @@ import swc from "@swc/core";
 import { rollup } from "rollup";
 import esbuild from "rollup-plugin-esbuild";
 
-const pluginPath = resolve("Revenge Plugin", "Word Tracker");
-const outputPath = resolve("dist", "Revenge Plugin", "Word Tracker");
+const pluginPath = resolve("Revenge Plugin", "Omniscience");
+const outputPath = resolve("dist", "Revenge Plugin", "Omniscience");
 const manifestPath = resolve(pluginPath, "manifest.json");
 const manifest = JSON.parse(await readFile(manifestPath, "utf8"));
 const extensions = [".js", ".jsx", ".mjs", ".ts", ".tsx", ".cts", ".mts"];

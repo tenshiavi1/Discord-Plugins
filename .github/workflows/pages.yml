@@ -1,4 +1,4 @@
-name: Build and deploy Revenge plugins
+name: Build and deploy Omniscience
 
 on:
   push:

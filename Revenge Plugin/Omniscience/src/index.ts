@@ -239,9 +239,9 @@ function updateSidebar() {
         if (!unpatchSidebar) {
             try {
                 unpatchSidebar = patchSettingsPin({
-                    key: "keywordtracker",
+                    key: "omniscience",
                     icon: getAssetIDByName("ChatCheckIcon"),
-                    title: () => "Keyword Tracker",
+                    title: () => "Omniscience",
                     predicate: () => storage.showInSettings === true,
                     page: Settings,
                 });
