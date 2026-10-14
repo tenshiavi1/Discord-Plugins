@@ -5,7 +5,7 @@ import { useProxy } from "@vendetta/storage";
 import { storage } from "@vendetta/plugin";
 import { getCategories, setCategoryCollapsed } from "./data";
 
-const { getPrivateChannelRowHeight } = findByProps("getPrivateChannelRowHeightWithoutPadding");
+const getPrivateChannelRowHeight = findByProps("getPrivateChannelRowHeightWithoutPadding")?.getPrivateChannelRowHeight;
 const PrivateChannelSortStore = findByProps("getPrivateChannelIds");
 const MessageRequestStore = findByProps("shouldShowMessageRequests");
 const ReadStateStore = findByStoreName("ReadStateStore");
