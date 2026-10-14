@@ -55,7 +55,6 @@ const builtEntry = resolve(outputPath, "index.js");
 await bundle.write({
   file: builtEntry,
   format: "iife",
-  name: "WordTracker",
   compact: true,
   exports: "named",
   globals(id) {
