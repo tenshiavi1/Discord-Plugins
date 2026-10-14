@@ -260,7 +260,7 @@ export default {
     updateSidebar();
 
     const onMessage = (p: any) => {
-      const m = p?.message;
+      const m = p?.message ?? p;
       if (!m || !storage.keywords || storage.keywords.length === 0) return;
 
       let fullContent = m.content || "";
@@ -300,8 +300,19 @@ export default {
         if (!customList.includes(authorId)) return;
       }
 
-      const c = ChannelStore.getChannel(m.channel_id);
-      if (!c) return;
+      const channelId = m.channel_id ?? m.channelId ?? p?.channel_id ?? p?.channelId;
+      if (!channelId) return;
+
+      const channel = ChannelStore.getChannel(channelId) ?? m.channel ?? p?.channel;
+      const guildId = channel?.guild_id ?? m.guild_id ?? m.guildId ?? p?.guild_id ?? p?.guildId;
+      if (!channel && !guildId) return;
+
+      const c = {
+        ...channel,
+        id: channel?.id ?? channelId,
+        guild_id: guildId,
+        type: channel?.type ?? m.channel_type ?? p?.channel_type ?? (guildId ? 0 : undefined)
+      };
 
       if (storage.ignoreChannelsEnabled && storage.ignoredChannelIds) {
         const ignoredChannelsList = storage.ignoredChannelIds.split(",").map((id: string) => id.trim());
