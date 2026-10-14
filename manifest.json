@@ -1,0 +1,13 @@
+{
+    "name": "Keyword Tracker",
+    "description": "Track keywords and get notified when mentioned.",
+    "authors": [
+        {
+            "name": "tenshiavi"
+        }
+    ],
+    "main": "src/index.ts",
+    "vendetta": {
+        "icon": "ChatCheckIcon"
+    }
+}
