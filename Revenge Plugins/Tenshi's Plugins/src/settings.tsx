@@ -1,6 +1,7 @@
 import { findByProps } from "@vendetta/metro";
-import { React, ReactNative as RN } from "@vendetta/metro/common";
-import { getSettings, installPlugin, plugins, removePlugin } from "@vendetta/plugins";
+import { clipboard, React, ReactNative as RN } from "@vendetta/metro/common";
+import { fetchPlugin, getSettings, installPlugin, plugins, removePlugin, startPlugin, stopPlugin } from "@vendetta/plugins";
+import { createMMKVBackend } from "@vendetta/storage";
 import { useProxy } from "@vendetta/storage";
 import { showConfirmationAlert } from "@vendetta/ui/alerts";
 import { getAssetIDByName } from "@vendetta/ui/assets";
@@ -10,6 +11,8 @@ import { MANAGED_PLUGINS, type ManagedPlugin } from "./catalog";
 
 const { FormRow, FormSection } = Forms;
 const tabsNavigationRef = findByProps("getRootNavigationRef");
+const showSimpleActionSheet = findByProps("showSimpleActionSheet")?.showSimpleActionSheet;
+const hideActionSheet = findByProps("openLazy", "hideActionSheet")?.hideActionSheet;
 
 function findInstalledPlugin(entry: ManagedPlugin) {
 	for (const url of [entry.url, ...entry.legacyUrls]) {
@@ -121,6 +124,160 @@ export default function Settings() {
 		});
 	};
 
+	const confirmClearData = (entry: ManagedPlugin, installed: NonNullable<ReturnType<typeof findInstalledPlugin>>) => {
+		showConfirmationAlert({
+			title: `Clear ${entry.name} data?`,
+			content: "This permanently removes this plugin's saved settings and data.",
+			confirmText: "Clear Data",
+			cancelText: "Cancel",
+			onConfirm: () => {
+				void (async () => {
+					const wasEnabled = !!installed.instance.enabled;
+					let stopped = false;
+					try {
+						if (wasEnabled) {
+							stopPlugin(installed.key, false);
+							stopped = true;
+						}
+						await createMMKVBackend(installed.key).set({});
+						if (stopped) {
+							await startPlugin(installed.key);
+							stopped = false;
+						}
+						showToast(`${entry.name} data cleared`, getAssetIDByName("Check"));
+					} catch (error) {
+						console.error(`[Tenshi's Plugins] Failed to clear ${entry.name} data.`, error);
+						if (stopped) {
+							try {
+								await startPlugin(installed.key);
+							} catch (restartError) {
+								console.error(`[Tenshi's Plugins] Failed to restart ${entry.name} after clearing data.`, restartError);
+							}
+						}
+						showToast(`Failed to clear ${entry.name} data`, getAssetIDByName("Warning"));
+					}
+				})();
+			},
+		});
+	};
+
+	const showPluginActions = (entry: ManagedPlugin) => {
+		const installed = findInstalledPlugin(entry);
+		if (!showSimpleActionSheet) {
+			console.error("[Tenshi's Plugins] Revenge's plugin action sheet is unavailable.");
+			showToast("Plugin actions are unavailable", getAssetIDByName("Warning"));
+			return;
+		}
+
+		const options = [];
+		const PluginSettings = installed ? getSettings(installed.key) : undefined;
+
+		if (PluginSettings && installed) {
+			options.push({
+				label: "Configure",
+				icon: getAssetIDByName("WrenchIcon"),
+				onPress: () => {
+					hideActionSheet?.();
+					openPluginSettings(entry);
+				},
+			});
+		}
+
+		if (installed) {
+			options.push(
+				{
+					label: "Refetch",
+					icon: getAssetIDByName("RetryIcon"),
+					onPress: () => {
+						hideActionSheet?.();
+						void (async () => {
+							const wasEnabled = !!installed.instance.enabled;
+							let stopped = false;
+							try {
+								if (wasEnabled) {
+									stopPlugin(installed.key, false);
+									stopped = true;
+								}
+								await fetchPlugin(installed.key);
+								if (stopped) {
+									await startPlugin(installed.key);
+									stopped = false;
+								}
+								showToast(`${entry.name} refetched`, getAssetIDByName("Check"));
+							} catch (error) {
+								console.error(`[Tenshi's Plugins] Failed to refetch ${entry.name}.`, error);
+								if (stopped) {
+									try {
+										await startPlugin(installed.key);
+									} catch (restartError) {
+										console.error(`[Tenshi's Plugins] Failed to restart ${entry.name} after refetch.`, restartError);
+									}
+								}
+								showToast(`Failed to refetch ${entry.name}`, getAssetIDByName("Warning"));
+							}
+						})();
+					},
+				},
+				{
+					label: "Copy URL",
+					icon: getAssetIDByName("LinkIcon"),
+					onPress: () => {
+						clipboard.setString(installed.key);
+						showToast("Plugin URL copied", getAssetIDByName("Check"));
+					},
+				},
+				{
+					label: installed.instance.update === false ? "Enable Updates" : "Disable Updates",
+					icon: getAssetIDByName("DownloadIcon"),
+					onPress: () => {
+						installed.instance.update = installed.instance.update === false;
+						showToast(
+							`${entry.name} updates ${installed.instance.update ? "enabled" : "disabled"}`,
+							getAssetIDByName("Check"),
+						);
+					},
+				},
+				{
+					label: "Clear Data",
+					icon: getAssetIDByName("CopyIcon"),
+					isDestructive: true,
+					onPress: () => {
+						hideActionSheet?.();
+						confirmClearData(entry, installed);
+					},
+				},
+				{
+					label: "Delete",
+					icon: getAssetIDByName("TrashIcon"),
+					isDestructive: true,
+					onPress: () => {
+						hideActionSheet?.();
+						confirmDelete(entry);
+					},
+				},
+			);
+		} else {
+			options.push({
+				label: "Install",
+				icon: getAssetIDByName("DownloadIcon"),
+				onPress: () => {
+					hideActionSheet?.();
+					void changePlugin(entry);
+				},
+			});
+		}
+
+		showSimpleActionSheet({
+			key: "CardOverflow",
+			header: {
+				title: entry.name,
+				subtitle: entry.description,
+				onClose: hideActionSheet,
+			},
+			options,
+		});
+	};
+
 	return (
 		<RN.ScrollView style={{ flex: 1 }} contentContainerStyle={{ padding: 10 }}>
 			<RN.View
@@ -175,13 +332,8 @@ export default function Settings() {
 									<IconButton
 										assetNames={["InfoIcon", "InformationIcon", "ic_info_24px"]}
 										fallback="ⓘ"
-										label={`Information about ${entry.name}`}
-										onPress={() => showConfirmationAlert({
-											title: entry.name,
-											content: entry.description,
-											confirmText: "Close",
-											onConfirm: () => {},
-										})}
+										label={`Actions for ${entry.name}`}
+										onPress={() => showPluginActions(entry)}
 									/>
 									<RN.TouchableOpacity
 										accessibilityRole="button"
