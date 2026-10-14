@@ -1,9 +1,9 @@
 import { stylesheet, constants, moment, toasts, clipboard } from "@vendetta/metro/common";
 import { findByProps } from "@vendetta/metro";
 import { semanticColors } from '@vendetta/ui';
-import { getAssetByName, getAssetIDByName } from "@vendetta/ui/assets";
+import { getAssetIDByName } from "@vendetta/ui/assets";
 import { showToast } from "@vendetta/ui/toasts";
-import { React, ReactNative as RN } from "@vendetta/metro/common";
+import { React } from "@vendetta/metro/common";
 const {View, Text, Pressable } = findByProps("Button", "Text", "View");
 
 const snowflakeUtils = findByProps("extractTimestamp");

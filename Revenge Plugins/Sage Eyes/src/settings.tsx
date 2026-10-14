@@ -2,10 +2,9 @@ import { React, ReactNative as RN } from "@vendetta/metro/common";
 import { useProxy } from "@vendetta/storage";
 import { storage } from "@vendetta/plugin";
 import { Forms } from "@vendetta/ui/components";
-import { getAssetByID, getAssetIDByName } from "@vendetta/ui/assets";
-import { settings } from "@vendetta";
+import { getAssetIDByName } from "@vendetta/ui/assets";
 
-const { FormRow, FormSection, FormSwitc, FormSwitchRow } = Forms;
+const { FormRow, FormSection, FormSwitchRow } = Forms;
 
 export function Settings() {
 	useProxy(storage);

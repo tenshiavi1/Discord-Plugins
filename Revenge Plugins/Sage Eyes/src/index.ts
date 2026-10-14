@@ -1,20 +1,16 @@
 import { find, findByProps, findByName } from "@vendetta/metro";
 import { constants, React, ReactNative as RN } from "@vendetta/metro/common";
-import HiddenChannel from "./HiddenChannel";
 import AlertContent from "./AlertContent";
 import { Settings } from "./settings";
-import { getAssetByID, getAssetByName, getAssetIDByName } from "@vendetta/ui/assets";
+import { getAssetByName } from "@vendetta/ui/assets";
 
 import { after, instead } from "@vendetta/patcher";
 import { showConfirmationAlert } from "@vendetta/ui/alerts";
-import { settings } from "@vendetta";
 import { storage } from "@vendetta/plugin";
 
 const Permissions = findByProps("getChannelPermissions", "can");
 const { ChannelTypes } = findByProps("ChannelTypes");
 const { getChannel } = findByProps("getChannel") || findByName("getChannel", false);
-const snowFlakeTimestamp = findByProps("extractTimestamp");
-
 const skipChannels = [ChannelTypes.DM, ChannelTypes.GROUP_DM, ChannelTypes.GUILD_CATEGORY];
 
 
