@@ -36,6 +36,16 @@ After GitHub Pages finishes deploying, add this URL in Revenge:
 
 `https://tenshiavi1.github.io/Plugins/Revenge%20Plugin/Aura%20Control/`
 
+## Ephemeral Entity
+
+Anonymizes file names before uploads from Revenge mobile. Choose random characters, a consistent replacement name, or a timestamp while retaining the original file extension. Maintained by tenshiavi.
+
+Source and plugin metadata are in `Revenge Plugin/Ephemeral Entity`.
+
+After GitHub Pages finishes deploying, add this URL in Revenge:
+
+`https://tenshiavi1.github.io/Plugins/Revenge%20Plugin/Ephemeral%20Entity/`
+
 ## License
 
 The project is released under CC0 1.0 Universal. See [LICENSE](LICENSE).

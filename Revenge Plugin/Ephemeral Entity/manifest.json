@@ -1,0 +1,13 @@
+{
+  "name": "Ephemeral Entity",
+  "description": "Anonymize file names before uploading from Revenge.",
+  "authors": [
+    {
+      "name": "tenshiavi"
+    }
+  ],
+  "main": "src/index.ts",
+  "vendetta": {
+    "icon": "ic_upload"
+  }
+}
