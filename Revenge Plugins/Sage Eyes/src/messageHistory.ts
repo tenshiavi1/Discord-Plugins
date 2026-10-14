@@ -135,14 +135,11 @@ function retainDeletedMessage(
 	event.type = "MESSAGE_UPDATE";
 	event.channelId = original.channel_id ?? channelId;
 	const indicator = settings.deletedIndicatorText.trim() || "This message is deleted";
-	const displayContent = settings.minimalisticMode
-		? `${indicator} ${original.content ?? ""}`.trim()
-		: `${indicator}\n${original.content ?? ""}`;
 	event.message = {
 		...original,
 		id: messageId,
 		channel_id: original.channel_id ?? channelId,
-		content: withBackgroundHighlight(displayContent, settings.useBackgroundHighlight),
+		content: withBackgroundHighlight(indicator, settings.useBackgroundHighlight),
 		was_deleted: true,
 	};
 	event.optimistic = false;
@@ -210,17 +207,17 @@ function handleDispatch(args: unknown[]) {
 	}
 	rememberMessage(editHistory, key, record);
 
-	const previousVersions = record.previous.map(({ content, editedAt }) => {
-		const timestamp = settings.timestampForEdits ? ` (${getRelativeTimestamp(editedAt)})` : "";
-		return `${content}${timestamp}`;
-	});
+	const prefix = settings.editedPrefixTag.trim() || "[ EDITED ]";
+	const originalContent = record.previous[0]?.content ?? record.currentContent;
+	const originalTimestamp = settings.timestampForEdits
+		? ` (${getRelativeTimestamp(record.previous[0]?.editedAt)})`
+		: "";
 	const currentTimestamp = settings.timestampForEdits
 		? ` (${getRelativeTimestamp(record.currentEditedAt)})`
 		: "";
-	const prefix = settings.editedPrefixTag.trim() || "[ EDITED ]";
 	const displayContent = settings.minimalisticMode
-		? `${prefix} ${[...previousVersions, `${message.content}${currentTimestamp}`].join(" | ")}`
-		: `${prefix}\n${previousVersions.join("\n\n---\n\n")}\n\nCurrent version\n${message.content}${currentTimestamp}`;
+		? `${originalContent}${originalTimestamp} ${prefix} ${message.content}${currentTimestamp}`
+		: `${originalContent}${originalTimestamp}\n${prefix}\n${message.content}${currentTimestamp}`;
 	event.message = {
 		...original,
 		...message,

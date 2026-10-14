@@ -59,7 +59,7 @@ export function Settings() {
 			<FormSection title="General Logger" titleStyleType="no_border">
 				<FormSwitchRow
 					label="Log deleted messages"
-					subLabel="Show locally cached deleted messages in chat. Long-press a log and choose Remove Deleted Message to dismiss it in one action."
+					subLabel="Replace a deleted message with a simple notice. Long-press the notice to remove it."
 					value={Boolean(storage.keepDeletedMessages)}
 					onValueChange={(value: boolean) => {
 						storage.keepDeletedMessages = value;
@@ -68,7 +68,7 @@ export function Settings() {
 				/>
 				<FormSwitchRow
 					label="Log edited messages"
-					subLabel="Append earlier text to edited messages. Long-press a message and choose Remove Edit History to restore its current text."
+					subLabel="Show the original and latest text with a short edited label. Long-press to remove the label."
 					value={Boolean(storage.keepEditHistory)}
 					onValueChange={(value: boolean) => {
 						storage.keepEditHistory = value;
@@ -106,7 +106,7 @@ export function Settings() {
 			<FormSection title="Styling & Appearance" titleStyleType="no_border">
 				<FormSwitchRow
 					label="Minimalistic mode"
-					subLabel="Use compact one-line deleted and edit-history labels."
+					subLabel="Show original and latest edit text on one line instead of separate lines."
 					value={Boolean(storage.minimalisticMode)}
 					onValueChange={(value: boolean) => {
 						storage.minimalisticMode = value;
@@ -115,7 +115,7 @@ export function Settings() {
 				/>
 				<FormSwitchRow
 					label="Use background highlight"
-					subLabel="Render retained deleted-message content as a quote-style highlighted block."
+					subLabel="Show the deleted-message notice as a quote-style highlighted line."
 					value={Boolean(storage.useBackgroundHighlight)}
 					onValueChange={(value: boolean) => {
 						storage.useBackgroundHighlight = value;
