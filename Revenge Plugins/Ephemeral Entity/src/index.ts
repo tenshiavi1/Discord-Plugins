@@ -1,8 +1,11 @@
 import { findByProps } from "@vendetta/metro";
 import { instead } from "@vendetta/patcher";
 import { storage } from "@vendetta/plugin";
+import { registerCommand, unregisterAllCommands } from "@vendetta/commands";
+import { showToast } from "@vendetta/ui/toasts";
 import { anonymizeUploadFiles, METHODS, type AnonymizationMethod } from "./filenames";
 import { clearTrackingUrlsInMessage } from "./urls";
+import { clearTypingStatusPatch, setTypingStatusHidden } from "./privacy";
 import Settings from "./settings";
 
 const defaults = {
@@ -11,9 +14,13 @@ const defaults = {
 	randomizedLength: 7,
 	consistentName: "image",
 	clearTrackingUrls: true,
+	enableSilentLeave: true,
+	hideTypingStatus: true,
 };
 
 const unpatches: (() => void)[] = [];
+const channelStore = findByProps("getChannel");
+const apiUtils = findByProps("getAPIBaseURL", "del");
 
 function normalizeSettings() {
 	const method = METHODS.some((option) => option.value === storage.method)
@@ -36,6 +43,44 @@ export default {
 	onLoad() {
 		for (const [key, value] of Object.entries(defaults)) {
 			if (storage[key] === undefined) storage[key] = value;
+		}
+
+		setTypingStatusHidden(Boolean(storage.hideTypingStatus));
+
+		if (typeof channelStore?.getChannel === "function" && typeof apiUtils?.del === "function") {
+			try {
+				registerCommand({
+					name: "leave silent",
+					description: "Leave the current Group DM silently.",
+					options: [],
+					predicate: (context: any) => {
+						if (!storage.enableSilentLeave) return false;
+						const channel = channelStore.getChannel(context?.channel?.id);
+						return channel?.type === 3;
+					},
+					execute: async (_args: unknown, context: any) => {
+						const channelId = context?.channel?.id;
+						if (!channelId) {
+							showToast("Could not find the current Group DM.");
+							return;
+						}
+						try {
+							await apiUtils.del({
+								url: `/channels/${channelId}`,
+								query: "silent=true",
+							});
+							showToast("Left Group DM successfully.");
+						} catch (error) {
+							console.error("[Ephemeral Entity] Could not silently leave the Group DM.", error);
+							showToast("Failed to leave Group DM.");
+						}
+					},
+				});
+			} catch (error) {
+				console.error("[Ephemeral Entity] Could not register the silent-leave command.", error);
+			}
+		} else {
+			console.warn("[Ephemeral Entity] Discord's channel or API module was not found; silent leave is unavailable.");
 		}
 
 		const uploadModule = findByProps("uploadFiles");
@@ -79,6 +124,8 @@ export default {
 	},
 	onUnload() {
 		for (const unpatch of unpatches.splice(0)) unpatch();
+		clearTypingStatusPatch();
+		unregisterAllCommands();
 	},
 	settings: Settings,
 };

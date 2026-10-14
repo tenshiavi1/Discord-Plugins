@@ -3,6 +3,7 @@ import { storage } from "@vendetta/plugin";
 import { useProxy } from "@vendetta/storage";
 import { Forms } from "@vendetta/ui/components";
 import { METHODS } from "./filenames";
+import { setTypingStatusHidden } from "./privacy";
 
 const { FormRow, FormSection, FormSwitchRow } = Forms;
 
@@ -53,6 +54,21 @@ export default function Settings() {
 					subLabel="Clean common advertising and click-tracking parameters when sending or editing messages."
 					value={Boolean(storage.clearTrackingUrls)}
 					onValueChange={(value: boolean) => { storage.clearTrackingUrls = value; }}
+				/>
+				<FormSwitchRow
+					label="Enable /leave silent command"
+					subLabel="Adds a command to leave the current group DM without sending a visible leave message."
+					value={Boolean(storage.enableSilentLeave)}
+					onValueChange={(value: boolean) => { storage.enableSilentLeave = value; }}
+				/>
+				<FormSwitchRow
+					label="Hide typing status"
+					subLabel="Prevent Revenge from sending typing-start and typing-stop events while this is enabled."
+					value={Boolean(storage.hideTypingStatus)}
+					onValueChange={(value: boolean) => {
+						storage.hideTypingStatus = value;
+						setTypingStatusHidden(value);
+					}}
 				/>
 			</FormSection>
 			<FormSection title="Anonymization method" titleStyleType="no_border">
