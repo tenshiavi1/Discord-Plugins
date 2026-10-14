@@ -9,6 +9,6 @@ Each catalog item provides:
 - An Install or Delete button using Revenge's plugin manager. Installed plugins continue to appear in Revenge's normal Plugins list.
 - A top-right reload button that reloads Revenge and returns to this manager.
 
-The catalog includes Omniscience, Sage Eyes, Aura Control, Ephemeral Entity, and this manager plugin. Vencord plugins are not listed because they run on a different client and cannot be installed by Revenge.
+The catalog includes Omniscience, Sage Eyes, Aura Control, Ephemeral Entity, and this manager plugin. Sage Eyes can also retain deleted messages and show previous edited text for the current session. Vencord plugins are not listed because they run on a different client and cannot be installed by Revenge.
 
 Maintained by tenshiavi.

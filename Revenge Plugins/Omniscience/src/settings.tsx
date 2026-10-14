@@ -50,17 +50,26 @@ export default function Settings() {
   };
 
   const importKeywords = async () => {
-    const text = await Clipboard.getString();
+    let text: string;
     try {
-      const parsed = JSON.parse(text);
-      if (Array.isArray(parsed)) {
-        storage.keywords = parsed;
-        forceUpdate();
-        showToast("Imported successfully", getAssetIDByName("Check"));
-      } else {
-        showToast("Invalid JSON format", getAssetIDByName("Warning"));
+      text = await Clipboard.getString();
+    } catch (error) {
+      console.error("[Omniscience] Could not read keywords from the clipboard.", error);
+      showToast("Could not read clipboard", getAssetIDByName("Warning"));
+      return;
+    }
+
+    try {
+      const parsed: unknown = JSON.parse(text);
+      if (!Array.isArray(parsed) || !parsed.every((keyword) => typeof keyword === "string")) {
+        showToast("Import must be a JSON array of strings", getAssetIDByName("Warning"));
+        return;
       }
-    } catch (e) {
+      storage.keywords = [...new Set(parsed.map((keyword: string) => keyword.trim()).filter(Boolean))];
+      forceUpdate();
+      showToast("Imported successfully", getAssetIDByName("Check"));
+    } catch (error) {
+      console.warn("[Omniscience] Clipboard content is not a valid keyword list.", error);
       showToast("Invalid JSON format", getAssetIDByName("Warning"));
     }
   };

@@ -9,7 +9,7 @@ Mobile plugins compatible with Revenge:
 - [Aura Control](./Revenge%20Plugins/Aura%20Control/README.md) — Configure a custom Rich Presence.
 - [Ephemeral Entity](./Revenge%20Plugins/Ephemeral%20Entity/README.md) — Anonymize attachment filenames and optionally clean tracking parameters from sent URLs.
 - [Omniscience](./Revenge%20Plugins/Omniscience/README.md) — Track configured keywords and optionally notify a channel or webhook.
-- [Sage Eyes](./Revenge%20Plugins/Sage%20Eyes/README.md) — Show and inspect hidden or obscured channels.
+- [Sage Eyes](./Revenge%20Plugins/Sage%20Eyes/README.md) — Inspect hidden channel details and retain deleted messages and edit history for the current session.
 - [Tenshi's Plugins](./Revenge%20Plugins/Tenshi's%20Plugins/README.md) — Browse, configure, install, and delete the Revenge plugins from main settings.
 
 Add a plugin's integration URL in Revenge:

@@ -9,7 +9,7 @@ import { findInReactTree } from "@vendetta/utils";
 import Settings from "./settings";
 
 const { FormSection, FormRow } = Forms;
-const { TableRowIcon } = findByProps("TableRowIcon");
+const TableRowIcon = findByProps("TableRowIcon")?.TableRowIcon;
 
 const FluxDispatcher = findByProps("dispatch", "subscribe");
 const ChannelStore = findByProps("getChannel");
@@ -54,6 +54,11 @@ const defaults = {
 for (const [key, value] of Object.entries(defaults)) {
   if (storage[key] === undefined) storage[key] = value;
 }
+if (!Array.isArray(storage.keywords) || !storage.keywords.every((keyword: unknown) => typeof keyword === "string")) {
+  console.warn("[Omniscience] Invalid saved keyword data was reset.");
+  storage.keywords = [];
+}
+storage.keywords = [...new Set(storage.keywords.map((keyword: string) => keyword.trim()).filter(Boolean))];
 
 let unsubMessage: (() => void) | null = null;
 
@@ -279,8 +284,9 @@ export default {
       }
 
       if (!fullContent) return;
+      if (typeof m.author?.id !== "string") return;
 
-      const currentUser = UserStore.getCurrentUser();
+      const currentUser = UserStore?.getCurrentUser?.();
       if (m.author?.id === currentUser?.id) return;
 
       if (storage.ignoreBots && m.author?.bot) return;
@@ -293,8 +299,8 @@ export default {
       }
 
       if (storage.trackMode === "friends") {
-        const friends = RelationshipStore.getFriendIDs();
-        if (!friends.includes(authorId)) return;
+        const friends = RelationshipStore?.getFriendIDs?.();
+        if (!Array.isArray(friends) || !friends.includes(authorId)) return;
       } else if (storage.trackMode === "custom") {
         const customList = storage.customIds.split(",").map((id: string) => id.trim());
         if (!customList.includes(authorId)) return;
@@ -303,7 +309,7 @@ export default {
       const channelId = m.channel_id ?? m.channelId ?? p?.channel_id ?? p?.channelId;
       if (!channelId) return;
 
-      const channel = ChannelStore.getChannel(channelId) ?? m.channel ?? p?.channel;
+      const channel = ChannelStore?.getChannel?.(channelId) ?? m.channel ?? p?.channel;
       const guildId = channel?.guild_id ?? m.guild_id ?? m.guildId ?? p?.guild_id ?? p?.guildId;
       if (!channel && !guildId) return;
 
@@ -338,7 +344,10 @@ export default {
 
       let matchedKeyword = "";
 
-      for (let kw of storage.keywords) {
+      for (const storedKeyword of storage.keywords) {
+        if (typeof storedKeyword !== "string") continue;
+        const kw = storedKeyword.trim();
+        if (!kw) continue;
         let content = fullContent;
         let testKw = kw;
 
@@ -369,7 +378,7 @@ export default {
       if (!matchedKeyword) return;
 
       const author = m.author;
-      const authorName = author.username;
+      const authorName = typeof author?.username === "string" ? author.username : "Unknown user";
 
       const sendToChannel = storage.sendNotificationToChannel && storage.targetChannelId;
       const sendToWebhook = storage.sendNotificationToWebhook && storage.webhookUrl;
@@ -383,7 +392,7 @@ export default {
         messageContent += `**Message:**\n${m.content || "[Embed Message]"}\n`;
 
         if (c.guild_id) {
-          const g = GuildStore.getGuild(c.guild_id);
+          const g = GuildStore?.getGuild?.(c.guild_id);
           messageContent += `**Location:** Server\n`;
           messageContent += `**Server:**\n`;
           messageContent += `    Name: \`${g?.name}\`\n`;
@@ -412,17 +421,26 @@ export default {
           : { parse: [] };
 
         if (sendToChannel) {
-          RestAPI.post({
-            url: `/channels/${storage.targetChannelId.trim()}/messages`,
-            body: {
-              content: notificationContent,
-              allowed_mentions: allowedMentions
-            }
-          }).catch(() => {});
+          if (typeof RestAPI?.post !== "function") {
+            console.warn("[Omniscience] Discord's REST module is unavailable; channel notifications cannot be sent.");
+          } else {
+            void RestAPI.post({
+              url: `/channels/${storage.targetChannelId.trim()}/messages`,
+              body: {
+                content: notificationContent,
+                allowed_mentions: allowedMentions
+              }
+            }).catch((error: unknown) => {
+              console.error("[Omniscience] Could not send the channel notification.", error);
+            });
+          }
         }
 
         if (sendToWebhook) {
-          fetch(storage.webhookUrl.trim(), {
+          if (typeof fetch !== "function") {
+            console.error("[Omniscience] Fetch is unavailable; webhook notifications cannot be sent.");
+          } else {
+            void fetch(storage.webhookUrl.trim(), {
             method: "POST",
             headers: {
               "Content-Type": "application/json"
@@ -431,14 +449,19 @@ export default {
               content: notificationContent,
               allowed_mentions: allowedMentions
             })
-          }).catch(() => {});
+            }).then((response) => {
+              if (!response.ok) throw new Error(`Webhook returned HTTP ${response.status}.`);
+            }).catch((error: unknown) => {
+              console.error("[Omniscience] Could not send the webhook notification.", error);
+            });
+          }
         }
 
         showToast(`${authorName} sent a tracked message`);
       } else {
         let locationStr = "DM";
         if (c.guild_id) {
-          const g = GuildStore.getGuild(c.guild_id);
+          const g = GuildStore?.getGuild?.(c.guild_id);
           locationStr = `Server: ${g?.name} #${c.name}`;
         } else if (c.type === 3) {
           locationStr = `Group: ${c.name || 'Unnamed'}`;
@@ -447,8 +470,12 @@ export default {
       }
     };
 
-    FluxDispatcher.subscribe("MESSAGE_CREATE", onMessage);
-    unsubMessage = () => FluxDispatcher.unsubscribe("MESSAGE_CREATE", onMessage);
+    if (typeof FluxDispatcher?.subscribe === "function" && typeof FluxDispatcher?.unsubscribe === "function") {
+      FluxDispatcher.subscribe("MESSAGE_CREATE", onMessage);
+      unsubMessage = () => FluxDispatcher.unsubscribe("MESSAGE_CREATE", onMessage);
+    } else {
+      console.warn("[Omniscience] Discord's message dispatcher was not found; message tracking is unavailable.");
+    }
   },
 
   onUnload() {

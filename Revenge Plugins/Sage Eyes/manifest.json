@@ -1,6 +1,6 @@
 {
     "name": "Sage Eyes",
-    "description": "Show and inspect hidden channels in Revenge.",
+    "description": "Reveal hidden channel names, inspect channel details, and keep deleted messages and edit history visible.",
     "authors": [
         {
             "name": "tenshiavi"

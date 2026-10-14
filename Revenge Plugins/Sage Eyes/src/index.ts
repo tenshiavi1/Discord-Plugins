@@ -2,27 +2,41 @@ import { find, findByProps, findByName } from "@vendetta/metro";
 import { constants, React, ReactNative as RN } from "@vendetta/metro/common";
 import AlertContent from "./AlertContent";
 import { Settings } from "./settings";
-import { getAssetByName } from "@vendetta/ui/assets";
+import { getAssetIDByName } from "@vendetta/ui/assets";
 
 import { after, instead } from "@vendetta/patcher";
 import { showConfirmationAlert } from "@vendetta/ui/alerts";
 import { storage } from "@vendetta/plugin";
+import { initializeMessageHistory, removeMessageHistoryPatch } from "./messageHistory";
 
 const Permissions = findByProps("getChannelPermissions", "can");
-const { ChannelTypes } = findByProps("ChannelTypes");
-const { getChannel } = findByProps("getChannel") || findByName("getChannel", false);
-const skipChannels = [ChannelTypes.DM, ChannelTypes.GROUP_DM, ChannelTypes.GUILD_CATEGORY];
-
-
+const channelTypes = findByProps("ChannelTypes")?.ChannelTypes;
+const channelModule = findByProps("getChannel") ?? findByName("getChannel", false);
+const getChannel = typeof channelModule === "function"
+	? channelModule
+	: typeof channelModule?.getChannel === "function"
+		? channelModule.getChannel.bind(channelModule)
+		: undefined;
+const internalPermissionChecks = new WeakSet<object>();
+const skipChannels = [
+	channelTypes?.DM ?? 1,
+	channelTypes?.GROUP_DM ?? 3,
+	channelTypes?.GUILD_CATEGORY ?? 4,
+];
 
 function isHidden(channel: any | undefined) {
 	if (channel === undefined) return false;
 	if (typeof channel === "string") channel = getChannel(channel);
-	if (!channel || skipChannels.includes(channel.type)) return false;
-	channel.realCheck = true;
-	const res = !Permissions.can(constants.Permissions.VIEW_CHANNEL, channel);
-	delete channel.realCheck;
-	return res;
+	if (!channel || (typeof channel !== "object" && typeof channel !== "function")
+		|| skipChannels.includes(channel.type)
+		|| typeof Permissions?.can !== "function"
+		|| constants?.Permissions?.VIEW_CHANNEL === undefined) return false;
+	internalPermissionChecks.add(channel);
+	try {
+		return !Permissions.can(constants.Permissions.VIEW_CHANNEL, channel);
+	} finally {
+		internalPermissionChecks.delete(channel);
+	}
 }
 
 const unpatches: (() => void)[] = [];
@@ -34,28 +48,32 @@ function disablePrivateChannelObfuscation(value: any, depth = 0, seen = new Set<
 	if (value === null || (typeof value !== "object" && typeof value !== "function") || depth > 8 || seen.has(value)) return value;
 	seen.add(value);
 
-	for (const flag of privateChannelHidingFlags) {
-		const descriptor = Object.getOwnPropertyDescriptor(value, flag);
-		if (descriptor?.value !== true && !descriptor?.get) continue;
+	try {
+		for (const flag of privateChannelHidingFlags) {
+			const descriptor = Object.getOwnPropertyDescriptor(value, flag);
+			if (descriptor?.value !== true && !descriptor?.get) continue;
 
-		try {
-			if (descriptor.configurable) {
-				Object.defineProperty(value, flag, { configurable: true, enumerable: descriptor.enumerable, writable: true, value: false });
-			} else if (descriptor.writable) {
-				value[flag] = false;
-			} else {
-				console.warn(`[Sage Eyes] ${flag} is not writable.`);
+			try {
+				if (descriptor.configurable) {
+					Object.defineProperty(value, flag, { configurable: true, enumerable: descriptor.enumerable, writable: true, value: false });
+				} else if (descriptor.writable) {
+					value[flag] = false;
+				} else {
+					console.warn(`[Sage Eyes] ${flag} is not writable.`);
+				}
+			} catch (error) {
+				console.warn(`[Sage Eyes] Could not disable ${flag}.`, error);
 			}
-		} catch (error) {
-			console.warn(`[Sage Eyes] Could not disable ${flag}.`, error);
 		}
-	}
 
-	for (const key of Reflect.ownKeys(value)) {
-		const descriptor = Object.getOwnPropertyDescriptor(value, key);
-		if (descriptor && "value" in descriptor) {
-			disablePrivateChannelObfuscation(descriptor.value, depth + 1, seen);
+		for (const key of Reflect.ownKeys(value)) {
+			const descriptor = Object.getOwnPropertyDescriptor(value, key);
+			if (descriptor && "value" in descriptor) {
+				disablePrivateChannelObfuscation(descriptor.value, depth + 1, seen);
+			}
 		}
+	} catch (error) {
+		console.warn("[Sage Eyes] Could not inspect Discord's private-channel protection data.", error);
 	}
 
 	return value;
@@ -139,14 +157,23 @@ export default {
 	onLoad: () => {
 		storage.showIcon ??= true;
 		storage.showPopup ??= true;
+		storage.keepDeletedMessages ??= true;
+		storage.keepEditHistory ??= true;
 		patchPrivateChannelObfuscation();
 
-		unpatches.push(
-			after("can", Permissions, ([permID, channel], res) => {
-				if (!channel?.realCheck && permID === constants.Permissions.VIEW_CHANNEL) return true;
-				return res;
-			})
-		);
+		if (typeof Permissions?.can === "function" && constants?.Permissions?.VIEW_CHANNEL !== undefined) {
+			unpatches.push(
+				after("can", Permissions, ([permID, channel], res) => {
+					if (channel && !internalPermissionChecks.has(channel)
+						&& permID === constants.Permissions.VIEW_CHANNEL) return true;
+					return res;
+				}),
+			);
+		} else {
+			console.warn("[Sage Eyes] Discord's channel permission module was not found; hidden-channel detection is unavailable.");
+		}
+
+		initializeMessageHistory(storage);
 
 		const transitionToGuild = findByProps("transitionToGuild");
 		if (transitionToGuild) {
@@ -158,7 +185,7 @@ export default {
 								const pathMatch = args[0].match(/(\d+)$/);
 								if (pathMatch?.[1]) {
 									const channelId = pathMatch[1];
-									const channel = getChannel(channelId);
+									const channel = getChannel?.(channelId);
 									if (channel && isHidden(channel)) {
 										if (storage.showPopup) {
 	                                        showConfirmationAlert({
@@ -184,29 +211,32 @@ export default {
 
 		const ChannelInfo = findByName("ChannelInfo", false);
 		if (ChannelInfo && storage.showIcon) {
+			const lockIcon = getAssetIDByName("ic_lock");
 			unpatches.push(
-				after("default", ChannelInfo, ([{ channel }], ret) =>
-					React.createElement(
+				after("default", ChannelInfo, (args, ret) => {
+					const channel = args[0]?.channel;
+					return React.createElement(
 						React.Fragment,
 						{},
-						channel && isHidden(channel)
+						channel && isHidden(channel) && lockIcon
 							? React.createElement(
 								RN.Image,
 								{
-									source: getAssetByName("ic_lock").id,
+									source: lockIcon,
 									style: { width: 20, height: 20, marginRight: 4 },
 								}
 							)
 							: null,
 						ret,
-					)
-				)
+					);
+				}),
 			);
 		}
 
 	},
 	onUnload: () => {
 		for (const unpatch of unpatches.splice(0)) unpatch();
+		removeMessageHistoryPatch();
 	},
 	settings: Settings,
 };
