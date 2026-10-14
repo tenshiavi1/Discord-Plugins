@@ -1,0 +1,13 @@
+{
+  "name": "Tenshi's Plugins",
+  "description": "Browse and manage tenshiavi's Revenge plugins from main settings.",
+  "authors": [
+    {
+      "name": "tenshiavi"
+    }
+  ],
+  "main": "src/index.ts",
+  "vendetta": {
+    "icon": "ChatCheckIcon"
+  }
+}

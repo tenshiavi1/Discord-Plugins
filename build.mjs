@@ -9,7 +9,7 @@ import { rollup } from "rollup";
 import esbuild from "rollup-plugin-esbuild";
 
 const extensions = [".js", ".jsx", ".mjs", ".ts", ".tsx", ".cts", ".mts"];
-const pluginDirectories = ["Omniscience", "Sage Eyes", "Aura Control", "Ephemeral Entity"];
+const pluginDirectories = ["Omniscience", "Sage Eyes", "Aura Control", "Ephemeral Entity", "Tenshi's Plugins"];
 
 for (const pluginName of pluginDirectories) {
   const pluginPath = resolve("Revenge Plugins", pluginName);

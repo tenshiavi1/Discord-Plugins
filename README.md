@@ -6,19 +6,21 @@ This repository groups plugins by client platform.
 
 Mobile plugins compatible with Revenge:
 
-- [Omniscience](./Revenge%20Plugins/Omniscience/README.md) — Track configured keywords and optionally notify a channel or webhook.
-- [Sage Eyes](./Revenge%20Plugins/Sage%20Eyes/README.md) — Show and inspect hidden or obscured channels.
 - [Aura Control](./Revenge%20Plugins/Aura%20Control/README.md) — Configure a custom Rich Presence.
 - [Ephemeral Entity](./Revenge%20Plugins/Ephemeral%20Entity/README.md) — Anonymize attachment filenames and optionally clean tracking parameters from sent URLs.
+- [Omniscience](./Revenge%20Plugins/Omniscience/README.md) — Track configured keywords and optionally notify a channel or webhook.
+- [Sage Eyes](./Revenge%20Plugins/Sage%20Eyes/README.md) — Show and inspect hidden or obscured channels.
+- [Tenshi's Plugins](./Revenge%20Plugins/Tenshi's%20Plugins/README.md) — Browse, configure, install, and delete the Revenge plugins from main settings.
 
 Add a plugin's integration URL in Revenge:
 
 | Plugin | Integration URL |
 | --- | --- |
-| Omniscience | `https://tenshiavi1.github.io/Discord-Plugins/Revenge%20Plugins/Omniscience/` |
-| Sage Eyes | `https://tenshiavi1.github.io/Discord-Plugins/Revenge%20Plugins/Sage%20Eyes/` |
 | Aura Control | `https://tenshiavi1.github.io/Discord-Plugins/Revenge%20Plugins/Aura%20Control/` |
 | Ephemeral Entity | `https://tenshiavi1.github.io/Discord-Plugins/Revenge%20Plugins/Ephemeral%20Entity/` |
+| Omniscience | `https://tenshiavi1.github.io/Discord-Plugins/Revenge%20Plugins/Omniscience/` |
+| Sage Eyes | `https://tenshiavi1.github.io/Discord-Plugins/Revenge%20Plugins/Sage%20Eyes/` |
+| Tenshi's Plugins | `https://tenshiavi1.github.io/Discord-Plugins/Revenge%20Plugins/Tenshi's%20Plugins/` |
 
 The build also publishes the previous singular `Revenge%20Plugin` category path beneath the new repository URL for compatibility.
 
