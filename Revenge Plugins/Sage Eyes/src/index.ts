@@ -11,8 +11,6 @@ import { settings } from "@vendetta";
 import { storage } from "@vendetta/plugin";
 
 const Permissions = findByProps("getChannelPermissions", "can");
-// const Router = findByProps("transitionToGuild");
-// const Fetcher = findByProps("stores", "fetchMessages");
 const { ChannelTypes } = findByProps("ChannelTypes");
 const { getChannel } = findByProps("getChannel") || findByName("getChannel", false);
 const snowFlakeTimestamp = findByProps("extractTimestamp");
@@ -30,8 +28,6 @@ function isHidden(channel: any | undefined) {
 	delete channel.realCheck;
 	return res;
 }
-
-// console.log("Loaded Hidden Channels plugin");
 
 const unpatches: (() => void)[] = [];
 
@@ -151,53 +147,14 @@ export default {
 
 		unpatches.push(
 			after("can", Permissions, ([permID, channel], res) => {
-				// console.log("[HiddenChannels] Permissions.can called " + (!channel?.realCheck && permID === constants.Permissions.VIEW_CHANNEL));
 				if (!channel?.realCheck && permID === constants.Permissions.VIEW_CHANNEL) return true;
 				return res;
 			})
 		);
 
-		// unpatches.push(
-		// 	instead("transitionToGuild", Router, (args, orig) => {
-		// 		console.log("[HiddenChannels] Router.transitionToGuild called with args:", args);
-		// 		const [_, channel] = args;
-		// 		if (!isHidden(channel) && typeof orig === "function") orig(args);
-		// 	})
-		// );
-
-		// unpatches.push(
-		// 	instead("fetchMessages", Fetcher, (args, orig) => {
-		// 		console.log("[HiddenChannels] Fetcher.fetchMessages called with args:", args);
-		// 		const [channel] = args;
-		// 		if (!isHidden(channel) && typeof orig === "function") orig(args);
-		// 	})
-		// );
-
-		// unpatches.push(
-		// 	instead("default", ChannelMessages, (args, orig) => {
-		// 		console.log("[HiddenChannels] ChannelMessages.default called with args:", args);
-		// 		const channel = args[0]?.channel;
-		// 		console.log("[HiddenChannels] ChannelMessages.default called with:", channel, "isHidden:", isHidden(channel));
-		// 		if (!isHidden(channel) && typeof orig === "function") return orig(...args);
-		// 		else return React.createElement(HiddenChannel, { channel });
-		// 	})
-		// );
-
-		// const Components = [
-		// 	"transitionToGuild",
-		// 	// "fetchMessages",
-		// 	// "Channel",
-		// 	// "Messages",
-		// 	// "getChannel",
-		// 	// "ChannelTypes",
-		// 	// "ChannelMessages", // Not working for some reason
-		// 	// "ChannelContainer",
-		// ];
-
 		const transitionToGuild = findByProps("transitionToGuild");
 		if (transitionToGuild) {
 			for (const key of Object.keys(transitionToGuild)) {
-				// Yes, all of them need to be patched. No, I don't know why. The key that's actually responsible is 'forward'
 				if (typeof transitionToGuild[key] === "function") {
 					unpatches.push(
 						instead(key, transitionToGuild, (args, orig) => {
@@ -207,7 +164,6 @@ export default {
 									const channelId = pathMatch[1];
 									const channel = getChannel(channelId);
 									if (channel && isHidden(channel)) {
-                                        // console.log(key.toString())
 										if (storage.showPopup) {
 	                                        showConfirmationAlert({
 	                                            title: "This channel is hidden.",
