@@ -26,6 +26,6 @@ export const MANAGED_PLUGINS: ManagedPlugin[] = [
 	catalogEntry("Aura Control", "Configure a custom Discord Rich Presence from Revenge mobile."),
 	catalogEntry("Ephemeral Entity", "Anonymize uploaded filenames and optionally clean tracking parameters from sent URLs."),
 	catalogEntry("Omniscience", "Track configured keywords and optionally notify a channel or webhook."),
-	catalogEntry("Sage Eyes", "Inspect hidden channel details and keep deleted messages and edit history visible in the current session."),
+	catalogEntry("Sage Eyes", "Inspect hidden channels, retain deleted messages and edit history, and manage message logs with long-press actions."),
 	catalogEntry("Tenshi's Plugins", "Browse and manage tenshiavi's Revenge plugins from main settings."),
 ];

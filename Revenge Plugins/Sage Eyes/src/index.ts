@@ -159,6 +159,9 @@ export default {
 		storage.showPopup ??= true;
 		storage.keepDeletedMessages ??= true;
 		storage.keepEditHistory ??= true;
+		storage.ignoreBotMessages ??= false;
+		storage.ignoreOwnMessages ??= false;
+		if (!Array.isArray(storage.ignoredUserIds)) storage.ignoredUserIds = [];
 		patchPrivateChannelObfuscation();
 
 		if (typeof Permissions?.can === "function" && constants?.Permissions?.VIEW_CHANNEL !== undefined) {

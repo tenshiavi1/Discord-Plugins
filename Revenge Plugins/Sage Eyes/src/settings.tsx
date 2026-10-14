@@ -4,7 +4,7 @@ import { storage } from "@vendetta/plugin";
 import { Forms } from "@vendetta/ui/components";
 import { getAssetIDByName } from "@vendetta/ui/assets";
 import { showToast } from "@vendetta/ui/toasts";
-import { clearMessageHistory } from "./messageHistory";
+import { clearMessageHistory, updateMessageHistorySettings } from "./messageHistory";
 
 const { FormRow, FormSection, FormSwitchRow } = Forms;
 
@@ -30,16 +30,40 @@ export function Settings() {
 			</FormSection>
 			<FormSection title="Message history" titleStyleType="no_border">
 				<FormSwitchRow
-					label="Keep deleted messages visible"
-					subLabel="Retain deleted message content in the current session when Revenge has it cached. History is memory-only and cleared when this plugin unloads."
+					label="Keep deleted message logs"
+					subLabel="Show locally cached deleted messages in chat. Long-press a log and choose Remove Deleted Message to dismiss it in one action."
 					value={Boolean(storage.keepDeletedMessages)}
-					onValueChange={(value: boolean) => { storage.keepDeletedMessages = value; }}
+					onValueChange={(value: boolean) => {
+						storage.keepDeletedMessages = value;
+						updateMessageHistorySettings({ keepDeletedMessages: value });
+					}}
 				/>
 				<FormSwitchRow
-					label="Show previous edited text"
-					subLabel="Append earlier message text to edited messages when it was available before the edit."
+					label="Keep edit history"
+					subLabel="Append earlier text to edited messages. Long-press a message and choose Remove Edit History to restore its current text."
 					value={Boolean(storage.keepEditHistory)}
-					onValueChange={(value: boolean) => { storage.keepEditHistory = value; }}
+					onValueChange={(value: boolean) => {
+						storage.keepEditHistory = value;
+						updateMessageHistorySettings({ keepEditHistory: value });
+					}}
+				/>
+				<FormSwitchRow
+					label="Ignore bot messages"
+					subLabel="Do not retain deletions or edits from bots."
+					value={Boolean(storage.ignoreBotMessages)}
+					onValueChange={(value: boolean) => {
+						storage.ignoreBotMessages = value;
+						updateMessageHistorySettings({ ignoreBotMessages: value });
+					}}
+				/>
+				<FormSwitchRow
+					label="Ignore your messages"
+					subLabel="Do not retain deletions or edits to your own messages."
+					value={Boolean(storage.ignoreOwnMessages)}
+					onValueChange={(value: boolean) => {
+						storage.ignoreOwnMessages = value;
+						updateMessageHistorySettings({ ignoreOwnMessages: value });
+					}}
 				/>
 				<FormRow
 					label="Clear message-history tracking"
@@ -51,6 +75,31 @@ export function Settings() {
 					}}
 				/>
 			</FormSection>
+			{Array.isArray(storage.ignoredUserIds) && storage.ignoredUserIds.length > 0 && (
+				<FormSection title={`Ignored users (${storage.ignoredUserIds.length})`} titleStyleType="no_border">
+					{storage.ignoredUserIds.map((userId: string) => (
+						<FormRow
+							key={userId}
+							label={`User ${userId}`}
+							subLabel="Ignored in Sage Eyes message history."
+							trailing={
+								<RN.TouchableOpacity
+									accessibilityRole="button"
+									accessibilityLabel={`Remove ${userId} from Sage Eyes ignored users`}
+									onPress={() => {
+										const ignoredUserIds = storage.ignoredUserIds.filter((id: string) => id !== userId);
+										storage.ignoredUserIds = ignoredUserIds;
+										updateMessageHistorySettings({ ignoredUserIds });
+									}}
+									style={{ paddingHorizontal: 12, paddingVertical: 8 }}
+								>
+									<RN.Text style={{ color: "#ed4245", fontWeight: "600" }}>Remove</RN.Text>
+								</RN.TouchableOpacity>
+							}
+						/>
+					))}
+				</FormSection>
+			)}
 		</RN.ScrollView>
 	);
 }

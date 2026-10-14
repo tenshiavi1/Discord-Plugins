@@ -1,6 +1,6 @@
 {
     "name": "Sage Eyes",
-    "description": "Reveal hidden channel names, inspect channel details, and keep deleted messages and edit history visible.",
+    "description": "Inspect hidden channels, retain deleted messages and edit history, and manage message logs with long-press actions.",
     "authors": [
         {
             "name": "tenshiavi"
