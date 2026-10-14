@@ -2,6 +2,7 @@ import { findByProps } from "@vendetta/metro";
 import { instead } from "@vendetta/patcher";
 import { storage } from "@vendetta/plugin";
 import { anonymizeUploadFiles, METHODS, type AnonymizationMethod } from "./filenames";
+import { clearTrackingUrlsInMessage } from "./urls";
 import Settings from "./settings";
 
 const defaults = {
@@ -9,6 +10,7 @@ const defaults = {
 	method: "random" as AnonymizationMethod,
 	randomizedLength: 7,
 	consistentName: "image",
+	clearTrackingUrls: true,
 };
 
 const unpatches: (() => void)[] = [];
@@ -37,19 +39,43 @@ export default {
 		}
 
 		const uploadModule = findByProps("uploadFiles");
-		if (typeof uploadModule?.uploadFiles !== "function") {
+		if (typeof uploadModule?.uploadFiles === "function") {
+			unpatches.push(
+				instead("uploadFiles", uploadModule, (args, original) => {
+					if (storage.anonymiseByDefault) {
+						anonymizeUploadFiles(args[0], normalizeSettings());
+					}
+					return original(...args);
+				}),
+			);
+		} else {
 			console.warn("[Ephemeral Entity] Discord's file upload module was not found; filenames will not be anonymized.");
-			return;
 		}
 
-		unpatches.push(
-			instead("uploadFiles", uploadModule, (args, original) => {
-				if (storage.anonymiseByDefault) {
-					anonymizeUploadFiles(args[0], normalizeSettings());
-				}
-				return original(...args);
-			}),
-		);
+		const messageActions = findByProps("sendMessage", "editMessage") ?? findByProps("sendMessage");
+		let patchedMessageMethods = 0;
+		for (const [method, messageIndex] of [["sendMessage", 1], ["editMessage", 2]] as const) {
+			if (typeof messageActions?.[method] !== "function") continue;
+
+			unpatches.push(
+				instead(method, messageActions, (args, original) => {
+					if (!storage.clearTrackingUrls) return original(...args);
+
+					const message = args[messageIndex];
+					const cleanedMessage = clearTrackingUrlsInMessage(message);
+					if (cleanedMessage === message) return original(...args);
+
+					const nextArgs = [...args];
+					nextArgs[messageIndex] = cleanedMessage;
+					return original(...nextArgs);
+				}),
+			);
+			patchedMessageMethods++;
+		}
+
+		if (patchedMessageMethods === 0) {
+			console.warn("[Ephemeral Entity] Discord's message send/edit actions were not found; tracking URLs will not be cleaned.");
+		}
 	},
 	onUnload() {
 		for (const unpatch of unpatches.splice(0)) unpatch();

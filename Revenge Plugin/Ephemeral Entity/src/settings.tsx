@@ -48,6 +48,12 @@ export default function Settings() {
 					value={Boolean(storage.anonymiseByDefault)}
 					onValueChange={(value: boolean) => { storage.anonymiseByDefault = value; }}
 				/>
+				<FormSwitchRow
+					label="Remove tracking parameters from sent URLs"
+					subLabel="Clean common advertising and click-tracking parameters when sending or editing messages."
+					value={Boolean(storage.clearTrackingUrls)}
+					onValueChange={(value: boolean) => { storage.clearTrackingUrls = value; }}
+				/>
 			</FormSection>
 			<FormSection title="Anonymization method" titleStyleType="no_border">
 				{METHODS.map((method) => (

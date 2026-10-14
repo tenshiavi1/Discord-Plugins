@@ -38,7 +38,7 @@ After GitHub Pages finishes deploying, add this URL in Revenge:
 
 ## Ephemeral Entity
 
-Anonymizes file names before uploads from Revenge mobile. Choose random characters, a consistent replacement name, or a timestamp while retaining the original file extension. Maintained by tenshiavi.
+Anonymizes file names before uploads and removes common tracking parameters from sent URLs in Revenge mobile. Choose random characters, a consistent replacement name, or a timestamp while retaining the original file extension. URL cleaning is separately toggleable. Maintained by tenshiavi.
 
 Source and plugin metadata are in `Revenge Plugin/Ephemeral Entity`.
 
