@@ -26,16 +26,6 @@ After GitHub Pages finishes deploying, add this URL in Revenge:
 
 `https://tenshiavi1.github.io/Plugins/Revenge%20Plugin/Sage%20Eyes/`
 
-## Oracle's Ledger
-
-Organizes direct messages into collapsible categories in the plugin settings. Add and move conversations from the organizer, and tap a conversation to open it. This works independently of Discord's native DM-list UI. Made by tenshiavi.
-
-Source and plugin metadata are in `Revenge Plugin/Oracle's Ledger`.
-
-After GitHub Pages finishes deploying, add this URL in Revenge:
-
-`https://tenshiavi1.github.io/Plugins/Revenge%20Plugin/Oracle%27s%20Ledger/`
-
 ## License
 
 The project is released under CC0 1.0 Universal. See [LICENSE](LICENSE).
