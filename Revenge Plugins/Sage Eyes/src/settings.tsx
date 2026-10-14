@@ -103,25 +103,7 @@ export function Settings() {
 					}}
 				/>
 			</FormSection>
-			<FormSection title="Styling & Appearance" titleStyleType="no_border">
-				<FormSwitchRow
-					label="Minimalistic mode"
-					subLabel="Show original and latest edit text on one line instead of separate lines."
-					value={Boolean(storage.minimalisticMode)}
-					onValueChange={(value: boolean) => {
-						storage.minimalisticMode = value;
-						updateMessageHistorySettings({ minimalisticMode: value });
-					}}
-				/>
-				<FormSwitchRow
-					label="Use background highlight"
-					subLabel="Show the deleted-message notice as a quote-style highlighted line."
-					value={Boolean(storage.useBackgroundHighlight)}
-					onValueChange={(value: boolean) => {
-						storage.useBackgroundHighlight = value;
-						updateMessageHistorySettings({ useBackgroundHighlight: value });
-					}}
-				/>
+			<FormSection title="Display" titleStyleType="no_border">
 				<FormSwitchRow
 					label="Add timestamp for edits"
 					subLabel="Show a relative timestamp beside each captured version."
@@ -135,8 +117,8 @@ export function Settings() {
 			<FormSection title="Custom Buffers" titleStyleType="no_border">
 				<TextSetting
 					label="Deleted indicator text"
-					value={String(storage.deletedIndicatorText ?? "This message is deleted")}
-					placeholder="This message is deleted"
+					value={String(storage.deletedIndicatorText ?? "This message was deleted")}
+					placeholder="This message was deleted"
 					onChangeText={(value) => {
 						storage.deletedIndicatorText = value;
 						updateMessageHistorySettings({ deletedIndicatorText: value });
@@ -144,8 +126,8 @@ export function Settings() {
 				/>
 				<TextSetting
 					label="Edited prefix tag"
-					value={String(storage.editedPrefixTag ?? "[ EDITED ]")}
-					placeholder="[ EDITED ]"
+					value={String(storage.editedPrefixTag ?? "(edited)")}
+					placeholder="(edited)"
 					onChangeText={(value) => {
 						storage.editedPrefixTag = value;
 						updateMessageHistorySettings({ editedPrefixTag: value });

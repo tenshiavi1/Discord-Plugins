@@ -161,11 +161,16 @@ export default {
 		storage.keepEditHistory ??= true;
 		storage.ignoreBotMessages ??= false;
 		storage.ignoreOwnMessages ??= false;
-		storage.minimalisticMode ??= true;
-		storage.useBackgroundHighlight ??= false;
 		storage.timestampForEdits ??= false;
-		storage.deletedIndicatorText ??= "This message is deleted";
-		storage.editedPrefixTag ??= "[ EDITED ]";
+		if (storage.deletedIndicatorText === "This message is deleted") {
+			storage.deletedIndicatorText = "This message was deleted";
+		} else {
+			storage.deletedIndicatorText ??= "This message was deleted";
+		}
+		if (storage.editedPrefixTag === "[ EDITED ]" || storage.editedPrefixTag === "`[ EDITED ]`") {
+			storage.editedPrefixTag = "(edited)";
+		}
+		storage.editedPrefixTag ??= "(edited)";
 		if (!Array.isArray(storage.ignoredUserIds)) storage.ignoredUserIds = [];
 		patchPrivateChannelObfuscation();
 

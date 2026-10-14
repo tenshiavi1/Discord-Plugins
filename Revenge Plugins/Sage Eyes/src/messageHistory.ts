@@ -44,8 +44,6 @@ type MessageHistorySettings = {
 	ignoreBotMessages: boolean;
 	ignoreOwnMessages: boolean;
 	ignoredUserIds: string[];
-	minimalisticMode: boolean;
-	useBackgroundHighlight: boolean;
 	timestampForEdits: boolean;
 	deletedIndicatorText: string;
 	editedPrefixTag: string;
@@ -61,11 +59,9 @@ let settings: MessageHistorySettings = {
 	ignoreBotMessages: false,
 	ignoreOwnMessages: false,
 	ignoredUserIds: [],
-	minimalisticMode: true,
-	useBackgroundHighlight: false,
 	timestampForEdits: false,
-	deletedIndicatorText: "This message is deleted",
-	editedPrefixTag: "[ EDITED ]",
+	deletedIndicatorText: "This message was deleted",
+	editedPrefixTag: "(edited)",
 };
 
 function getMessageKey(channelId: string, messageId: string) {
@@ -121,33 +117,23 @@ function getMessageTimestamp(message: MessageRecord) {
 	return null;
 }
 
-function withBackgroundHighlight(content: string, enabled: boolean) {
-	if (!enabled) return content;
-	return content.split("\n").map((line) => `> ${line}`).join("\n");
-}
-
-function retainDeletedMessage(
-	event: Record<string, any>,
-	channelId: string,
-	messageId: string,
-	original: MessageRecord,
-) {
-	event.type = "MESSAGE_UPDATE";
-	event.channelId = original.channel_id ?? channelId;
-	const indicator = settings.deletedIndicatorText.trim() || "This message is deleted";
-	event.message = {
-		...original,
-		id: messageId,
-		channel_id: original.channel_id ?? channelId,
-		content: withBackgroundHighlight(indicator, settings.useBackgroundHighlight),
-		was_deleted: true,
+function retainDeletedMessage(args: unknown[], channelId: string, messageId: string) {
+	const indicator = settings.deletedIndicatorText.trim() || "This message was deleted";
+	args[0] = {
+		type: "MESSAGE_EDIT_FAILED_AUTOMOD",
+		messageData: {
+			type: 1,
+			message: { channelId, messageId },
+		},
+		errorResponseBody: {
+			code: 200000,
+			message: indicator,
+		},
 	};
-	event.optimistic = false;
-	event.sendMessageOptions = {};
-	event.isPushNotification = false;
+	return args;
 }
 
-function handleDispatch(args: unknown[]) {
+function handleDispatch(args: unknown[]): unknown[] | void {
 	const event = args[0] as Record<string, any> | undefined;
 	if (!event || typeof event.type !== "string" || event.otherPluginBypass) return;
 
@@ -160,8 +146,7 @@ function handleDispatch(args: unknown[]) {
 		const existingRecord = deletedMessages.get(key);
 		if (existingRecord) {
 			if (shouldIgnore(existingRecord.original.author) || (Number(existingRecord.original.flags) & 64) !== 0) return;
-			retainDeletedMessage(event, channelId, messageId, existingRecord.original);
-			return;
+			return retainDeletedMessage(args, channelId, messageId);
 		}
 
 		const original = getStoredMessage(channelId, messageId) ?? deletedMessages.get(key)?.original;
@@ -170,8 +155,7 @@ function handleDispatch(args: unknown[]) {
 		if (!original.content && !original.attachments?.length && !original.embeds?.length) return;
 
 		rememberMessage(deletedMessages, key, { channelId, original });
-		retainDeletedMessage(event, channelId, messageId, original);
-		return;
+		return retainDeletedMessage(args, channelId, messageId);
 	}
 
 	if (event.type !== "MESSAGE_UPDATE" || !settings.keepEditHistory) return;
@@ -207,7 +191,7 @@ function handleDispatch(args: unknown[]) {
 	}
 	rememberMessage(editHistory, key, record);
 
-	const prefix = settings.editedPrefixTag.trim() || "[ EDITED ]";
+	const prefix = settings.editedPrefixTag.trim() || "(edited)";
 	const originalContent = record.previous[0]?.content ?? record.currentContent;
 	const originalTimestamp = settings.timestampForEdits
 		? ` (${getRelativeTimestamp(record.previous[0]?.editedAt)})`
@@ -215,9 +199,7 @@ function handleDispatch(args: unknown[]) {
 	const currentTimestamp = settings.timestampForEdits
 		? ` (${getRelativeTimestamp(record.currentEditedAt)})`
 		: "";
-	const displayContent = settings.minimalisticMode
-		? `${originalContent}${originalTimestamp} ${prefix} ${message.content}${currentTimestamp}`
-		: `${originalContent}${originalTimestamp}\n${prefix}\n${message.content}${currentTimestamp}`;
+	const displayContent = `${originalContent}${originalTimestamp} ${prefix}\n↓\n${record.currentContent}${currentTimestamp} ${prefix}`;
 	event.message = {
 		...original,
 		...message,
@@ -410,8 +392,6 @@ export function initializeMessageHistory(pluginSettings: {
 	ignoreBotMessages?: boolean;
 	ignoreOwnMessages?: boolean;
 	ignoredUserIds?: unknown;
-	minimalisticMode?: boolean;
-	useBackgroundHighlight?: boolean;
 	timestampForEdits?: boolean;
 	deletedIndicatorText?: string;
 	editedPrefixTag?: string;
@@ -424,11 +404,9 @@ export function initializeMessageHistory(pluginSettings: {
 		ignoredUserIds: Array.isArray(pluginSettings.ignoredUserIds)
 			? pluginSettings.ignoredUserIds.filter((id): id is string => typeof id === "string")
 			: [],
-		minimalisticMode: pluginSettings.minimalisticMode ?? true,
-		useBackgroundHighlight: pluginSettings.useBackgroundHighlight ?? false,
 		timestampForEdits: pluginSettings.timestampForEdits ?? false,
-		deletedIndicatorText: pluginSettings.deletedIndicatorText ?? "This message is deleted",
-		editedPrefixTag: pluginSettings.editedPrefixTag ?? "[ EDITED ]",
+		deletedIndicatorText: pluginSettings.deletedIndicatorText ?? "This message was deleted",
+		editedPrefixTag: pluginSettings.editedPrefixTag ?? "(edited)",
 	};
 
 	if (typeof FluxDispatcher?.dispatch !== "function") {
@@ -439,7 +417,7 @@ export function initializeMessageHistory(pluginSettings: {
 	try {
 		unpatches.push(before("dispatch", FluxDispatcher, (args) => {
 			try {
-				handleDispatch(args);
+				return handleDispatch(args);
 			} catch (error) {
 				console.error("[Sage Eyes] Could not update message history.", error);
 			}
