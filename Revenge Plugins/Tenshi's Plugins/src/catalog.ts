@@ -9,8 +9,6 @@ export type ManagedPlugin = {
 const PUBLISHED_ROOT = "https://tenshiavi1.github.io/Discord-Plugins/Revenge%20Plugins";
 const LEGACY_ROOTS = [
 	"https://tenshiavi1.github.io/Discord-Plugins/Revenge%20Plugin",
-	"https://tenshiavi1.github.io/Plugins/Revenge%20Plugins",
-	"https://tenshiavi1.github.io/Plugins/Revenge%20Plugin",
 ];
 const GITHUB_CONTENTS_URL =
 	"https://api.github.com/repos/tenshiavi1/Discord-Plugins/contents/Revenge%20Plugins?ref=main";
@@ -24,13 +22,15 @@ export async function fetchWithRetry(url: string, init?: RequestInit): Promise<R
 	for (let attempt = 0; attempt < maxAttempts; attempt++) {
 		let timeout: ReturnType<typeof setTimeout> | undefined;
 		let response: Response | undefined;
+		const separator = url.includes("?") ? "&" : "?";
+		const requestUrl = `${url}${separator}_fetch=${Date.now()}-${attempt}`;
 		try {
-			const request = fetch(url, { ...init, cache: "no-store" });
+			const request = fetch(requestUrl, init);
 			response = await Promise.race([
 				request,
 				new Promise<Response>((_, reject) => {
 					timeout = setTimeout(() => {
-						reject(new Error(`Request timed out while fetching ${url}.`));
+						reject(new Error(`Request timed out after 12 seconds: ${url}`));
 					}, 12_000);
 				}),
 			]);
@@ -53,7 +53,8 @@ export async function fetchWithRetry(url: string, init?: RequestInit): Promise<R
 		}
 	}
 
-	throw lastError instanceof Error ? lastError : new Error(`Could not fetch ${url}.`);
+	const message = lastError instanceof Error ? lastError.message : String(lastError);
+	throw new Error(`Could not fetch ${url} after ${maxAttempts} attempts: ${message}`);
 }
 
 const PLUGIN_SEARCH_TERMS: Record<string, string> = {

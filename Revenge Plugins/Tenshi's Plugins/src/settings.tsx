@@ -27,6 +27,15 @@ type PluginManifest = {
 	[key: string]: unknown;
 };
 
+function errorMessage(error: unknown): string {
+	return error instanceof Error ? error.message : String(error);
+}
+
+function shortenError(error: unknown): string {
+	const message = errorMessage(error);
+	return message.length > 180 ? `${message.slice(0, 177)}...` : message;
+}
+
 async function fetchPluginBundle(url: string, expectedName: string): Promise<{ manifest: PluginManifest; js: string }> {
 	const baseUrl = url.endsWith("/") ? url : `${url}/`;
 	const manifestResponse = await fetchWithRetry(`${baseUrl}manifest.json`);
@@ -62,10 +71,15 @@ async function fetchPluginBundle(url: string, expectedName: string): Promise<{ m
 	}
 
 	if (globalThis.crypto?.subtle && typeof TextEncoder !== "undefined") {
-		const digest = await globalThis.crypto.subtle.digest("SHA-256", new TextEncoder().encode(js));
-		const actualHash = Array.from(new Uint8Array(digest), (byte) => byte.toString(16).padStart(2, "0")).join("");
-		if (actualHash.toLowerCase() !== manifest.hash.toLowerCase()) {
-			throw new Error(`The downloaded ${expectedName} bundle did not match its manifest hash.`);
+		try {
+			const digest = await globalThis.crypto.subtle.digest("SHA-256", new TextEncoder().encode(js));
+			const actualHash = Array.from(new Uint8Array(digest), (byte) => byte.toString(16).padStart(2, "0")).join("");
+			if (actualHash.toLowerCase() !== manifest.hash.toLowerCase()) {
+				throw new Error(`The downloaded ${expectedName} bundle did not match its manifest hash.`);
+			}
+		} catch (error) {
+			if (error instanceof Error && error.message.includes("did not match its manifest hash")) throw error;
+			console.warn(`[Tenshi's Plugins] SHA-256 verification is unavailable in this runtime for ${expectedName}.`, error);
 		}
 	}
 
@@ -151,6 +165,7 @@ export default function Settings() {
 	const [fetchingAll, setFetchingAll] = React.useState(false);
 	const [fetchProgress, setFetchProgress] = React.useState(0);
 	const [fetchTotal, setFetchTotal] = React.useState(0);
+	const [fetchFailures, setFetchFailures] = React.useState<string[]>([]);
 	const [catalog, setCatalog] = React.useState(MANAGED_PLUGINS);
 	const [searchQuery, setSearchQuery] = React.useState("");
 	const [searchInputReset, setSearchInputReset] = React.useState(0);
@@ -221,22 +236,21 @@ export default function Settings() {
 		const existingPlugin = plugins[installed.key];
 		const wasEnabled = !!installed.instance.enabled;
 
-		let bundle: Awaited<ReturnType<typeof fetchPluginBundle>>;
-		try {
-			bundle = await fetchPluginBundle(entry.url, entry.name);
-		} catch (canonicalError) {
-			if (entry.url === installed.key) throw canonicalError;
-			console.warn(
-				`[Tenshi's Plugins] Current repository URL failed for ${entry.name}; retrying its installed source.`,
-				canonicalError,
-			);
+		const sources = [...new Set([entry.url, installed.key, ...entry.legacyUrls])];
+		const sourceErrors: string[] = [];
+		let bundle: Awaited<ReturnType<typeof fetchPluginBundle>> | undefined;
+		for (const source of sources) {
 			try {
-				bundle = await fetchPluginBundle(installed.key, entry.name);
-			} catch (installedSourceError) {
-				throw new Error(
-					`Could not refetch ${entry.name} from either source. Repository: ${String(canonicalError)} Installed source: ${String(installedSourceError)}`,
-				);
+				bundle = await fetchPluginBundle(source, entry.name);
+				break;
+			} catch (error) {
+				const failure = `${source}: ${errorMessage(error)}`;
+				sourceErrors.push(failure);
+				console.warn(`[Tenshi's Plugins] Could not fetch ${entry.name} from ${source}.`, error);
 			}
+		}
+		if (!bundle) {
+			throw new Error(`Could not fetch ${entry.name} from any source. ${sourceErrors.join(" | ")}`);
 		}
 
 		const manifestChanged = JSON.stringify(existingPlugin?.manifest) !== JSON.stringify(bundle.manifest);
@@ -309,6 +323,7 @@ export default function Settings() {
 	const fetchAllPlugins = async () => {
 		if (fetchingAll || Object.values(busy).some(Boolean)) return;
 		setFetchingAll(true);
+		setFetchFailures([]);
 		setFetchProgress(0);
 		try {
 			const discoveredPlugins = await discoverManagedPlugins();
@@ -345,7 +360,9 @@ export default function Settings() {
 						else unchangedCount++;
 					} catch (error) {
 						console.error(`[Tenshi's Plugins] Fetch All failed for ${target.entry.name}.`, error);
-						failedPlugins.push(target.entry.name);
+						const failure = `${target.entry.name}: ${errorMessage(error)}`;
+						failedPlugins.push(failure);
+						setFetchFailures((current) => [...current, failure]);
 					} finally {
 						completedCount++;
 						setFetchProgress(completedCount);
@@ -362,7 +379,9 @@ export default function Settings() {
 					else unchangedCount++;
 				} catch (error) {
 					console.error(`[Tenshi's Plugins] Fetch All failed for ${managerTarget.entry.name}.`, error);
-					failedPlugins.push(managerTarget.entry.name);
+					const failure = `${managerTarget.entry.name}: ${errorMessage(error)}`;
+					failedPlugins.push(failure);
+					setFetchFailures((current) => [...current, failure]);
 				} finally {
 					completedCount++;
 					setFetchProgress(completedCount);
@@ -372,7 +391,7 @@ export default function Settings() {
 
 			if (failedPlugins.length > 0) {
 				showToast(
-					`Plugin catalog refreshed. ${pluralize(updatedCount, "plugin")} updated, ${pluralize(unchangedCount, "plugin")} already up to date, and ${pluralize(availableCount, "plugin")} available to install. ${pluralize(failedPlugins.length, "plugin")} failed: ${failedPlugins.join(", ")}.`,
+					`Plugin catalog refreshed, but ${pluralize(failedPlugins.length, "plugin")} could not be fetched. Open Fetch Details to see the errors.`,
 					getAssetIDByName("Warning"),
 				);
 			} else {
@@ -651,6 +670,7 @@ export default function Settings() {
 					onPress: () => {
 						hideActionSheet?.();
 						void (async () => {
+							setFetchFailures([]);
 							try {
 								const updated = await refetchPlugin(entry, installed);
 								showToast(
@@ -661,7 +681,11 @@ export default function Settings() {
 								);
 							} catch (error) {
 								console.error(`[Tenshi's Plugins] Failed to refetch ${entry.name}.`, error);
-								showToast(`Could not refresh ${entry.name}. Check your connection and try again.`, getAssetIDByName("Warning"));
+								setFetchFailures([`${entry.name}: ${errorMessage(error)}`]);
+								showToast(
+									`Could not refresh ${entry.name}: ${shortenError(error)}`,
+									getAssetIDByName("Warning"),
+								);
 							}
 						})();
 					},
@@ -795,6 +819,51 @@ export default function Settings() {
 					<RN.Text style={{ color: "#dbdee1", marginLeft: 10 }}>
 						{fetchTotal > 0 ? `Updating plugins ${fetchProgress}/${fetchTotal}` : "Loading plugin catalog..."}
 					</RN.Text>
+				</RN.View>
+			)}
+			{fetchFailures.length > 0 && (
+				<RN.View
+					style={{
+						marginBottom: 12,
+						padding: 12,
+						borderRadius: 12,
+						backgroundColor: "#3b2427",
+					}}
+				>
+					<RN.Text style={{ color: "#f2f3f5", fontSize: 15, fontWeight: "600", marginBottom: 8 }}>
+						Fetch Details
+					</RN.Text>
+					{fetchFailures.map((failure, index) => (
+						<RN.Text
+							key={`${index}-${failure}`}
+							selectable
+							style={{ color: "#f2f3f5", fontSize: 12, marginBottom: 6 }}
+						>
+							{failure}
+						</RN.Text>
+					))}
+					<RN.TouchableOpacity
+						accessibilityRole="button"
+						accessibilityLabel="Copy plugin fetch failure details"
+						onPress={() => {
+							try {
+								clipboard.setString(fetchFailures.join("\n"));
+								showToast("Copied the plugin fetch errors to your clipboard.", getAssetIDByName("Check"));
+							} catch (error) {
+								console.error("[Tenshi's Plugins] Could not copy fetch failure details.", error);
+								showToast("Could not copy the fetch errors. Select the details above to copy them.", getAssetIDByName("Warning"));
+							}
+						}}
+						style={{
+							minHeight: 40,
+							alignItems: "center",
+							justifyContent: "center",
+							borderRadius: 8,
+							backgroundColor: "#292b38",
+						}}
+					>
+						<RN.Text style={{ color: "#f2f3f5", fontWeight: "600" }}>Copy Fetch Errors</RN.Text>
+					</RN.TouchableOpacity>
 				</RN.View>
 			)}
 			<RN.View
