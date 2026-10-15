@@ -8,7 +8,7 @@ Mobile plugins compatible with Revenge:
 
 - [Aura Control](./Revenge%20Plugins/Aura%20Control/README.md) — Create and manage custom Rich Presence.
 - [Ephemeral Entity](./Revenge%20Plugins/Ephemeral%20Entity/README.md) — Anonymize uploads, clean tracking URLs, hide typing, and leave group DMs silently.
-- [Omniscience](./Revenge%20Plugins/Omniscience/README.md) — Track message keywords across DMs and servers, with optional channel and webhook alerts.
+- [Omniscience](./Revenge%20Plugins/Omniscience/README.md) — Track keywords and mentions of your active account, with optional channel and webhook alerts.
 - [Sage Eyes](./Revenge%20Plugins/Sage%20Eyes/README.md) — View hidden-channel details, server info, and local message edit/deletion history.
 - [Tenshi's Plugins](./Revenge%20Plugins/Tenshi's%20Plugins/README.md) — Manage Revenge plugins, keep Developer Mode on, and review crash reports.
 - [Avatar Handler](./Revenge%20Plugins/Avatar%20Handler/README.md) — Unlock Discord's native mobile account switcher for saved accounts.

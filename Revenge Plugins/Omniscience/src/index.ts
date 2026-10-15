@@ -35,6 +35,7 @@ const defaults = {
   sendNotificationToChannel: false,
   sendNotificationToWebhook: false,
   keywords: [],
+  trackOwnMentions: false,
   targetChannelId: "",
   webhookUrl: "",
   trackMode: "everyone",
@@ -268,7 +269,7 @@ export default {
     const onMessage = (p: any) => {
       if (!storage.enabled) return;
       const m = p?.message ?? p;
-      if (!m || !storage.keywords || storage.keywords.length === 0) return;
+      if (!m) return;
 
       let fullContent = m.content || "";
 
@@ -285,7 +286,7 @@ export default {
         }
       }
 
-      if (!fullContent) return;
+      if (!fullContent && !storage.trackOwnMentions) return;
       if (typeof m.author?.id !== "string") return;
 
       const currentUser = UserStore?.getCurrentUser?.();
@@ -344,9 +345,24 @@ export default {
         if ((c.type === 1 || (c.type === 0 && !c.guild_id)) && !storage.trackDMs) return;
       }
 
-      let matchedKeyword = "";
+      const currentUserId = currentUser?.id;
+      const mentionsCurrentUser = Boolean(
+        storage.trackOwnMentions &&
+        currentUserId &&
+        Array.isArray(m.mentions) &&
+        m.mentions.some((mention: unknown) =>
+          typeof mention === "string"
+            ? mention === currentUserId
+            : typeof mention === "object" &&
+              mention !== null &&
+              "id" in mention &&
+              mention.id === currentUserId,
+        ),
+      );
+      let matchedKeyword = mentionsCurrentUser ? "@you" : "";
 
-      for (const storedKeyword of storage.keywords) {
+      for (const storedKeyword of Array.isArray(storage.keywords) ? storage.keywords : []) {
+        if (matchedKeyword) break;
         if (typeof storedKeyword !== "string") continue;
         const kw = storedKeyword.trim();
         if (!kw) continue;
@@ -414,7 +430,6 @@ export default {
           messageContent += `**Message Link:** https://discord.com/channels/@me/${c.id}/${m.id}`;
         }
 
-        const currentUserId = currentUser?.id;
         const notificationContent = currentUserId
           ? `<@${currentUserId}>\n${messageContent}`
           : messageContent;

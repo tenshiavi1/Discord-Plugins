@@ -6,10 +6,13 @@ Omniscience is a Revenge mobile keyword-tracking plugin by tenshiavi. It monitor
 
 - Add, remove, import, and export tracked keywords.
 - Enable or pause keyword monitoring with its master toggle.
+- Optionally track direct mentions of the currently active Discord account.
 - Choose whether to track everyone, friends, or selected user IDs.
 - Include or exclude servers, channels, and users; choose whether to track embeds or ignore bots.
 - Configure whole-word, exact-match, case-sensitive, and in-sentence matching.
 - Optionally forward matches to a channel or webhook.
+
+Mention tracking uses incoming message events delivered to the active Discord client and the current account's user ID. It does not monitor saved but inactive accounts or run background polling.
 
 ## Privacy
 

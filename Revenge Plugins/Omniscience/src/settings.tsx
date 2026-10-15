@@ -165,6 +165,12 @@ export default function Settings() {
 
         <TableRowGroup title="Tracking Target">
           <TableSwitchRow
+            label="Track Mentions Of This Account"
+            subLabel="Notify when an incoming message mentions the currently active Discord account. Inactive saved accounts are not monitored."
+            value={Boolean(storage.trackOwnMentions)}
+            onValueChange={(v: boolean) => { storage.trackOwnMentions = v; forceUpdate(); }}
+          />
+          <TableSwitchRow
             label="Track Everyone"
             subLabel="Listen to messages from all users"
             value={storage.trackMode === "everyone"}
