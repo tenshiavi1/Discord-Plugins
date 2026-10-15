@@ -97,7 +97,8 @@ export async function discoverManagedPlugins(): Promise<ManagedPlugin[]> {
 			"type" in entry &&
 			entry.type === "dir" &&
 			"name" in entry &&
-			typeof entry.name === "string",
+			typeof entry.name === "string" &&
+			entry.name !== "shared",
 	);
 	if (pluginDirectories.length === 0) {
 		throw new Error("No Revenge plugin directories were found in the repository.");
