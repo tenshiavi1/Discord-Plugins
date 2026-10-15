@@ -6,9 +6,9 @@ God Console is a Revenge mobile plugin by tenshiavi with three optional utilitie
 
 - **Read All** adds a guild-bar button that marks unread server channels and DMs as read.
 - **Jump To Top** adds a control beside Discord's Jump to Present button to return to the top of the current chat.
-- **Valid User** adds a message-menu action that fetches uncached users mentioned in the message, then refreshes its local display.
+- **Valid User** automatically fetches uncached users mentioned in new or loaded messages so their mentions display normally.
 
-Each feature can be enabled or disabled independently in plugin settings. Mention repair only runs when selected from a message's long-press menu, makes a limited number of sequential user lookups, and does not send messages or invent users for IDs Discord cannot resolve.
+Each feature can be enabled or disabled independently in plugin settings. Mention repair processes up to ten uncached users per message, throttles requests, and does not send messages or invent users for IDs Discord cannot resolve.
 
 ## Installation
 

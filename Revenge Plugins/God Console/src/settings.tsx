@@ -43,7 +43,7 @@ export default function Settings() {
 				<TableRowGroup title="Valid User">
 					<TableSwitchRow
 						label="Enable Mention Repair"
-						subLabel="Add a message-menu action to resolve uncached user mentions."
+						subLabel="Automatically resolve uncached user mentions as messages appear."
 						value={Boolean(storage.validUserEnabled)}
 						onValueChange={(value: boolean) => {
 							storage.validUserEnabled = value;
