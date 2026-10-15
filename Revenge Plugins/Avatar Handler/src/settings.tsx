@@ -21,6 +21,13 @@ const { TableRow, TableRowGroup, TableSwitchRow, Stack } = findByProps(
 
 export default function Settings() {
 	useProxy(storage);
+	const [pendingAction, setPendingAction] = React.useState<"login" | "manager" | null>(null);
+	const pendingActionTimer = React.useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
+	const pendingActionRef = React.useRef(false);
+
+	React.useEffect(() => () => {
+		if (pendingActionTimer.current) clearTimeout(pendingActionTimer.current);
+	}, []);
 
 	const confirmEnable = () => {
 		showConfirmationAlert({
@@ -38,6 +45,47 @@ export default function Settings() {
 				}
 			},
 		});
+	};
+
+	const runAccountAction = async (action: "login" | "manager") => {
+		if (pendingActionRef.current) return;
+		pendingActionRef.current = true;
+		setPendingAction(action);
+		await new Promise<void>((resolve) => {
+			setTimeout(resolve, 100);
+		});
+
+		let opened = false;
+		try {
+			opened = action === "login"
+				? openNativeAccountLogin()
+				: openNativeAccountManager();
+		} catch (error) {
+			console.error(`[Avatar Handler] Could not open Discord's native ${action === "login" ? "account login" : "account manager"}.`, error);
+		}
+		if (opened) {
+			showToast(
+				action === "login"
+					? "Opened Discord's native account login"
+					: "Opened Discord's native account manager",
+				getAssetIDByName("Check"),
+			);
+			pendingActionTimer.current = setTimeout(() => {
+				pendingActionTimer.current = undefined;
+				pendingActionRef.current = false;
+				setPendingAction(null);
+			}, 900);
+			return;
+		}
+
+		pendingActionRef.current = false;
+		setPendingAction(null);
+		showToast(
+			action === "login"
+				? "Discord's native account login is unavailable in this client"
+				: "Discord's account manager is unavailable in this client",
+			getAssetIDByName("Warning"),
+		);
 	};
 
 	return (
@@ -59,30 +107,26 @@ export default function Settings() {
 						}}
 					/>
 					<TableRow
-						label="Add an account"
-						subLabel="Open Discord's native login screen. Discord handles passwords, MFA, and any other verification."
-						trailing={<TableRow.Arrow />}
-						disabled={!storage.enabled}
-						onPress={() => {
-							if (openNativeAccountLogin()) {
-								showToast("Opened Discord's native account login", getAssetIDByName("Check"));
-							} else {
-								showToast("Discord's native account login is unavailable in this client", getAssetIDByName("Warning"));
-							}
-						}}
+						label={pendingAction === "login" ? "Opening login..." : "Add an account"}
+						subLabel={pendingAction === "login"
+							? "Opening Discord's native login screen..."
+							: "Open Discord's native login screen. Discord handles passwords, MFA, and any other verification."}
+						trailing={pendingAction === "login"
+							? <RN.ActivityIndicator size="small" />
+							: <TableRow.Arrow />}
+						disabled={!storage.enabled || pendingAction !== null}
+						onPress={() => { void runAccountAction("login"); }}
 					/>
 					<TableRow
-						label="Switch or manage accounts"
-						subLabel="Open Discord's native account manager to switch to a saved account or manage your account list."
-						trailing={<TableRow.Arrow />}
-						disabled={!storage.enabled}
-						onPress={() => {
-							if (openNativeAccountManager()) {
-								showToast("Opened Discord's native account manager", getAssetIDByName("Check"));
-							} else {
-								showToast("Discord's account manager is unavailable in this client", getAssetIDByName("Warning"));
-							}
-						}}
+						label={pendingAction === "manager" ? "Opening account manager..." : "Switch or manage accounts"}
+						subLabel={pendingAction === "manager"
+							? "Opening Discord's native account manager..."
+							: "Open Discord's native account manager to switch to a saved account or manage your account list."}
+						trailing={pendingAction === "manager"
+							? <RN.ActivityIndicator size="small" />
+							: <TableRow.Arrow />}
+						disabled={!storage.enabled || pendingAction !== null}
+						onPress={() => { void runAccountAction("manager"); }}
 					/>
 				</TableRowGroup>
 				<TableRowGroup title="Security and Login Responses">
