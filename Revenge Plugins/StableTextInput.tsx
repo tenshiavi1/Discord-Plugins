@@ -4,9 +4,11 @@ type StableTextInputProps = {
 	value: string;
 	onChangeText: (value: string) => void;
 	placeholder?: string;
+	accessibilityLabel?: string;
 	keyboardType?: "default" | "numeric";
 	maxLength?: number;
 	editable?: boolean;
+	resetKey?: string | number;
 	returnKeyType?: "done" | "next" | "search" | "send";
 	onSubmitEditing?: () => void;
 	style?: Record<string, unknown>;
@@ -29,18 +31,22 @@ const StableTextInput = React.memo(function StableTextInput({
 	value,
 	onChangeText,
 	placeholder,
+	accessibilityLabel,
 	keyboardType = "default",
 	maxLength,
 	editable = true,
+	resetKey,
 	returnKeyType,
 	onSubmitEditing,
 	style,
 }: StableTextInputProps) {
 	return (
 		<RN.TextInput
+			key={resetKey}
 			defaultValue={value}
 			placeholder={placeholder}
 			placeholderTextColor="#949ba4"
+			accessibilityLabel={accessibilityLabel}
 			keyboardType={keyboardType}
 			maxLength={maxLength}
 			autoCapitalize="none"
@@ -56,9 +62,11 @@ const StableTextInput = React.memo(function StableTextInput({
 		/>
 	);
 }, (previous, next) => previous.placeholder === next.placeholder
+	&& previous.accessibilityLabel === next.accessibilityLabel
 	&& previous.keyboardType === next.keyboardType
 	&& previous.maxLength === next.maxLength
 	&& previous.editable === next.editable
+	&& previous.resetKey === next.resetKey
 	&& previous.returnKeyType === next.returnKeyType
 	&& previous.onSubmitEditing === next.onSubmitEditing
 	&& stylesEqual(previous.style, next.style));

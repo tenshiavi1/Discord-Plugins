@@ -6,6 +6,7 @@ import { createMMKVBackend } from "@vendetta/storage";
 import { useProxy } from "@vendetta/storage";
 import { showConfirmationAlert } from "@vendetta/ui/alerts";
 import { getAssetIDByName } from "@vendetta/ui/assets";
+import StableTextInput from "../../StableTextInput";
 import { showToast } from "@vendetta/ui/toasts";
 import { discoverManagedPlugins, MANAGED_PLUGINS, type ManagedPlugin } from "./catalog";
 import { clearLastCrash, getCrashReasons, getLastCrash } from "./crashLog";
@@ -184,6 +185,7 @@ export default function Settings() {
 	const [fetchTotal, setFetchTotal] = React.useState(0);
 	const [catalog, setCatalog] = React.useState(MANAGED_PLUGINS);
 	const [searchQuery, setSearchQuery] = React.useState("");
+	const [searchInputReset, setSearchInputReset] = React.useState(0);
 	const navigation = NavigationNative.useNavigation();
 	const { width: screenWidth, fontScale } = RN.useWindowDimensions();
 	const normalizedQuery = searchQuery.trim().toLocaleLowerCase();
@@ -818,14 +820,12 @@ export default function Settings() {
 					backgroundColor: "#2b2d31",
 				}}
 			>
-				<RN.TextInput
+				<StableTextInput
 					accessibilityLabel="Search plugins"
 					placeholder="Search Plugins by Name or Description"
-					placeholderTextColor="#949ba4"
 					value={searchQuery}
 					onChangeText={setSearchQuery}
-					autoCapitalize="none"
-					autoCorrect={false}
+					resetKey={searchInputReset}
 					returnKeyType="search"
 					style={{ flex: 1, minHeight: 44, color: "#f2f3f5" }}
 				/>
@@ -833,7 +833,10 @@ export default function Settings() {
 					<RN.TouchableOpacity
 						accessibilityLabel="Clear Plugin Search"
 						accessibilityRole="button"
-						onPress={() => setSearchQuery("")}
+						onPress={() => {
+							setSearchQuery("");
+							setSearchInputReset((current) => current + 1);
+						}}
 						style={{ padding: 8 }}
 					>
 						<RN.Text style={{ color: "#b5bac1", fontSize: 16 }}>Clear</RN.Text>
@@ -874,7 +877,7 @@ export default function Settings() {
 						? `Crash Reason: ${crashReasons
 							.map((reason) => `${reason.pluginName} (${formatCrashDate(reason.timestamp)})`)
 							.join(", ")}`
-						: "Crash Reason: None recorded"}
+						: "Crash Reason: None Recorded"}
 				</RN.Text>
 				<RN.TouchableOpacity
 					accessibilityLabel="Copy last crash logs"

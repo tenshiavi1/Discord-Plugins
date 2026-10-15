@@ -7,20 +7,27 @@ import { getAssetIDByName } from "@vendetta/ui/assets";
 import StableTextInput from "../../StableTextInput";
 
 const { ScrollView } = findByProps("ScrollView");
-const { TableRowGroup, TableRow, TableSwitchRow, Stack, TextInput } = findByProps(
+const { TableRowGroup, TableRow, TableSwitchRow, Stack } = findByProps(
   "TableSwitchRow",
   "TableRowGroup",
   "Stack",
-  "TableRow",
-  "TextInput"
+  "TableRow"
 );
 const { Text } = findByProps("Text", "View");
 const { Clipboard } = RN;
+const inputStyle = {
+  color: "#f2f3f5",
+  backgroundColor: "#1e1f22",
+  borderRadius: 8,
+  paddingHorizontal: 12,
+  paddingVertical: 10,
+};
 
 export default function Settings() {
   useProxy(storage);
   const [, forceUpdate] = React.useReducer((x) => x + 1, 0);
   const [newKeyword, setNewKeyword] = React.useState("");
+  const [keywordInputReset, setKeywordInputReset] = React.useState(0);
 
   const addKeyword = () => {
     if (!newKeyword.trim()) {
@@ -32,6 +39,7 @@ export default function Settings() {
     if (!storage.keywords.includes(kw)) {
       storage.keywords = [...storage.keywords, kw];
       setNewKeyword("");
+      setKeywordInputReset((current) => current + 1);
       forceUpdate();
       showToast("Keyword added", getAssetIDByName("Check"));
     } else {
@@ -90,16 +98,30 @@ export default function Settings() {
 
         <TableRowGroup title="Add Keyword">
           <Stack spacing={4}>
-            <TextInput
-              placeholder="Enter keyword or phrase..."
-              value={newKeyword}
-              onChange={setNewKeyword}
-              isClearable
-              autoCapitalize="none"
-              autoCorrect={false}
-              onSubmitEditing={addKeyword}
-              returnKeyType="done"
-            />
+            <RN.View style={{ flexDirection: "row", alignItems: "center" }}>
+              <StableTextInput
+                placeholder="Enter keyword or phrase..."
+                value={newKeyword}
+                onChangeText={setNewKeyword}
+                resetKey={keywordInputReset}
+                onSubmitEditing={addKeyword}
+                returnKeyType="done"
+                style={{ ...inputStyle, flex: 1 }}
+              />
+              {newKeyword.length > 0 && (
+                <RN.TouchableOpacity
+                  accessibilityLabel="Clear keyword"
+                  accessibilityRole="button"
+                  onPress={() => {
+                    setNewKeyword("");
+                    setKeywordInputReset((current) => current + 1);
+                  }}
+                  style={{ padding: 10 }}
+                >
+                  <Text style={{ color: "#b5bac1" }}>Clear</Text>
+                </RN.TouchableOpacity>
+              )}
+            </RN.View>
           </Stack>
         </TableRowGroup>
 
@@ -216,10 +238,12 @@ export default function Settings() {
         {storage.trackMode === "custom" && (
           <TableRowGroup title="Custom User IDs">
             <Stack spacing={4} style={{ padding: 10 }}>
-              <TextInput
+              <StableTextInput
+                key="customIds"
                 placeholder="1099039269391171765, 845374453939568720"
-                value={storage.customIds}
-                onChange={(v: string) => { storage.customIds = v; forceUpdate(); }}
+                value={String(storage.customIds ?? "")}
+                onChangeText={(value: string) => { storage.customIds = value; }}
+                style={inputStyle}
               />
             </Stack>
           </TableRowGroup>
@@ -259,10 +283,12 @@ export default function Settings() {
         {storage.trackChannelsEnabled && (
           <TableRowGroup title="Tracked Channel IDs">
             <Stack spacing={4} style={{ padding: 10 }}>
-              <TextInput
+              <StableTextInput
+                key="trackedChannelIds"
                 placeholder="1205207690352005243, 1296197038006075543"
-                value={storage.trackedChannelIds}
-                onChange={(v: string) => { storage.trackedChannelIds = v; forceUpdate(); }}
+                value={String(storage.trackedChannelIds ?? "")}
+                onChangeText={(value: string) => { storage.trackedChannelIds = value; }}
+                style={inputStyle}
               />
             </Stack>
           </TableRowGroup>
