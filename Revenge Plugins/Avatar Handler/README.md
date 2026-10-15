@@ -2,7 +2,7 @@
 
 Avatar Handler unlocks Discord's native mobile multi-account switcher for accounts already saved in Discord.
 
-## Authentication and account security
+## Authentication and Account Security
 
 The plugin only enables Discord's own account-switcher capability. Account selection, saved sessions, login screens, authenticator-app codes, other 2FA challenges, and rejected-login explanations remain under Discord's control. If Discord denies a login, follow the message shown by Discord and retry through its native flow.
 
@@ -12,10 +12,12 @@ Avatar Handler does not read, collect, export, or store passwords, authenticatio
 
 The **Unlock Native Account Switcher** setting enables or disables the native capability. Enabling it requires confirmation. **Add an account** opens Discord's native login screen directly; **Switch or manage accounts** opens Discord's native account manager for selecting saved accounts. The settings actions show a loading indicator while opening and block duplicate taps; Discord displays progress for authentication and account switching in its native screens. If the installed client does not expose the expected capability or native screen, the plugin reports that the feature is unavailable rather than attempting a custom login flow.
 
-## Other plugin settings
+## Plugin Settings
 
 Plugin preferences remain in the installed plugin's local storage on this device. Avatar Handler does not copy or migrate settings during account switches; switching accounts does not invoke the plugin manager's data-clearing operation. Preferences are shared on the device rather than isolated per Discord account. Uninstalling a plugin or explicitly choosing **Clear Data** or **Clear All** in Tenshi's Plugins can remove that plugin's settings.
 
 ## Source
 
 Plugin metadata is in `manifest.json`; implementation is in `src`.
+
+Maintained by tenshiavi.

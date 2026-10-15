@@ -30,9 +30,9 @@ export default function Settings() {
 						}}
 					/>
 				</TableRowGroup>
-				<TableRowGroup title="Jump To Top">
+				<TableRowGroup title="Jump to Top">
 					<TableSwitchRow
-						label="Enable Jump To Top"
+						label="Enable Jump to Top"
 						subLabel="Add a button beside Jump to Present to return to the top of the current chat."
 						value={Boolean(storage.jumpToTopEnabled)}
 						onValueChange={(value: boolean) => {
@@ -43,8 +43,8 @@ export default function Settings() {
 				</TableRowGroup>
 				<TableRowGroup title="Valid User">
 					<TableSwitchRow
-						label="Enable Mention Repair"
-						subLabel="Automatically resolve uncached user mentions as messages appear."
+						label="Enable Valid User"
+						subLabel="Resolve uncached user mentions as messages appear."
 						value={Boolean(storage.validUserEnabled)}
 						onValueChange={(value: boolean) => {
 							storage.validUserEnabled = value;
@@ -54,8 +54,8 @@ export default function Settings() {
 				</TableRowGroup>
 				<TableRowGroup title="Add Attachments">
 					<TableSwitchRow
-						label="Enable Add Attachment Command"
-						subLabel="Register /addattachment to add up to three files to your own message in the current channel."
+						label="Enable /addattachment"
+						subLabel="Add up to three files to your own message in the current channel."
 						value={Boolean(storage.addAttachmentsEnabled)}
 						onValueChange={(value: boolean) => {
 							storage.addAttachmentsEnabled = value;

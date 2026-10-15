@@ -1,6 +1,6 @@
 {
     "name": "Omniscience",
-    "description": "Track keywords and mentions of your active account, with optional channel and webhook alerts.",
+    "description": "Track message keywords and active-account mentions, with optional channel or webhook alerts.",
     "authors": [
         {
             "name": "tenshiavi"

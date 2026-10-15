@@ -50,26 +50,26 @@ export default function Settings() {
 			<Stack spacing={8}>
 			<TableRowGroup title="Privacy">
 				<TableSwitchRow
-					label="Anonymize Uploaded File Names"
-					subLabel="Replace attachment names before the client uploads them."
+					label="Anonymize File Names"
+					subLabel="Rename attachments before Discord uploads them."
 					value={Boolean(storage.anonymiseByDefault)}
 					onValueChange={(value: boolean) => { storage.anonymiseByDefault = value; }}
 				/>
 				<TableSwitchRow
-					label="Remove Tracking Parameters From Sent URLs"
-					subLabel="Clean common advertising and click-tracking parameters when sending or editing messages."
+					label="Remove Tracking Parameters from URLs"
+					subLabel="Remove common advertising and click-tracking parameters when you send or edit messages."
 					value={Boolean(storage.clearTrackingUrls)}
 					onValueChange={(value: boolean) => { storage.clearTrackingUrls = value; }}
 				/>
 				<TableSwitchRow
-					label="Enable Silent /leave Command"
-					subLabel="Adds a command to leave the current group DM without sending a visible leave message."
+					label="Enable /leave silent"
+					subLabel="Register /leave silent to leave the current group DM without a visible leave message."
 					value={Boolean(storage.enableSilentLeave)}
 					onValueChange={(value: boolean) => { storage.enableSilentLeave = value; }}
 				/>
 				<TableSwitchRow
 					label="Silent Typing"
-					subLabel="Suppress typing-start events while enabled; normal typing-stop behavior is preserved. Toggle here or with /silenttype."
+					subLabel="Suppress typing-start events while enabled; normal typing-stop behavior is unchanged. Toggle here or with /silenttype."
 					value={Boolean(storage.hideTypingStatus)}
 					onValueChange={(value: boolean) => {
 						storage.hideTypingStatus = value;

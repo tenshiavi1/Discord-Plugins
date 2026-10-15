@@ -1,6 +1,6 @@
 # Omniscience
 
-Omniscience is a Revenge mobile keyword-tracking plugin by tenshiavi. It monitors selected server channels, group DMs, and direct messages for configured words or phrases, then shows a local notification.
+Omniscience monitors selected server channels, group DMs, and direct messages for configured words or phrases, then shows a local notification.
 
 ## Features
 

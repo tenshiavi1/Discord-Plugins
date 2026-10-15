@@ -126,11 +126,11 @@ export async function discoverManagedPlugins(): Promise<ManagedPlugin[]> {
 }
 
 export const MANAGED_PLUGINS: ManagedPlugin[] = [
-	catalogEntry("Aura Control", "Create and manage custom Rich Presence from Discord for Android."),
-	catalogEntry("Ephemeral Entity", "Anonymize uploads, clean tracking URLs, hide typing, and leave group DMs silently."),
-	catalogEntry("Omniscience", "Track keywords and mentions of your active account, with optional channel and webhook alerts."),
-	catalogEntry("Sage Eyes", "View hidden-channel details, server info, and local message edit/deletion history."),
-	catalogEntry("Tenshi's Plugins", "Manage Revenge plugins, keep Developer Mode on, and review crash reports."),
-	catalogEntry("Avatar Handler", "Unlock Discord's native mobile account switcher for saved accounts."),
-	catalogEntry("God Console", "Mark unread channels as read, jump to chat history, and repair unresolved mentions."),
+	catalogEntry("Aura Control", "Create and manage a custom Discord Rich Presence in Revenge."),
+	catalogEntry("Avatar Handler", "Use Discord's native account switcher for accounts already saved on your device."),
+	catalogEntry("Ephemeral Entity", "Anonymize uploaded file names, remove tracking parameters from sent URLs, hide typing status, and leave group DMs silently."),
+	catalogEntry("God Console", "Mark channels as read, jump to chat history, resolve uncached mentions, and add files to your messages."),
+	catalogEntry("Omniscience", "Track message keywords and active-account mentions, with optional channel or webhook alerts."),
+	catalogEntry("Sage Eyes", "View client-visible details for hidden channels, inspect server information, and keep in-session message history."),
+	catalogEntry("Tenshi's Plugins", "Manage Revenge plugins, keep Developer Mode enabled, and review crash diagnostics."),
 ];

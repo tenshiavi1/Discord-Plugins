@@ -73,7 +73,7 @@ export function Settings() {
 					value={storage.showIcon}
 				/>
 				<TableSwitchRow
-					label="Show Popup On Hidden Channels"
+					label="Show Popup on Hidden Channels"
 					subLabel={"Ask before opening an inaccessible channel and show the channel details available to the client."}
 					disabled={!hiddenChannelsEnabled}
 					onValueChange={(value) => {
@@ -144,7 +144,7 @@ export function Settings() {
 					}}
 				/>
 				<TableRow
-					label="Clear Message-History Tracking"
+					label="Clear Message History"
 					subLabel="Forget retained edit versions and deleted-message records. History already applied to the current channel may remain until it is reloaded."
 					disabled={!messageHistoryEnabled}
 					trailing={<TableRow.Arrow />}
@@ -157,7 +157,7 @@ export function Settings() {
 			</TableRowGroup>
 			<TableRowGroup title="Display">
 				<TableSwitchRow
-					label="Add Timestamp For Edits"
+					label="Add Timestamps for Edits"
 					subLabel="Show a relative timestamp beside each captured version."
 					disabled={!messageHistoryEnabled}
 					value={Boolean(storage.timestampForEdits)}
@@ -167,7 +167,7 @@ export function Settings() {
 					}}
 				/>
 			</TableRowGroup>
-			<TableRowGroup title="Custom Buffers">
+			<TableRowGroup title="Deleted Message Display">
 				<TextSetting
 					label="Deleted Indicator Text"
 					value={String(storage.deletedIndicatorText ?? "This message was deleted")}
@@ -218,7 +218,7 @@ export function Settings() {
 							}
 						/>
 					))
-					: <TableRow label="No Users Currently Ignored." disabled={!messageHistoryEnabled || !storage.enableIgnoreUsers} />}
+					: <TableRow label="No users are currently ignored." disabled={!messageHistoryEnabled || !storage.enableIgnoreUsers} />}
 			</TableRowGroup>
 			</Stack>
 		</RN.ScrollView>

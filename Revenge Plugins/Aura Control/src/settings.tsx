@@ -141,18 +141,18 @@ export default function Settings() {
 					/>
 				))}
 			</TableRowGroup>
-			<TableRowGroup title="Details And State">
+			<TableRowGroup title="Details and State">
 				<TextSetting label="Details" storageKey="details" />
 				<TextSetting label="Details URL" storageKey="detailsUrl" placeholder="https://example.com" limit={512} />
 				<TextSetting label="State" storageKey="state" />
 				<TextSetting label="State URL" storageKey="stateUrl" placeholder="https://example.com" limit={512} />
 				{storage.activityType === 1 && (
-					<TextSetting label="Stream URL (Twitch Or YouTube)" storageKey="streamUrl" placeholder="https://twitch.tv/..." limit={512} />
+					<TextSetting label="Stream URL (Twitch or YouTube)" storageKey="streamUrl" placeholder="https://twitch.tv/..." limit={512} />
 				)}
 			</TableRowGroup>
 			<TableRowGroup title="Party">
 				<TextSetting 				label="Current Party Size" storageKey="partySize" placeholder="Optional whole number" limit={9} />
-				<TextSetting 				label="Party Maximum" storageKey="partyMaxSize" placeholder="Optional whole number" limit={9} />
+				<TextSetting 				label="Maximum Party Size" storageKey="partyMaxSize" placeholder="Optional whole number" limit={9} />
 			</TableRowGroup>
 			<TableRowGroup title="Timestamp">
 				<RN.Text style={{ color: "#b5bac1", padding: 12 }}>
@@ -169,19 +169,19 @@ export default function Settings() {
 				{storage.timestampMode === "custom" && (
 					<>
 						<TextSetting
-							label="Start (Local Time: YYYY-MM-DD HH:MM)"
+							label="Start Time (Local: YYYY-MM-DD HH:MM)"
 							storageKey="timestampCustomStart"
 							placeholder="2026-10-14 19:00"
 							limit={16}
 						/>
 						<TableSwitchRow
-							label="Set End Timestamp"
+							label="Include End Time"
 							value={Boolean(storage.timestampEndEnabled)}
 							onValueChange={(value: boolean) => { storage.timestampEndEnabled = value; }}
 						/>
 						{storage.timestampEndEnabled && (
 							<TextSetting
-								label="End (Local Time: YYYY-MM-DD HH:MM)"
+								label="End Time (Local: YYYY-MM-DD HH:MM)"
 								storageKey="timestampCustomEnd"
 								placeholder="2026-10-14 20:00"
 								limit={16}

@@ -1,6 +1,6 @@
 {
   "name": "Tenshi's Plugins",
-  "description": "Manage Revenge plugins, keep Developer Mode on, and review crash reports.",
+  "description": "Manage Revenge plugins, keep Developer Mode enabled, and review crash diagnostics.",
   "authors": [
     {
       "name": "tenshiavi"

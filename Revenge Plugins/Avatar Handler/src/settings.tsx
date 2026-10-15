@@ -129,7 +129,7 @@ export default function Settings() {
 						onPress={() => { void runAccountAction("manager"); }}
 					/>
 				</TableRowGroup>
-				<TableRowGroup title="Security and Login Responses">
+				<TableRowGroup title="Sign-In and Security">
 					<TableRow
 						label="Discord handles authentication"
 						subLabel="Passwords, authenticator codes, saved sessions, and login denials stay in Discord's native flow. If login is denied, follow Discord's message and retry there."

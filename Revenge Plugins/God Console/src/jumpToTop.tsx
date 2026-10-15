@@ -88,7 +88,7 @@ function removePatches() {
 		try {
 			unpatch();
 		} catch (error) {
-			console.warn("[God Console] Could not remove a Jump To Top patch.", error);
+			console.warn("[God Console] Could not remove a Jump to Top patch.", error);
 		}
 	}
 	patchedElements = new WeakSet<object>();

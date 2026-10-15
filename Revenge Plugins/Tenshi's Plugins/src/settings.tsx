@@ -878,7 +878,7 @@ export default function Settings() {
 			>
 				<RN.View style={{ flexDirection: "row", alignItems: "center" }}>
 					<RN.TouchableOpacity
-						accessibilityLabel="Manage Plugins"
+						accessibilityLabel="Manage plugins"
 						accessibilityRole="button"
 						disabled={fetchingAll || Object.values(busy).some(Boolean)}
 						onPress={showManageActions}
@@ -935,7 +935,7 @@ export default function Settings() {
 				/>
 				{searchQuery.length > 0 && (
 					<RN.TouchableOpacity
-						accessibilityLabel="Clear Plugin Search"
+						accessibilityLabel="Clear plugin search"
 						accessibilityRole="button"
 						onPress={() => {
 							setSearchQuery("");
@@ -1000,7 +1000,7 @@ export default function Settings() {
 						opacity: activityLog.length === 0 ? 0.55 : 1,
 					}}
 				>
-					<RN.Text style={{ color: "#f2f3f5", fontWeight: "600" }}>Copy Activity Log</RN.Text>
+						<RN.Text style={{ color: "#f2f3f5", fontWeight: "600" }}>Copy activity log</RN.Text>
 				</RN.TouchableOpacity>
 			</RN.View>
 			<RN.View
@@ -1021,8 +1021,8 @@ export default function Settings() {
 					}}
 				>
 					{lastCrash
-						? `Last Crash: ${lastCrash.pluginName} ${crashDate}`
-						: "Last Crash: None Recorded"}
+						? `Last saved error log: ${lastCrash.pluginName} ${crashDate}`
+						: "Last saved error log: None recorded"}
 				</RN.Text>
 				{lastCrash?.message
 					? <RN.Text numberOfLines={2} ellipsizeMode="tail" style={{ marginTop: 4, color: "#d8dee9", fontFamily: "monospace", fontSize: 13 }}>
@@ -1039,23 +1039,23 @@ export default function Settings() {
 					}}
 				>
 					{crashReasons.length > 0
-						? `Crash Reason: ${crashReasons
+						? `Recent fatal errors: ${crashReasons
 							.map((reason) => `${reason.pluginName} (${formatCrashDate(reason.timestamp)})`)
 							.join(", ")}`
-						: "Crash Reason: None Recorded"}
+						: "Recent fatal errors: None recorded"}
 				</RN.Text>
 				<RN.TouchableOpacity
-					accessibilityLabel="Copy last crash logs"
+					accessibilityLabel="Copy saved error log"
 					accessibilityRole="button"
 					disabled={!lastCrash}
 					onPress={() => {
 						if (!lastCrash) return;
 						try {
 							clipboard.setString(lastCrash.logs);
-							showToast("Copied the last crash log to your clipboard.", getAssetIDByName("Check"));
+							showToast("Copied the crash log to your clipboard.", getAssetIDByName("Check"));
 						} catch (error) {
 							console.error("[Tenshi's Plugins] Could not copy the last crash logs.", error);
-							showToast("Could not copy the last crash log to your clipboard.", getAssetIDByName("Warning"));
+							showToast("Could not copy the crash log to your clipboard.", getAssetIDByName("Warning"));
 						}
 					}}
 					style={{
@@ -1069,7 +1069,7 @@ export default function Settings() {
 					}}
 				>
 					<RN.Text style={{ color: "#f2f3f5", fontFamily: "monospace", fontWeight: "600" }}>
-						Copy Logs
+						Copy saved error log
 					</RN.Text>
 				</RN.TouchableOpacity>
 			</RN.View>
@@ -1121,7 +1121,7 @@ export default function Settings() {
 									<IconButton
 										assetNames={["WrenchIcon", "SettingsIcon", "ic_settings_24px"]}
 										fallback="🔧"
-										label={`Open ${entry.name} Settings`}
+										label={`Open ${entry.name} settings`}
 										disabled={!PluginSettings || fetchingAll}
 										onPress={() => openPluginSettings(entry)}
 									/>
@@ -1129,7 +1129,7 @@ export default function Settings() {
 									<IconButton
 										assetNames={["InfoIcon", "InformationIcon", "ic_info_24px"]}
 										fallback="ⓘ"
-										label={`Actions For ${entry.name}`}
+										label={`Actions for ${entry.name}`}
 										disabled={fetchingAll}
 										onPress={() => showPluginActions(entry)}
 									/>
@@ -1169,7 +1169,7 @@ export default function Settings() {
 				})}
 				{visiblePlugins.length === 0 && (
 					<TableRow
-						label="No Plugins Found"
+						label="No plugins found"
 						subLabel="Try a different plugin name or description."
 					/>
 				)}

@@ -1,6 +1,6 @@
 {
   "name": "Ephemeral Entity",
-  "description": "Anonymize uploads, clean tracking URLs, hide typing, and leave group DMs silently.",
+  "description": "Anonymize uploaded file names, remove tracking parameters from sent URLs, hide typing status, and leave group DMs silently.",
   "authors": [
     {
       "name": "tenshiavi"

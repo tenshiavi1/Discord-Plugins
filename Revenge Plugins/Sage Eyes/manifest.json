@@ -1,6 +1,6 @@
 {
     "name": "Sage Eyes",
-    "description": "View hidden-channel details, server info, and local message edit/deletion history.",
+    "description": "View client-visible details for hidden channels, inspect server information, and keep in-session message history.",
     "authors": [
         {
             "name": "tenshiavi"
