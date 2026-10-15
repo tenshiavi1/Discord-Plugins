@@ -365,16 +365,9 @@ export default function Settings() {
 					const installed = findInstalledPlugin(entry);
 					const isBusy = !!busy[entry.url];
 					const contentWidth = Math.max(0, screenWidth - 60);
-					const actionGroupWidth = 176;
-					const titleWidthOnRow = Math.max(0, contentWidth - actionGroupWidth - 8);
-					const minimumTitleSize = 14;
-					const estimatedTitleWidth = (fontSize: number, width: number) =>
-						entry.name.length * 0.56 * fontSize * fontScale > width;
-					const stackHeader = estimatedTitleWidth(minimumTitleSize, titleWidthOnRow);
-					const titleWidth = stackHeader ? contentWidth : titleWidthOnRow;
 					const titleFontSize = Math.max(
-						minimumTitleSize,
-						Math.min(22, titleWidth / (entry.name.length * 0.56 * fontScale)),
+						11.2,
+						Math.min(17.6, contentWidth / (entry.name.length * 0.56 * fontScale)),
 					);
 					return (
 						<RN.View
@@ -387,30 +380,28 @@ export default function Settings() {
 								backgroundColor: "#1c1e2b",
 							}}
 						>
-							<RN.View
+							<RN.Text
 								style={{
-									flexDirection: stackHeader ? "column" : "row",
-									alignItems: stackHeader ? "stretch" : "center",
+									alignSelf: "flex-start",
+									color: "#f2f3f5",
+									fontSize: titleFontSize,
+									fontWeight: "600",
 								}}
 							>
-								<RN.Text
-									style={{
-										flex: stackHeader ? undefined : 1,
-										flexShrink: 1,
-										marginRight: stackHeader ? 0 : 8,
-										color: "#f2f3f5",
-										fontSize: titleFontSize,
-										fontWeight: "600",
-									}}
-								>
-									{entry.name}
-								</RN.Text>
+								{entry.name}
+							</RN.Text>
+							<RN.View
+								style={{
+									flexDirection: "row",
+									alignItems: "center",
+									justifyContent: "space-between",
+									marginTop: 12,
+								}}
+							>
 								<RN.View
 									style={{
 										flexDirection: "row",
 										alignItems: "center",
-										alignSelf: stackHeader ? "flex-end" : undefined,
-										marginTop: stackHeader ? 12 : 0,
 									}}
 								>
 									<IconButton
@@ -427,34 +418,33 @@ export default function Settings() {
 										label={`Actions For ${entry.name}`}
 										onPress={() => showPluginActions(entry)}
 									/>
-									<RN.View style={{ width: 8 }} />
-									<RN.TouchableOpacity
-										accessibilityRole="button"
-										disabled={isBusy}
-										onPress={() => installed ? confirmDelete(entry) : void changePlugin(entry)}
-										style={{
-											minWidth: 88,
-											height: 40,
-											paddingHorizontal: 12,
-											borderRadius: 12,
-											alignItems: "center",
-											justifyContent: "center",
-											backgroundColor: installed ? "#ed4245" : "#5865f2",
-											opacity: isBusy ? 0.6 : 1,
-										}}
-									>
-										<RN.Text style={{ color: "#ffffff", fontWeight: "600" }}>
-											{isBusy ? "Working..." : installed ? "Delete" : "Install"}
-										</RN.Text>
-									</RN.TouchableOpacity>
 								</RN.View>
+								<RN.TouchableOpacity
+									accessibilityRole="button"
+									disabled={isBusy}
+									onPress={() => installed ? confirmDelete(entry) : void changePlugin(entry)}
+									style={{
+										minWidth: 88,
+										height: 40,
+										paddingHorizontal: 12,
+										borderRadius: 12,
+										alignItems: "center",
+										justifyContent: "center",
+										backgroundColor: installed ? "#ed4245" : "#5865f2",
+										opacity: isBusy ? 0.6 : 1,
+									}}
+								>
+									<RN.Text style={{ color: "#ffffff", fontWeight: "600" }}>
+										{isBusy ? "Working..." : installed ? "Delete" : "Install"}
+									</RN.Text>
+								</RN.TouchableOpacity>
 							</RN.View>
 							<RN.Text
 								style={{
 									marginTop: 12,
 									color: "#b5bac1",
-									fontSize: 16,
-									lineHeight: 23,
+									fontSize: 15.2,
+									lineHeight: 21.85,
 								}}
 							>
 								{entry.description}
