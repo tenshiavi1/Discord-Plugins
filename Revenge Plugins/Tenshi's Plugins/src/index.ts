@@ -1,7 +1,7 @@
+import { installCrashCapture, recoverLegacyPendingDisables } from "./crashLog";
 import { installSettingsPin } from "./settingsPin";
 import Settings from "./settings";
 import { resumeManagerAfterReload } from "./managerNavigation";
-import { installCrashCapture, recoverFromLastCrash } from "./crashLog";
 import { enableDeveloperMode, installDeveloperModeGuard, stopDeveloperModeRetries } from "./developerMode";
 
 let unpatchSettings: (() => void) | undefined;
@@ -14,7 +14,7 @@ export default {
 		unpatchCrashCapture = installCrashCapture();
 		unpatchDeveloperMode = installDeveloperModeGuard();
 		enableDeveloperMode();
-		void recoverFromLastCrash();
+		void recoverLegacyPendingDisables();
 		resumeManagerAfterReload(Settings);
 	},
 	onUnload() {

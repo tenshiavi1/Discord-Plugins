@@ -2,11 +2,17 @@ import { storage } from "@vendetta/plugin";
 import { plugins, startPlugin, stopPlugin } from "@vendetta/plugins";
 import { createMMKVBackend } from "@vendetta/storage";
 import { MANAGED_PLUGINS } from "./catalog";
+import { installPluginCrashGuard } from "../../shared/crashGuard";
+
+let removeCrashGuard: (() => void) | undefined = installPluginCrashGuard("Tenshi's Plugins", storage);
 
 export type CrashRecord = {
 	pluginName: string;
 	timestamp: number;
 	logs: string;
+	errorName?: string;
+	message?: string;
+	fatal?: boolean;
 };
 
 export type CrashReason = {
@@ -17,7 +23,7 @@ export type CrashReason = {
 const LAST_CRASH_KEY = "lastCrash";
 const CRASH_REASONS_KEY = "crashReasons";
 const PENDING_DISABLE_KEY = "pendingCrashDisable";
-const FEATURE_STORAGE_KEYS: Record<string, string[]> = {
+const LEGACY_FEATURE_STORAGE_KEYS: Record<string, string[]> = {
 	"Aura Control": ["enabled"],
 	"Ephemeral Entity": [
 		"anonymiseByDefault",
@@ -29,40 +35,11 @@ const FEATURE_STORAGE_KEYS: Record<string, string[]> = {
 	"Sage Eyes": ["enableHiddenChannels", "enableMessageHistory"],
 };
 
-type PendingDisable = {
+type LegacyPendingDisable = {
 	pluginName: string;
 	storageKey: string;
 	timestamp: number;
 };
-
-function identifyPlugin(message: string, stack: string) {
-	const errorText = `${message}\n${stack}`.replace(/%20|\+/gi, " ").toLocaleLowerCase();
-	for (const plugin of MANAGED_PLUGINS) {
-		if (errorText.includes(plugin.name.toLocaleLowerCase())) {
-			return plugin.name;
-		}
-	}
-
-	const pluginPath = stack.match(/Revenge(?:%20|\s)Plugins[\\/](.+?)(?:[\\/?:]|$)/i)?.[1];
-	if (pluginPath) {
-		try {
-			return decodeURIComponent(pluginPath.replace(/\+/g, " "));
-		} catch {
-			return pluginPath;
-		}
-	}
-	return "Unknown plugin";
-}
-
-function errorDetails(error: unknown) {
-	if (error instanceof Error) {
-		return {
-			message: error.message || error.name,
-			stack: error.stack || "",
-		};
-	}
-	return { message: String(error), stack: "" };
-}
 
 export function getLastCrash(): CrashRecord | undefined {
 	const record: unknown = storage[LAST_CRASH_KEY];
@@ -81,6 +58,9 @@ export function getLastCrash(): CrashRecord | undefined {
 			pluginName: record.pluginName,
 			timestamp: record.timestamp,
 			logs: record.logs,
+			errorName: "errorName" in record && typeof record.errorName === "string" ? record.errorName : undefined,
+			message: "message" in record && typeof record.message === "string" ? record.message : undefined,
+			fatal: "fatal" in record && typeof record.fatal === "boolean" ? record.fatal : undefined,
 		};
 	}
 	if (record !== undefined) {
@@ -106,93 +86,31 @@ export function getCrashReasons(): CrashReason[] {
 
 export function clearLastCrash() {
 	storage[LAST_CRASH_KEY] = undefined;
+	storage.lastError = undefined;
 	storage[CRASH_REASONS_KEY] = undefined;
 	storage[PENDING_DISABLE_KEY] = undefined;
 }
 
-function findFeatureToggle(pluginName: string, stack: string, message: string): string | undefined {
-	const source = `${stack}\n${message}`.toLocaleLowerCase();
-	switch (pluginName) {
-		case "Aura Control":
-			return "enabled";
-		case "Omniscience":
-			return "enabled";
-		case "Sage Eyes":
-			if (/hiddenchannel|hidden channel|isHidden|patchPrivateChannelObfuscation|ChannelInfo|transitionToGuild/i.test(source)) {
-				return "enableHiddenChannels";
-			}
-			if (/messagehistory|message history|initializeMessageHistory|deletedmessage|editHistory/i.test(source)) {
-				return "enableMessageHistory";
-			}
-			break;
-		case "Ephemeral Entity":
-			if (/anonymizeUploadFiles|anonymiseByDefault|uploadFiles/i.test(source)) return "anonymiseByDefault";
-			if (/clearTrackingUrlsInMessage|clearTrackingUrls|sendMessage|editMessage/i.test(source)) return "clearTrackingUrls";
-			if (/enableSilentLeave|silent leave|leave silent/i.test(source)) return "enableSilentLeave";
-			if (/setTypingStatusHidden|hideTypingStatus|silent typing|silenttype/i.test(source)) return "hideTypingStatus";
-			break;
-	}
-	return undefined;
-}
-
-function saveCrash(error: unknown, isFatal: boolean) {
-	const { message, stack } = errorDetails(error);
-	const timestamp = Date.now();
-	const pluginName = identifyPlugin(message, stack);
-	const logs = [
-		`Unhandled JavaScript error (${isFatal ? "fatal" : "non-fatal"})`,
-		`Timestamp: ${new Date(timestamp).toISOString()}`,
-		`Message: ${message}`,
-		stack ? `Stack:\n${stack}` : "Stack: unavailable",
-	].join("\n");
-
-	storage[LAST_CRASH_KEY] = {
-		pluginName,
-		timestamp,
-		logs,
-	} satisfies CrashRecord;
-
-	if (pluginName !== "Unknown plugin") {
-		storage[CRASH_REASONS_KEY] = [
-			...getCrashReasons(),
-			{ pluginName, timestamp },
-		].slice(-10);
-	}
-
-	if (isFatal) {
-		const storageKey = findFeatureToggle(pluginName, stack, message);
-		if (storageKey) {
-			const pending = getPendingDisables().filter(
-				(item) => item.pluginName !== pluginName || item.storageKey !== storageKey,
-			);
-			storage[PENDING_DISABLE_KEY] = [
-				...pending,
-				{ pluginName, storageKey, timestamp },
-			].slice(-10) satisfies PendingDisable[];
-		}
-	}
-}
-
-function getPendingDisables(): PendingDisable[] {
+function getLegacyPendingDisables(): LegacyPendingDisable[] {
 	const pendingItems: unknown = storage[PENDING_DISABLE_KEY];
 	if (!Array.isArray(pendingItems)) return [];
 	return pendingItems.filter(
-		(pending): pending is PendingDisable =>
+		(pending): pending is LegacyPendingDisable =>
 			typeof pending === "object" &&
 			pending !== null &&
 			"pluginName" in pending &&
 			typeof pending.pluginName === "string" &&
 			"storageKey" in pending &&
 			typeof pending.storageKey === "string" &&
-			FEATURE_STORAGE_KEYS[pending.pluginName]?.includes(pending.storageKey) === true &&
+			LEGACY_FEATURE_STORAGE_KEYS[pending.pluginName]?.includes(pending.storageKey) === true &&
 			"timestamp" in pending &&
 			typeof pending.timestamp === "number" &&
 			Number.isFinite(pending.timestamp),
 	);
 }
 
-export async function recoverFromLastCrash() {
-	for (const pending of getPendingDisables()) {
+export async function recoverLegacyPendingDisables() {
+	for (const pending of getLegacyPendingDisables()) {
 		const entry = MANAGED_PLUGINS.find((plugin) => plugin.name === pending.pluginName);
 		if (!entry) {
 			console.error(`[Tenshi's Plugins] Cannot recover unknown plugin ${pending.pluginName}.`);
@@ -225,7 +143,7 @@ export async function recoverFromLastCrash() {
 			console.warn(
 				`[Tenshi's Plugins] Disabled ${pending.storageKey} for ${pending.pluginName} after a fatal error.`,
 			);
-			storage[PENDING_DISABLE_KEY] = getPendingDisables().filter(
+			storage[PENDING_DISABLE_KEY] = getLegacyPendingDisables().filter(
 				(item) => item.pluginName !== pending.pluginName || item.storageKey !== pending.storageKey,
 			);
 		} catch (error) {
@@ -241,32 +159,13 @@ export async function recoverFromLastCrash() {
 	}
 }
 
-type GlobalErrorUtils = {
-	getGlobalHandler: () => (error: unknown, isFatal?: boolean) => void;
-	setGlobalHandler: (handler: (error: unknown, isFatal?: boolean) => void) => void;
-};
-
 export function installCrashCapture() {
-	const errorUtils = (globalThis as typeof globalThis & { ErrorUtils?: GlobalErrorUtils }).ErrorUtils;
-	if (!errorUtils) {
-		console.error("[Tenshi's Plugins] React Native's global error handler is unavailable; crash logging is disabled.");
-		return () => {};
-	}
-
-	const previousHandler = errorUtils.getGlobalHandler();
-	const handler = (error: unknown, isFatal = false) => {
-		try {
-			saveCrash(error, isFatal);
-		} catch (captureError) {
-			console.error("[Tenshi's Plugins] Could not save the last crash log.", captureError);
-		}
-		previousHandler(error, isFatal);
-	};
-
-	errorUtils.setGlobalHandler(handler);
+	removeCrashGuard ??= installPluginCrashGuard("Tenshi's Plugins", storage);
+	let active = true;
 	return () => {
-		if (errorUtils.getGlobalHandler() === handler) {
-			errorUtils.setGlobalHandler(previousHandler);
-		}
+		if (!active) return;
+		active = false;
+		removeCrashGuard?.();
+		removeCrashGuard = undefined;
 	};
 }

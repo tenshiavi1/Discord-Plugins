@@ -1,12 +1,22 @@
 import { findByProps } from "../../compat";
 import { showToast } from "../../shared/toast";
 import { storage } from "@vendetta/plugin";
+import { installPluginCrashGuard } from "../../shared/crashGuard";
 import { React, NavigationNative } from "@vendetta/metro/common";
 import { getAssetIDByName } from "@vendetta/ui/assets";
 import { after } from "@vendetta/patcher";
 import { Forms } from "@vendetta/ui/components";
 import { findInReactTree } from "@vendetta/utils";
 import Settings from "./settings";
+
+const registerCrashGuard = () => installPluginCrashGuard("Omniscience", storage, {
+  features: [
+    { storageKey: "enabled", patterns: [/onMessage|MESSAGE_CREATE|track.?message|notification/i] },
+    { storageKey: "showInSettings", patterns: [/updateSidebar|patchSettingsPin|patchPanelUI|patchTabsUI|SettingsOverviewScreen/i] },
+  ],
+  fallbackKeys: ["enabled", "showInSettings"],
+});
+let removeCrashGuard: (() => void) | undefined = registerCrashGuard();
 
 const { FormSection, FormRow } = Forms;
 const TableRowIcon = findByProps("TableRowIcon")?.TableRowIcon;
@@ -128,7 +138,9 @@ function patchPanelUI(tabs, patches) {
                 true,
             ),
         );
-    } catch (error) {}
+      } catch (error) {
+        console.error("[Omniscience] Could not add its settings shortcut.", error);
+      }
 }
 
 function patchTabsUI(tabs, patches) {
@@ -252,7 +264,9 @@ function updateSidebar() {
                     predicate: () => storage.showInSettings === true,
                     page: Settings,
                 });
-            } catch (error) {}
+            } catch (error) {
+              console.error("[Omniscience] Could not add its settings shortcut.", error);
+            }
         }
     } else {
         if (unpatchSidebar) {
@@ -264,7 +278,9 @@ function updateSidebar() {
 
 export default {
   onLoad() {
+    removeCrashGuard ??= registerCrashGuard();
     updateSidebar();
+    if (!storage.enabled) return;
 
     const onMessage = (p: any) => {
       if (!storage.enabled) return;
@@ -496,6 +512,8 @@ export default {
   },
 
   onUnload() {
+    removeCrashGuard?.();
+    removeCrashGuard = undefined;
     unsubMessage?.();
     if (unpatchSidebar) {
       unpatchSidebar();

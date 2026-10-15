@@ -1,6 +1,13 @@
 import { storage } from "@vendetta/plugin";
+import { installPluginCrashGuard } from "../../shared/crashGuard";
 import { installActivitySessionRestore, restoreActivitySession } from "./activity";
 import Settings from "./settings";
+
+const registerCrashGuard = () => installPluginCrashGuard("Aura Control", storage, {
+	features: [{ storageKey: "enabled" }],
+	fallbackKeys: ["enabled"],
+});
+let removeCrashGuard: (() => void) | undefined = registerCrashGuard();
 
 const defaults = {
 	enabled: false,
@@ -38,6 +45,7 @@ let removeSessionRestore: (() => void) | undefined;
 
 export default {
 	onLoad() {
+		removeCrashGuard ??= registerCrashGuard();
 		for (const [key, value] of Object.entries(defaults)) {
 			if (storage[key] === undefined) storage[key] = value;
 		}
@@ -45,6 +53,8 @@ export default {
 		removeSessionRestore = installActivitySessionRestore();
 	},
 	onUnload() {
+		removeCrashGuard?.();
+		removeCrashGuard = undefined;
 		removeSessionRestore?.();
 		removeSessionRestore = undefined;
 	},

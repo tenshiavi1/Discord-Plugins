@@ -8,10 +8,21 @@ import { showToast } from "../../shared/toast";
 import { after, instead } from "@vendetta/patcher";
 import { showConfirmationAlert } from "@vendetta/ui/alerts";
 import { storage } from "@vendetta/plugin";
+import { installPluginCrashGuard } from "../../shared/crashGuard";
 import { initializeMessageHistory, removeMessageHistoryPatch } from "./messageHistory";
 import { registerHiddenChannelFeatureToggle } from "./hiddenChannelToggle";
 import { registerMessageHistoryFeatureToggle } from "./messageHistoryToggle";
 import { setServerInfoFeatureEnabled } from "./serverInfo";
+
+const registerCrashGuard = () => installPluginCrashGuard("Sage Eyes", storage, {
+	features: [
+		{ storageKey: "enableHiddenChannels", patterns: [/hidden.?channel|setHiddenChannelFeature|patchPrivateChannel/i] },
+		{ storageKey: "enableMessageHistory", patterns: [/message.?history|initializeMessageHistory|deletedMessage|editHistory/i] },
+		{ storageKey: "enableServerInfo", patterns: [/server.?info|setServerInfoFeature/i] },
+	],
+	fallbackKeys: ["enableHiddenChannels", "enableMessageHistory", "enableServerInfo"],
+});
+let removeCrashGuard: (() => void) | undefined = registerCrashGuard();
 
 const Permissions = findByStoreName("PermissionStore") ?? findByProps("getChannelPermissions", "can");
 const channelTypes = findByProps("ChannelTypes")?.ChannelTypes;
@@ -301,6 +312,7 @@ registerMessageHistoryFeatureToggle(setMessageHistoryFeatureEnabled);
 
 export default {
 	onLoad: () => {
+		removeCrashGuard ??= registerCrashGuard();
 		storage.enableHiddenChannels ??= true;
 		storage.enableMessageHistory ??= true;
 		storage.enableServerInfo ??= true;
@@ -324,6 +336,8 @@ export default {
 		setServerInfoFeatureEnabled(Boolean(storage.enableServerInfo));
 	},
 	onUnload: () => {
+		removeCrashGuard?.();
+		removeCrashGuard = undefined;
 		setServerInfoFeatureEnabled(false);
 		setHiddenChannelFeatureEnabled(false);
 		setMessageHistoryFeatureEnabled(false);

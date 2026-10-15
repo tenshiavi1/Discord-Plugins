@@ -7,6 +7,18 @@ import { anonymizeUploadFiles, METHODS, type AnonymizationMethod } from "./filen
 import { clearTrackingUrlsInMessage } from "./urls";
 import { clearTypingStatusPatch, setTypingStatusHidden } from "./privacy";
 import Settings from "./settings";
+import { installPluginCrashGuard } from "../../shared/crashGuard";
+
+const registerCrashGuard = () => installPluginCrashGuard("Ephemeral Entity", storage, {
+	features: [
+		{ storageKey: "anonymiseByDefault", patterns: [/anonymi[sz]eUploadFiles|anonymi[sz]eByDefault|uploadFiles/i] },
+		{ storageKey: "clearTrackingUrls", patterns: [/clearTrackingUrls|tracking.?url|sendMessage|editMessage/i] },
+		{ storageKey: "enableSilentLeave", patterns: [/silent.?leave|leaveSilent/i] },
+		{ storageKey: "hideTypingStatus", patterns: [/setTypingStatusHidden|hideTypingStatus|silent.?typ/i] },
+	],
+	fallbackKeys: ["anonymiseByDefault", "clearTrackingUrls", "enableSilentLeave", "hideTypingStatus"],
+});
+let removeCrashGuard: (() => void) | undefined = registerCrashGuard();
 
 const defaults = {
 	anonymiseByDefault: true,
@@ -48,6 +60,7 @@ function normalizeSettings() {
 
 export default {
 	onLoad() {
+		removeCrashGuard ??= registerCrashGuard();
 		for (const [key, value] of Object.entries(defaults)) {
 			if (storage[key] === undefined) storage[key] = value;
 		}
@@ -144,6 +157,8 @@ export default {
 		}
 	},
 	onUnload() {
+		removeCrashGuard?.();
+		removeCrashGuard = undefined;
 		for (const unpatch of unpatches.splice(0)) unpatch();
 		clearTypingStatusPatch();
 		for (const unregister of unregisterCommands.splice(0)) unregister();

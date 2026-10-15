@@ -1024,6 +1024,11 @@ export default function Settings() {
 						? `Last Crash: ${lastCrash.pluginName} ${crashDate}`
 						: "Last Crash: None Recorded"}
 				</RN.Text>
+				{lastCrash?.message
+					? <RN.Text numberOfLines={2} ellipsizeMode="tail" style={{ marginTop: 4, color: "#d8dee9", fontFamily: "monospace", fontSize: 13 }}>
+						{`${lastCrash.errorName ?? "Error"}: ${lastCrash.message.slice(0, 180)}`}
+					</RN.Text>
+					: null}
 				<RN.Text
 					style={{
 						marginTop: 4,
