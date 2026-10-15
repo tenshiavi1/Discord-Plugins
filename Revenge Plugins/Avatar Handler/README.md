@@ -10,7 +10,7 @@ Avatar Handler does not read, collect, export, or store passwords, authenticatio
 
 ## Settings
 
-The **Unlock Native Account Switcher** setting enables or disables the native capability. Enabling it requires confirmation. **Add or switch accounts** opens Discord's native account manager, where you can add accounts or select saved ones. If the installed client does not expose the expected capability or account manager, the plugin reports that the feature is unavailable rather than attempting a custom login flow.
+The **Unlock Native Account Switcher** setting enables or disables the native capability. Enabling it requires confirmation. **Add an account** opens Discord's native login screen directly; **Switch or manage accounts** opens Discord's native account manager for selecting saved accounts. Discord handles all authentication challenges in either flow. If the installed client does not expose the expected capability or native screen, the plugin reports that the feature is unavailable rather than attempting a custom login flow.
 
 ## Other plugin settings
 

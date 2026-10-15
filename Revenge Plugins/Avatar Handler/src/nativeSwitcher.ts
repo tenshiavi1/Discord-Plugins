@@ -1,5 +1,5 @@
 import { after } from "@vendetta/patcher";
-import { findByName, findByProps, findByStoreName } from "../../compat";
+import { findByName, findByProps, findByPropsAll, findByStoreName } from "../../compat";
 
 type MultiAccountStore = {
 	canUseMultiAccountNotifications?: boolean;
@@ -23,6 +23,31 @@ export function openNativeAccountManager(): boolean {
 		return true;
 	} catch (error) {
 		console.error("[Avatar Handler] Could not open Discord's native account manager.", error);
+		return false;
+	}
+}
+
+export function openNativeAccountLogin(): boolean {
+	const loginRoute = findByPropsAll("ManageAccountsScreens")
+		.map((exports) => exports?.default ?? exports)
+		.map((module) => module?.ManageAccountsScreens?.LOGIN)
+		.find((route): route is string => typeof route === "string");
+	if (!loginRoute) {
+		console.warn("[Avatar Handler] Discord's native account-login screen was not found.");
+		return false;
+	}
+
+	const openManageAccountsModal = findByName("openManageAccountsModal");
+	if (typeof openManageAccountsModal !== "function") {
+		console.warn("[Avatar Handler] Discord's native account manager was not found.");
+		return false;
+	}
+
+	try {
+		openManageAccountsModal(loginRoute);
+		return true;
+	} catch (error) {
+		console.error("[Avatar Handler] Could not open Discord's native account-login screen.", error);
 		return false;
 	}
 }
