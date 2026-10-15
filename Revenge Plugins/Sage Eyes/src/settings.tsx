@@ -5,6 +5,7 @@ import { Forms } from "@vendetta/ui/components";
 import { getAssetIDByName } from "@vendetta/ui/assets";
 import { showToast } from "@vendetta/ui/toasts";
 import { clearMessageHistory, updateMessageHistorySettings } from "./messageHistory";
+import { setHiddenChannelFeatureEnabled } from "./hiddenChannelToggle";
 
 const { FormRow, FormSection, FormSwitchRow } = Forms;
 
@@ -40,7 +41,17 @@ export function Settings() {
 	useProxy(storage);
 	return (
 		<RN.ScrollView style={{ flex: 1 }}>
-			<FormSection title="Options" titleStyleType="no_border">
+			<FormSection title="Hidden Channels" titleStyleType="no_border">
+				<FormSwitchRow
+					label="Enable Hidden Channels"
+					subLabel="Turn Sage Eyes hidden-channel handling on or off. This does not grant server permissions."
+					leading={<FormRow.Icon source={getAssetIDByName("ic_lock")} />}
+					value={Boolean(storage.enableHiddenChannels)}
+					onValueChange={(value: boolean) => {
+						storage.enableHiddenChannels = value;
+						setHiddenChannelFeatureEnabled(value);
+					}}
+				/>
 				<FormSwitchRow
 					label={"Show Lock Icon"}
 					subLabel={"Show a lock beside channels you cannot access. This is a visual indicator only and does not grant permissions."}

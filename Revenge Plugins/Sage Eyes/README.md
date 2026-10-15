@@ -7,6 +7,7 @@ Sage Eyes is a Revenge mobile plugin by tenshiavi for inspecting hidden or obscu
 - Reveals channel names and details that are already available to the client but hidden or obscured by Discord's interface.
 - Adds an optional lock indicator to hidden channel names.
 - Can ask for confirmation before opening a hidden channel and show the channel details available to the client.
+- Includes a master Hidden Channels toggle to enable or disable hidden-channel handling, including its navigation prompts and lock indicator.
 - Keeps deleted messages in place with Discord's native deleted-warning display and shows the original and latest text for edits, separated by a downward arrow.
 - Adds long-press actions to remove a retained deleted-message log or restore an edited message to its current text.
 - Adds Ignore/Unignore in Sage Eyes to user profile menus, with controls to manage ignored users in settings.
@@ -15,7 +16,8 @@ Sage Eyes changes client-side display and navigation behavior only. It does not 
 
 ## Settings
 
-- **Show Lock Icon** adds or removes the hidden-channel indicator.
+- **Enable Hidden Channels** turns the hidden-channel feature on or off.
+- **Show Lock Icon** adds or removes the hidden-channel indicator while the feature is enabled.
 - **Show Popup on Hidden Channels** controls the confirmation and information popup before opening a hidden channel.
 - **Log deleted messages** toggles deleted-message retention.
 - **Log edited messages** toggles inline display of earlier message content.
