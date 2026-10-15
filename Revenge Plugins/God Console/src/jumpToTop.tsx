@@ -1,12 +1,8 @@
 import { React, ReactNative as RN } from "@vendetta/metro/common";
-import { after, before } from "@vendetta/patcher";
+import { after } from "@vendetta/patcher";
 import { findByName, findByProps, findByStoreName } from "../../compat";
-import { findInReactTree } from "@vendetta/utils";
-import { getAssetIDByName } from "@vendetta/ui/assets";
 import { showToast } from "../../shared/toast";
 
-const actionSheet = findByProps("openLazy", "hideActionSheet");
-const actionSheetRow = findByProps("ActionSheetRow")?.ActionSheetRow;
 let patchedElements = new WeakSet<object>();
 const unpatches: (() => void)[] = [];
 let enabled = false;
@@ -85,58 +81,6 @@ function installChatButton(): boolean {
 	return true;
 }
 
-function getActionRows(tree: any): any[] | undefined {
-	const groups = findInReactTree(tree, (node: any) =>
-		Array.isArray(node) && node[0]?.type?.name === "ActionSheetRowGroup",
-	) as any[] | undefined;
-	if (!groups) return undefined;
-	return findInReactTree(groups, (node: any) =>
-		Array.isArray(node) && node.some((child: any) => child?.type?.name === "ActionSheetRow"),
-	) as any[] | undefined;
-}
-
-function installMessageMenu() {
-	if (!actionSheet?.openLazy || !actionSheetRow) return;
-	unpatches.push(before("openLazy", actionSheet, ([component, actionName, sheetProps]: any[]) => {
-		if (!enabled || actionName !== "MessageLongPressActionSheet" || !sheetProps?.message) return;
-		const message = sheetProps.message;
-		const channelId = message.channel_id ?? message.channelId;
-		if (typeof channelId !== "string") return;
-		if (!component || typeof component.then !== "function") return;
-
-		void component.then((module: any) => {
-			if (!enabled || !module?.default) return;
-			const unpatch = after("default", module, (_args: any[], rendered: any) => {
-				React.useEffect(() => () => {
-					unpatch();
-					const index = unpatches.indexOf(unpatch);
-					if (index >= 0) unpatches.splice(index, 1);
-				}, []);
-				if (!enabled) return rendered;
-				const rows = getActionRows(rendered);
-				if (!rows || rows.some((row) => row?.props?.godConsoleJumpToTop)) return rendered;
-				const arrowIcon = getAssetIDByName("ArrowLargeDownIcon");
-				rows.unshift(React.createElement(actionSheetRow, {
-					key: `god-console-jump-${channelId}`,
-					label: "Jump To Top",
-					godConsoleJumpToTop: true,
-					icon: actionSheetRow.Icon && arrowIcon
-						? React.createElement(actionSheetRow.Icon, { source: arrowIcon })
-						: undefined,
-					onPress: () => {
-						actionSheet.hideActionSheet();
-						jumpToTop(channelId, message.guild_id ?? message.guildId);
-					},
-				}));
-				return rendered;
-			});
-			unpatches.push(unpatch);
-		}).catch((error: unknown) => {
-			console.error("[God Console] Could not open the Jump To Top action.", error);
-		});
-	}));
-}
-
 function removePatches() {
 	if (retryTimer) clearInterval(retryTimer);
 	retryTimer = undefined;
@@ -155,7 +99,6 @@ export function setJumpToTopEnabled(value: boolean) {
 	enabled = value;
 	removePatches();
 	if (!enabled) return;
-	installMessageMenu();
 	if (installChatButton()) return;
 	
 	retryCount = 0;

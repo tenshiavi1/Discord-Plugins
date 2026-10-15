@@ -222,7 +222,7 @@ function createActionRow(
 	onPress: () => void,
 	destructive = false,
 ) {
-	const icon = getAssetIDByName(iconName);
+	const icon = getAssetIDByName(iconName) ?? getAssetIDByName("TrashIcon");
 	const iconComponent = ActionSheetRow.Icon;
 	return React.createElement(ActionSheetRow, {
 		key: `sage-eyes-${label.toLowerCase().replaceAll(" ", "-")}`,

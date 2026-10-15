@@ -32,7 +32,7 @@ export default function Settings() {
 				<TableRowGroup title="Jump To Top">
 					<TableSwitchRow
 						label="Enable Jump To Top"
-						subLabel="Add a top-of-chat button and a Jump To Top action to message menus."
+						subLabel="Add a button beside Jump to Present to return to the top of the current chat."
 						value={Boolean(storage.jumpToTopEnabled)}
 						onValueChange={(value: boolean) => {
 							storage.jumpToTopEnabled = value;
