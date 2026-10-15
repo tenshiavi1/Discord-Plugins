@@ -1,7 +1,7 @@
 import { findByProps } from "../../compat";
 import { clipboard, NavigationNative, React, ReactNative as RN } from "@vendetta/metro/common";
 import { storage } from "@vendetta/plugin";
-import { fetchPlugin, getSettings, installPlugin, plugins, removePlugin, startPlugin, stopPlugin } from "@vendetta/plugins";
+import { getSettings, installPlugin, plugins, removePlugin, startPlugin, stopPlugin } from "@vendetta/plugins";
 import { createMMKVBackend } from "@vendetta/storage";
 import { useProxy } from "@vendetta/storage";
 import { showConfirmationAlert } from "@vendetta/ui/alerts";
@@ -14,6 +14,64 @@ import { reloadAndReturnToManager } from "./managerNavigation";
 const { TableRow, TableRowGroup } = findByProps("TableRow", "TableRowGroup");
 const showSimpleActionSheet = findByProps("showSimpleActionSheet")?.showSimpleActionSheet;
 const hideActionSheet = findByProps("openLazy", "hideActionSheet")?.hideActionSheet;
+
+type PluginManifest = {
+	name: string;
+	main?: string;
+	hash: string;
+	[key: string]: unknown;
+};
+
+async function fetchPluginBundle(url: string, expectedName: string): Promise<{ manifest: PluginManifest; js: string }> {
+	const baseUrl = url.endsWith("/") ? url : `${url}/`;
+	const manifestResponse = await fetch(`${baseUrl}manifest.json`, { cache: "no-store" });
+	if (!manifestResponse.ok) {
+		throw new Error(`Manifest request returned HTTP ${manifestResponse.status}.`);
+	}
+	const manifestValue: unknown = await manifestResponse.json();
+	if (
+		typeof manifestValue !== "object" ||
+		manifestValue === null ||
+		!("name" in manifestValue) ||
+		typeof manifestValue.name !== "string" ||
+		manifestValue.name.toLocaleLowerCase() !== expectedName.toLocaleLowerCase() ||
+		!("hash" in manifestValue) ||
+		typeof manifestValue.hash !== "string" ||
+		!/^[a-f\d]{64}$/i.test(manifestValue.hash) ||
+		!("main" in manifestValue && manifestValue.main !== undefined && typeof manifestValue.main !== "string")
+	) {
+		throw new Error(`The manifest at ${baseUrl} is not a valid ${expectedName} manifest.`);
+	}
+
+	const manifest = manifestValue as PluginManifest;
+	const main = manifest.main || "index.js";
+	if (
+		main.startsWith("/") ||
+		main.includes("\\") ||
+		main.split("/").some((segment) => segment === ".." || segment === "")
+	) {
+		throw new Error(`The ${expectedName} manifest contains an unsafe bundle path.`);
+	}
+
+	const bundleResponse = await fetch(`${baseUrl}${main}`, { cache: "no-store" });
+	if (!bundleResponse.ok) {
+		throw new Error(`Bundle request returned HTTP ${bundleResponse.status}.`);
+	}
+	const js = await bundleResponse.text();
+	if (!js.trim() || js.trimStart().startsWith("<")) {
+		throw new Error(`The bundle at ${baseUrl}${main} is empty or is not JavaScript.`);
+	}
+
+	if (globalThis.crypto?.subtle && typeof TextEncoder !== "undefined") {
+		const digest = await globalThis.crypto.subtle.digest("SHA-256", new TextEncoder().encode(js));
+		const actualHash = Array.from(new Uint8Array(digest), (byte) => byte.toString(16).padStart(2, "0")).join("");
+		if (actualHash.toLowerCase() !== manifest.hash.toLowerCase()) {
+			throw new Error(`The downloaded ${expectedName} bundle did not match its manifest hash.`);
+		}
+	}
+
+	return { manifest, js };
+}
 
 function findStackNavigation(navigation: any) {
 	let current = navigation;
@@ -28,6 +86,20 @@ function findInstalledPlugin(entry: ManagedPlugin) {
 	for (const url of [entry.url, ...entry.legacyUrls]) {
 		const instance = plugins[url];
 		if (instance) return { key: url, instance };
+	}
+
+	const approvedRoots = [entry.url, ...entry.legacyUrls].map((url) => {
+		const parsed = new URL(url);
+		const path = parsed.pathname.replace(/\/+$/, "");
+		return `${parsed.origin}${path.slice(0, path.lastIndexOf("/") + 1)}`;
+	});
+	for (const [url, instance] of Object.entries(plugins)) {
+		if (
+			approvedRoots.some((root) => url.startsWith(root)) &&
+			instance.manifest?.name?.toLocaleLowerCase() === entry.name.toLocaleLowerCase()
+		) {
+			return { key: url, instance };
+		}
 	}
 	return undefined;
 }
@@ -143,12 +215,43 @@ export default function Settings() {
 		installed: NonNullable<ReturnType<typeof findInstalledPlugin>>,
 	) => {
 		let stopped = false;
+		const existingPlugin = plugins[installed.key];
+
+		const refetchFromUrl = async (url: string) => {
+			const { manifest, js } = await fetchPluginBundle(url, entry.name);
+			plugins[installed.key] = {
+				...existingPlugin,
+				id: installed.key,
+				manifest,
+				js,
+				enabled: !!existingPlugin?.enabled,
+				update: existingPlugin?.update ?? true,
+			};
+		};
+
 		try {
 			if (installed.instance.enabled) {
 				stopPlugin(installed.key, false);
 				stopped = true;
 			}
-			await fetchPlugin(installed.key);
+
+			try {
+				await refetchFromUrl(entry.url);
+			} catch (canonicalError) {
+				if (entry.url === installed.key) throw canonicalError;
+				console.warn(
+					`[Tenshi's Plugins] Current repository URL failed for ${entry.name}; retrying its installed source.`,
+					canonicalError,
+				);
+				try {
+					await refetchFromUrl(installed.key);
+				} catch (installedSourceError) {
+					throw new Error(
+						`Could not refetch ${entry.name} from either source. Repository: ${String(canonicalError)} Installed source: ${String(installedSourceError)}`,
+					);
+				}
+			}
+
 			if (stopped) {
 				await startPlugin(installed.key);
 				stopped = false;
