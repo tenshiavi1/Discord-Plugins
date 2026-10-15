@@ -12,6 +12,7 @@ Mobile plugins compatible with Revenge:
 - [Sage Eyes](./Revenge%20Plugins/Sage%20Eyes/README.md) — View hidden-channel details, server info, and local message edit/deletion history.
 - [Tenshi's Plugins](./Revenge%20Plugins/Tenshi's%20Plugins/README.md) — Manage Revenge plugins, keep Developer Mode on, and review crash reports.
 - [Avatar Handler](./Revenge%20Plugins/Avatar%20Handler/README.md) — Unlock Discord's native mobile account switcher for saved accounts.
+- [God Console](./Revenge%20Plugins/God%20Console/README.md) — Mark unread channels as read, jump to chat history, and repair unresolved mentions.
 
 Add a plugin's integration URL in Revenge:
 
@@ -23,6 +24,7 @@ Add a plugin's integration URL in Revenge:
 | Sage Eyes | `https://tenshiavi1.github.io/Discord-Plugins/Revenge%20Plugins/Sage%20Eyes/` |
 | Tenshi's Plugins | `https://tenshiavi1.github.io/Discord-Plugins/Revenge%20Plugins/Tenshi's%20Plugins/` |
 | Avatar Handler | `https://tenshiavi1.github.io/Discord-Plugins/Revenge%20Plugins/Avatar%20Handler/` |
+| God Console | `https://tenshiavi1.github.io/Discord-Plugins/Revenge%20Plugins/God%20Console/` |
 
 The build also publishes the previous singular `Revenge%20Plugin` category path beneath the new repository URL for compatibility.
 

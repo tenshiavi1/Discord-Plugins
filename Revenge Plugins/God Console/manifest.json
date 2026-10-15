@@ -1,0 +1,13 @@
+{
+    "name": "God Console",
+    "description": "Mark unread channels as read, jump to chat history, and repair unresolved mentions.",
+    "authors": [
+        {
+            "name": "tenshiavi"
+        }
+    ],
+    "main": "src/index.ts",
+    "vendetta": {
+        "icon": "ic_check"
+    }
+}
