@@ -173,6 +173,33 @@ export default function Settings() {
 		}
 	};
 
+	const confirmFetchAll = () => {
+		showConfirmationAlert({
+			title: "Fetch All Plugins?",
+			content: "This will refetch all installed plugins and install any missing plugins in the catalog, including Tenshi's Plugins. Plugins may briefly stop while they are updated.",
+			confirmText: "Okay",
+			cancelText: "Cancel",
+			onConfirm: () => { void fetchAllPlugins(); },
+		});
+	};
+
+	const confirmRestart = () => {
+		showConfirmationAlert({
+			title: "Restart Discord?",
+			content: "Discord will restart.",
+			confirmText: "Okay",
+			cancelText: "Cancel",
+			onConfirm: () => {
+				try {
+					reloadAndReturnToManager();
+				} catch (error) {
+					console.error("[Tenshi's Plugins] Could not reload Revenge.", error);
+					showToast("Could not reload Revenge", getAssetIDByName("Warning"));
+				}
+			},
+		});
+	};
+
 	const confirmDelete = (entry: ManagedPlugin) => {
 		showConfirmationAlert({
 			title: `Delete ${entry.name}?`,
@@ -361,7 +388,7 @@ export default function Settings() {
 						accessibilityLabel="Fetch All Plugins"
 						accessibilityRole="button"
 						disabled={fetchingAll || Object.values(busy).some(Boolean)}
-						onPress={() => { void fetchAllPlugins(); }}
+						onPress={confirmFetchAll}
 						style={{
 							minHeight: 40,
 							paddingHorizontal: 12,
@@ -381,14 +408,7 @@ export default function Settings() {
 						accessibilityLabel="Restart Revenge and return to Tenshi's Plugins"
 						accessibilityRole="button"
 						disabled={fetchingAll}
-						onPress={() => {
-							try {
-								reloadAndReturnToManager();
-							} catch (error) {
-								console.error("[Tenshi's Plugins] Could not reload Revenge.", error);
-								showToast("Could not reload Revenge", getAssetIDByName("Warning"));
-							}
-						}}
+						onPress={confirmRestart}
 						style={{
 							minHeight: 40,
 							paddingHorizontal: 12,
