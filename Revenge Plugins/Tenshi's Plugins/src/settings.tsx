@@ -87,12 +87,21 @@ export default function Settings() {
 	const { width: screenWidth, fontScale } = RN.useWindowDimensions();
 	const normalizedQuery = searchQuery.trim().toLocaleLowerCase();
 	const lastCrash = getLastCrash();
-	const formatCrashDate = (timestamp: number) =>
-		new Date(timestamp).toLocaleDateString("en-US", {
+	const formatCrashDate = (timestamp: number) => {
+		const crashTime = new Date(timestamp);
+		const date = crashTime.toLocaleDateString("en-US", {
 			month: "2-digit",
 			day: "2-digit",
-			year: "2-digit",
+			year: "numeric",
 		});
+		const time = crashTime.toLocaleTimeString("en-US", {
+			hour: "2-digit",
+			minute: "2-digit",
+			second: "2-digit",
+			hourCycle: "h23",
+		});
+		return `${date} ${time}`;
+	};
 	const crashDate = lastCrash ? formatCrashDate(lastCrash.timestamp) : undefined;
 	const storedCrashReasons = getCrashReasons();
 	const crashReasons = storedCrashReasons.length > 0
@@ -672,7 +681,7 @@ export default function Settings() {
 				>
 					{lastCrash
 						? `Last Crash: ${lastCrash.pluginName} ${crashDate}`
-						: "Last Crash: None recorded"}
+						: "Last Crash: None Recorded"}
 				</RN.Text>
 				<RN.Text
 					style={{

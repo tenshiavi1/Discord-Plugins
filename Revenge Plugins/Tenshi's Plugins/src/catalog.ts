@@ -22,7 +22,7 @@ const PLUGIN_SEARCH_TERMS: Record<string, string> = {
 	"Ephemeral Entity": "anonymize anonymise upload uploads attachment file filename file name random randomized length consistent replacement name remove tracking parameters tracking url query strings send edit message silent leave leave group dm command silent typing typing status hide typing",
 	Omniscience: "keyword keywords phrase keyword tracking track monitor messages message create server servers guild group groups group dm direct message friends custom users ids ignore bots embeds channel channels webhook webhooks local notifications tracking target exact match whole words case sensitive in sentence imports export json",
 	"Sage Eyes": "hidden channels inaccessible channel access lock icon popup view anyway permissions general logger deleted messages edit edited message history deleted message history retain logs ignore bot own messages ignored users timestamps cleanup cleanup actions feature toggle",
-	"Tenshi's Plugins": "plugin manager install remove delete refetch fetch all restart search configure settings actions clear data crash logs",
+	"Tenshi's Plugins": "plugin manager install remove delete refetch fetch all restart search configure settings actions clear data crash logs developer mode developer settings copy id ids advanced discord appearance",
 };
 
 function catalogEntry(name: string, description: string, directoryName = name): ManagedPlugin {
