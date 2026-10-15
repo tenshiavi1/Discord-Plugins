@@ -209,52 +209,56 @@ export default function Settings() {
 	const refetchPlugin = async (
 		entry: ManagedPlugin,
 		installed: NonNullable<ReturnType<typeof findInstalledPlugin>>,
-	) => {
+	): Promise<boolean> => {
 		let stopped = false;
 		const existingPlugin = plugins[installed.key];
+		const wasEnabled = !!installed.instance.enabled;
 
-		const refetchFromUrl = async (url: string) => {
-			const { manifest, js } = await fetchPluginBundle(url, entry.name);
-			plugins[installed.key] = {
-				...existingPlugin,
-				id: installed.key,
-				manifest,
-				js,
-				enabled: !!existingPlugin?.enabled,
-				update: existingPlugin?.update ?? true,
-			};
-		};
+		let bundle: Awaited<ReturnType<typeof fetchPluginBundle>>;
+		try {
+			bundle = await fetchPluginBundle(entry.url, entry.name);
+		} catch (canonicalError) {
+			if (entry.url === installed.key) throw canonicalError;
+			console.warn(
+				`[Tenshi's Plugins] Current repository URL failed for ${entry.name}; retrying its installed source.`,
+				canonicalError,
+			);
+			try {
+				bundle = await fetchPluginBundle(installed.key, entry.name);
+			} catch (installedSourceError) {
+				throw new Error(
+					`Could not refetch ${entry.name} from either source. Repository: ${String(canonicalError)} Installed source: ${String(installedSourceError)}`,
+				);
+			}
+		}
+
+		const manifestChanged = JSON.stringify(existingPlugin?.manifest) !== JSON.stringify(bundle.manifest);
+		const bundleChanged = existingPlugin?.js !== bundle.js;
+		if (!manifestChanged && !bundleChanged) return false;
 
 		try {
-			if (installed.instance.enabled) {
+			if (bundleChanged && wasEnabled) {
 				stopPlugin(installed.key, false);
 				stopped = true;
 			}
 
-			try {
-				await refetchFromUrl(entry.url);
-			} catch (canonicalError) {
-				if (entry.url === installed.key) throw canonicalError;
-				console.warn(
-					`[Tenshi's Plugins] Current repository URL failed for ${entry.name}; retrying its installed source.`,
-					canonicalError,
-				);
-				try {
-					await refetchFromUrl(installed.key);
-				} catch (installedSourceError) {
-					throw new Error(
-						`Could not refetch ${entry.name} from either source. Repository: ${String(canonicalError)} Installed source: ${String(installedSourceError)}`,
-					);
-				}
-			}
+			plugins[installed.key] = {
+				...plugins[installed.key],
+				id: installed.key,
+				manifest: bundle.manifest,
+				js: bundle.js,
+				enabled: wasEnabled,
+				update: existingPlugin?.update ?? true,
+			};
 
 			if (stopped) {
 				await startPlugin(installed.key);
-				if (existingPlugin?.enabled && !plugins[installed.key]?.enabled) {
+				if (wasEnabled && !plugins[installed.key]?.enabled) {
 					throw new Error(`${entry.name} was fetched but Revenge could not restart it.`);
 				}
 				stopped = false;
 			}
+			return true;
 		} catch (error) {
 			if (stopped) {
 				try {
@@ -307,7 +311,8 @@ export default function Settings() {
 				(left, right) => Number(left.name === "Tenshi's Plugins") - Number(right.name === "Tenshi's Plugins"),
 			);
 			const failedPlugins: string[] = [];
-			let fetchedCount = 0;
+			let updatedCount = 0;
+			let unchangedCount = 0;
 			let availableCount = 0;
 			const targets = orderedPlugins
 				.map((entry) => ({ entry, installed: findInstalledPlugin(entry) }))
@@ -329,8 +334,8 @@ export default function Settings() {
 				while (nextTargetIndex < parallelTargets.length) {
 					const target = parallelTargets[nextTargetIndex++];
 					try {
-						await refetchPlugin(target.entry, target.installed);
-						fetchedCount++;
+						if (await refetchPlugin(target.entry, target.installed)) updatedCount++;
+						else unchangedCount++;
 					} catch (error) {
 						console.error(`[Tenshi's Plugins] Fetch All failed for ${target.entry.name}.`, error);
 						failedPlugins.push(target.entry.name);
@@ -346,8 +351,8 @@ export default function Settings() {
 			);
 			if (managerTarget) {
 				try {
-					await refetchPlugin(managerTarget.entry, managerTarget.installed);
-					fetchedCount++;
+					if (await refetchPlugin(managerTarget.entry, managerTarget.installed)) updatedCount++;
+					else unchangedCount++;
 				} catch (error) {
 					console.error(`[Tenshi's Plugins] Fetch All failed for ${managerTarget.entry.name}.`, error);
 					failedPlugins.push(managerTarget.entry.name);
@@ -360,12 +365,12 @@ export default function Settings() {
 
 			if (failedPlugins.length > 0) {
 				showToast(
-					`Catalog updated; refreshed ${fetchedCount}, failed ${failedPlugins.length}, ${availableCount} available to install`,
+					`Catalog updated; updated ${updatedCount}, already current ${unchangedCount}, failed ${failedPlugins.length}, ${availableCount} available to install`,
 					getAssetIDByName("Warning"),
 				);
 			} else {
 				showToast(
-					`Catalog updated; refreshed ${fetchedCount}, ${availableCount} available to install`,
+					`Catalog updated; updated ${updatedCount}, already current ${unchangedCount}, ${availableCount} available to install`,
 					getAssetIDByName("Check"),
 				);
 			}
@@ -634,8 +639,11 @@ export default function Settings() {
 						hideActionSheet?.();
 						void (async () => {
 							try {
-								await refetchPlugin(entry, installed);
-								showToast(`${entry.name} refetched`, getAssetIDByName("Check"));
+								const updated = await refetchPlugin(entry, installed);
+								showToast(
+									updated ? `${entry.name} refetched` : `${entry.name} is already up to date`,
+									getAssetIDByName("Check"),
+								);
 							} catch (error) {
 								console.error(`[Tenshi's Plugins] Failed to refetch ${entry.name}.`, error);
 								showToast(`Failed to refetch ${entry.name}`, getAssetIDByName("Warning"));
