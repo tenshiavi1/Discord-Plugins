@@ -1,5 +1,6 @@
 import { findByProps } from "@vendetta/metro";
 import { clipboard, NavigationNative, React, ReactNative as RN } from "@vendetta/metro/common";
+import { storage } from "@vendetta/plugin";
 import { fetchPlugin, getSettings, installPlugin, plugins, removePlugin, startPlugin, stopPlugin } from "@vendetta/plugins";
 import { createMMKVBackend } from "@vendetta/storage";
 import { useProxy } from "@vendetta/storage";
@@ -8,6 +9,7 @@ import { getAssetIDByName } from "@vendetta/ui/assets";
 import { Forms } from "@vendetta/ui/components";
 import { showToast } from "@vendetta/ui/toasts";
 import { discoverManagedPlugins, MANAGED_PLUGINS, type ManagedPlugin } from "./catalog";
+import { clearLastCrash, getLastCrash } from "./crashLog";
 import { reloadAndReturnToManager } from "./managerNavigation";
 
 const { FormRow, FormSection } = Forms;
@@ -74,6 +76,7 @@ function IconButton({
 
 export default function Settings() {
 	useProxy(plugins);
+	useProxy(storage);
 	const [busy, setBusy] = React.useState<Record<string, boolean>>({});
 	const [fetchingAll, setFetchingAll] = React.useState(false);
 	const [fetchProgress, setFetchProgress] = React.useState(0);
@@ -83,6 +86,14 @@ export default function Settings() {
 	const navigation = NavigationNative.useNavigation();
 	const { width: screenWidth, fontScale } = RN.useWindowDimensions();
 	const normalizedQuery = searchQuery.trim().toLocaleLowerCase();
+	const lastCrash = getLastCrash();
+	const crashDate = lastCrash
+		? new Date(lastCrash.timestamp).toLocaleDateString("en-US", {
+			month: "2-digit",
+			day: "2-digit",
+			year: "2-digit",
+		})
+		: undefined;
 	const visiblePlugins = catalog
 		.filter((entry) =>
 			!normalizedQuery ||
@@ -273,6 +284,14 @@ export default function Settings() {
 					failedPlugins.push(entry.name);
 				}
 			}
+			if (action === "clear") {
+				try {
+					clearLastCrash();
+				} catch (error) {
+					console.error("[Tenshi's Plugins] Failed to clear the last crash log.", error);
+					failedPlugins.push("Last crash log");
+				}
+			}
 		} finally {
 			setFetchingAll(false);
 		}
@@ -302,7 +321,7 @@ export default function Settings() {
 			},
 			clear: {
 				title: "Clear All Plugin Data?",
-				content: "This permanently clears saved settings and data for every installed plugin in the list. This cannot be undone, and enabled plugins may briefly stop and restart.",
+				content: "This permanently clears saved settings and data for every installed plugin in the list, including the last crash log. This cannot be undone, and enabled plugins may briefly stop and restart.",
 				confirmText: "Clear All",
 			},
 		}[action];
@@ -626,6 +645,57 @@ export default function Settings() {
 						<RN.Text style={{ color: "#b5bac1", fontSize: 16 }}>Clear</RN.Text>
 					</RN.TouchableOpacity>
 				)}
+			</RN.View>
+			<RN.View
+				style={{
+					marginBottom: 16,
+					padding: 12,
+					borderRadius: 8,
+					borderWidth: 1,
+					borderColor: "#343946",
+					backgroundColor: "#0d1017",
+				}}
+			>
+				<RN.Text
+					style={{
+						color: "#d8dee9",
+						fontFamily: "monospace",
+						fontSize: 14,
+						marginBottom: 10,
+					}}
+				>
+					{lastCrash
+						? `Last Crash: ${lastCrash.pluginName} ${crashDate}`
+						: "Last Crash: None recorded"}
+				</RN.Text>
+				<RN.TouchableOpacity
+					accessibilityLabel="Copy last crash logs"
+					accessibilityRole="button"
+					disabled={!lastCrash}
+					onPress={() => {
+						if (!lastCrash) return;
+						try {
+							clipboard.setString(lastCrash.logs);
+							showToast("Crash logs copied", getAssetIDByName("Check"));
+						} catch (error) {
+							console.error("[Tenshi's Plugins] Could not copy the last crash logs.", error);
+							showToast("Could not copy crash logs", getAssetIDByName("Warning"));
+						}
+					}}
+					style={{
+						width: "100%",
+						minHeight: 40,
+						alignItems: "center",
+						justifyContent: "center",
+						borderRadius: 6,
+						backgroundColor: lastCrash ? "#292b38" : "#1c1e2b",
+						opacity: lastCrash ? 1 : 0.55,
+					}}
+				>
+					<RN.Text style={{ color: "#f2f3f5", fontFamily: "monospace", fontWeight: "600" }}>
+						Copy Logs
+					</RN.Text>
+				</RN.TouchableOpacity>
 			</RN.View>
 			<FormSection title="Revenge Plugins">
 				{visiblePlugins.map((entry) => {
