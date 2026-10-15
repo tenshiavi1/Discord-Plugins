@@ -68,6 +68,12 @@ export default function Settings() {
 						subLabel="Avatar Handler does not collect, export, or save account passwords, 2FA codes, or session tokens."
 					/>
 				</TableRowGroup>
+				<TableRowGroup title="Plugin Settings">
+					<TableRow
+						label="Settings stay on this device"
+						subLabel="Plugin preferences are stored locally by each installed plugin, not copied between Discord accounts. Switching accounts does not clear them. Uninstalling a plugin or using Clear Data/Clear All can remove its settings."
+					/>
+				</TableRowGroup>
 			</Stack>
 		</RN.ScrollView>
 	);
