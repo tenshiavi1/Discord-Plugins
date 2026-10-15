@@ -49,7 +49,6 @@ export function Settings() {
 				<FormSwitchRow
 					label="Enable Hidden Channels"
 					subLabel="Turn Sage Eyes hidden-channel handling on or off. This does not grant server permissions."
-					leading={<FormRow.Icon source={getAssetIDByName("ic_lock")} />}
 					value={hiddenChannelsEnabled}
 					onValueChange={(value: boolean) => {
 						storage.enableHiddenChannels = value;
@@ -57,9 +56,8 @@ export function Settings() {
 					}}
 				/>
 				<FormSwitchRow
-					label={"Show Lock Icon"}
+					label="Show Lock Icon"
 					subLabel={"Show a lock beside channels you cannot access. This is a visual indicator only and does not grant permissions."}
-					leading={<FormRow.Icon source={getAssetIDByName("ic_lock")} />}
 					disabled={!hiddenChannelsEnabled}
 					onValueChange={(value) => {
 						if (hiddenChannelsEnabled) storage.showIcon = value;
@@ -67,9 +65,8 @@ export function Settings() {
 					value={storage.showIcon}
 				/>
 				<FormSwitchRow
-					label={"Show Popup on Hidden Channels"}
+					label="Show Popup On Hidden Channels"
 					subLabel={"Ask before opening an inaccessible channel and show the channel details available to the client."}
-					leading={<FormRow.Icon source={getAssetIDByName("ic_more_android")} />}
 					disabled={!hiddenChannelsEnabled}
 					onValueChange={(value) => {
 						if (hiddenChannelsEnabled) storage.showPopup = value;
@@ -81,7 +78,6 @@ export function Settings() {
 				<FormSwitchRow
 					label="Enable General Logger"
 					subLabel="Turn Sage Eyes message-history features on or off."
-					leading={<FormRow.Icon source={getAssetIDByName("ic_message_copy")} />}
 					value={messageHistoryEnabled}
 					onValueChange={(value: boolean) => {
 						storage.enableMessageHistory = value;
@@ -89,7 +85,7 @@ export function Settings() {
 					}}
 				/>
 				<FormSwitchRow
-					label="Log deleted messages"
+					label="Log Deleted Messages"
 					subLabel="Replace a deleted message with a simple notice. Long-press the notice to remove it."
 					disabled={!messageHistoryEnabled}
 					value={Boolean(storage.keepDeletedMessages)}
@@ -99,7 +95,7 @@ export function Settings() {
 					}}
 				/>
 				<FormSwitchRow
-					label="Log edited messages"
+					label="Log Edited Messages"
 					subLabel="Show the original and latest text separated by a downward arrow. Long-press to remove the history."
 					disabled={!messageHistoryEnabled}
 					value={Boolean(storage.keepEditHistory)}
@@ -109,7 +105,7 @@ export function Settings() {
 					}}
 				/>
 				<FormSwitchRow
-					label="Ignore bot messages"
+					label="Ignore Bot Messages"
 					subLabel="Do not retain deletions or edits from bots."
 					disabled={!messageHistoryEnabled}
 					value={Boolean(storage.ignoreBotMessages)}
@@ -119,7 +115,7 @@ export function Settings() {
 					}}
 				/>
 				<FormSwitchRow
-					label="Ignore your messages"
+					label="Ignore Your Messages"
 					subLabel="Do not retain deletions or edits to your own messages."
 					disabled={!messageHistoryEnabled}
 					value={Boolean(storage.ignoreOwnMessages)}
@@ -129,7 +125,7 @@ export function Settings() {
 					}}
 				/>
 				<FormRow
-					label="Clear message-history tracking"
+					label="Clear Message-History Tracking"
 					subLabel="Forget retained edit versions and deleted-message records. History already applied to the current channel may remain until it is reloaded."
 					disabled={!messageHistoryEnabled}
 					trailing={<FormRow.Arrow />}
@@ -142,7 +138,7 @@ export function Settings() {
 			</FormSection>
 			<FormSection title="Display" titleStyleType="no_border">
 				<FormSwitchRow
-					label="Add timestamp for edits"
+					label="Add Timestamp For Edits"
 					subLabel="Show a relative timestamp beside each captured version."
 					disabled={!messageHistoryEnabled}
 					value={Boolean(storage.timestampForEdits)}
@@ -154,7 +150,7 @@ export function Settings() {
 			</FormSection>
 			<FormSection title="Custom Buffers" titleStyleType="no_border">
 				<TextSetting
-					label="Deleted indicator text"
+					label="Deleted Indicator Text"
 					value={String(storage.deletedIndicatorText ?? "This message was deleted")}
 					placeholder="This message was deleted"
 					disabled={!messageHistoryEnabled}
@@ -204,7 +200,7 @@ export function Settings() {
 							}
 						/>
 					))
-					: <FormRow label="No users currently ignored." disabled={!messageHistoryEnabled || !storage.enableIgnoreUsers} />}
+					: <FormRow label="No Users Currently Ignored." disabled={!messageHistoryEnabled || !storage.enableIgnoreUsers} />}
 			</FormSection>
 		</RN.ScrollView>
 	);

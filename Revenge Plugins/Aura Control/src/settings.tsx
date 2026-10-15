@@ -85,13 +85,13 @@ export default function Settings() {
 	return (
 		<RN.ScrollView style={{ flex: 1 }} contentContainerStyle={{ paddingBottom: 24 }}>
 			<FormSection title="Application" titleStyleType="no_border">
-				<TextSetting label="Application ID (optional)" storageKey="applicationId" placeholder="Defaults to Discord-CustomRP's public application" limit={21} />
+				<TextSetting label="Application ID (Optional)" storageKey="applicationId" placeholder="Defaults to Discord-CustomRP's public application" limit={21} />
 				<RN.Text style={{ color: "#b5bac1", paddingHorizontal: 16, paddingTop: 8 }}>
 					Leave blank to connect with the public default application. Enter your own ID to use assets uploaded to your application.
 				</RN.Text>
 				<TextSetting label="Name" storageKey="applicationName" />
 			</FormSection>
-			<FormSection title="Activity type" titleStyleType="no_border">
+			<FormSection title="Activity Type" titleStyleType="no_border">
 				{ACTIVITY_TYPES.map((type) => (
 					<FormRow
 						key={`activity-type-${type.value}`}
@@ -109,18 +109,18 @@ export default function Settings() {
 					/>
 				))}
 			</FormSection>
-			<FormSection title="Details and state" titleStyleType="no_border">
+			<FormSection title="Details And State" titleStyleType="no_border">
 				<TextSetting label="Details" storageKey="details" />
 				<TextSetting label="Details URL" storageKey="detailsUrl" placeholder="https://example.com" limit={512} />
 				<TextSetting label="State" storageKey="state" />
 				<TextSetting label="State URL" storageKey="stateUrl" placeholder="https://example.com" limit={512} />
 				{storage.activityType === 1 && (
-					<TextSetting label="Stream URL (Twitch or YouTube)" storageKey="streamUrl" placeholder="https://twitch.tv/..." limit={512} />
+					<TextSetting label="Stream URL (Twitch Or YouTube)" storageKey="streamUrl" placeholder="https://twitch.tv/..." limit={512} />
 				)}
 			</FormSection>
 			<FormSection title="Party" titleStyleType="no_border">
-				<TextSetting label="Current party size" storageKey="partySize" placeholder="Optional whole number" limit={9} />
-				<TextSetting label="Party maximum" storageKey="partyMaxSize" placeholder="Optional whole number" limit={9} />
+				<TextSetting 				label="Current Party Size" storageKey="partySize" placeholder="Optional whole number" limit={9} />
+				<TextSetting 				label="Party Maximum" storageKey="partyMaxSize" placeholder="Optional whole number" limit={9} />
 			</FormSection>
 			<FormSection title="Timestamp" titleStyleType="no_border">
 				<RN.Text style={{ color: "#b5bac1", paddingHorizontal: 16, paddingTop: 8 }}>
@@ -136,19 +136,19 @@ export default function Settings() {
 				{storage.timestampMode === "custom" && (
 					<>
 						<TextSetting
-							label="Start (local time: YYYY-MM-DD HH:MM)"
+							label="Start (Local Time: YYYY-MM-DD HH:MM)"
 							storageKey="timestampCustomStart"
 							placeholder="2026-10-14 19:00"
 							limit={16}
 						/>
 						<FormSwitchRow
-							label="Set end timestamp"
+							label="Set End Timestamp"
 							value={Boolean(storage.timestampEndEnabled)}
 							onValueChange={(value: boolean) => { storage.timestampEndEnabled = value; }}
 						/>
 						{storage.timestampEndEnabled && (
 							<TextSetting
-								label="End (local time: YYYY-MM-DD HH:MM)"
+								label="End (Local Time: YYYY-MM-DD HH:MM)"
 								storageKey="timestampCustomEnd"
 								placeholder="2026-10-14 20:00"
 								limit={16}
@@ -157,7 +157,7 @@ export default function Settings() {
 					</>
 				)}
 			</FormSection>
-			<FormSection title="Large image" titleStyleType="no_border">
+			<FormSection title="Large Image" titleStyleType="no_border">
 				<RN.Text style={{ color: "#b5bac1", paddingHorizontal: 16, paddingTop: 8 }}>
 					Choose an asset key uploaded to this application's Rich Presence settings.
 				</RN.Text>
@@ -165,7 +165,7 @@ export default function Settings() {
 				<TextSetting label="Text" storageKey="largeImageText" />
 				<TextSetting label="URL" storageKey="largeImageUrl" placeholder="https://example.com" limit={512} />
 			</FormSection>
-			<FormSection title="Small image" titleStyleType="no_border">
+			<FormSection title="Small Image" titleStyleType="no_border">
 				<TextSetting label="Key" storageKey="smallImageKey" limit={256} />
 				<TextSetting label="Text" storageKey="smallImageText" />
 				<TextSetting label="URL" storageKey="smallImageUrl" placeholder="https://example.com" limit={512} />

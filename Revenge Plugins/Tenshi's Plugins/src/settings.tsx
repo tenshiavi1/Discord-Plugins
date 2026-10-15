@@ -339,7 +339,7 @@ export default function Settings() {
 			>
 				<RN.TextInput
 					accessibilityLabel="Search plugins"
-					placeholder="Search plugins by name or description"
+					placeholder="Search Plugins by Name or Description"
 					placeholderTextColor="#949ba4"
 					value={searchQuery}
 					onChangeText={setSearchQuery}
@@ -350,7 +350,7 @@ export default function Settings() {
 				/>
 				{searchQuery.length > 0 && (
 					<RN.TouchableOpacity
-						accessibilityLabel="Clear plugin search"
+						accessibilityLabel="Clear Plugin Search"
 						accessibilityRole="button"
 						onPress={() => setSearchQuery("")}
 						style={{ padding: 8 }}
@@ -391,7 +391,7 @@ export default function Settings() {
 									<IconButton
 										assetNames={["WrenchIcon", "SettingsIcon", "ic_settings_24px"]}
 										fallback="🔧"
-										label={`Open ${entry.name} settings`}
+										label={`Open ${entry.name} Settings`}
 										disabled={!installed}
 										onPress={() => openPluginSettings(entry)}
 									/>
@@ -399,7 +399,7 @@ export default function Settings() {
 									<IconButton
 										assetNames={["InfoIcon", "InformationIcon", "ic_info_24px"]}
 										fallback="ⓘ"
-										label={`Actions for ${entry.name}`}
+										label={`Actions For ${entry.name}`}
 										onPress={() => showPluginActions(entry)}
 									/>
 									<RN.View style={{ width: 8 }} />
@@ -439,7 +439,7 @@ export default function Settings() {
 				})}
 				{visiblePlugins.length === 0 && (
 					<FormRow
-						label="No plugins found"
+						label="No Plugins Found"
 						subLabel="Try a different plugin name or description."
 					/>
 				)}

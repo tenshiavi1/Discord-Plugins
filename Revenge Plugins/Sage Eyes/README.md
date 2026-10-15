@@ -21,13 +21,13 @@ Sage Eyes changes client-side display and navigation behavior only. It does not 
 - **Show Lock Icon** adds or removes the hidden-channel indicator while the feature is enabled.
 - **Show Popup on Hidden Channels** controls the confirmation and information popup before opening a hidden channel.
 - **Enable General Logger** turns message-history handling and its related settings on or off. Its subordinate settings are disabled while it is off.
-- **Log deleted messages** independently toggles deleted-message retention.
-- **Log edited messages** independently toggles inline display of earlier message content.
-- **Ignore bot messages** and **Ignore your messages** skip those messages during history capture.
-- **Add timestamp for edits** shows relative timestamps beside the original and latest edit text.
+- **Log Deleted Messages** independently toggles deleted-message retention.
+- **Log Edited Messages** independently toggles inline display of earlier message content.
+- **Ignore Bot Messages** and **Ignore Your Messages** skip those messages during history capture.
+- **Add Timestamp For Edits** shows relative timestamps beside the original and latest edit text.
 - **Custom Buffers** lets you edit the deleted indicator text.
 - **Enable Ignored Users** independently enables profile-menu Ignore/Unignore actions and exclusion of listed users from message history. Its controls are disabled while General Logger is off.
-- **Clear message-history tracking** forgets retained edit versions and deleted-message records. Content already applied to the current channel's message store may remain visible until that channel is reloaded.
+- **Clear Message-History Tracking** forgets retained edit versions and deleted-message records. Content already applied to the current channel's message store may remain visible until that channel is reloaded.
 
 Deleted messages retain their original content and show the native deleted-warning row. Edited messages display the original text, a downward arrow, and the latest text; Discord's small native edited badge appears once for the combined message. Intermediate versions are retained internally but are not expanded in chat. Long-press a deleted message and choose **Remove Deleted Message** to remove it with one action. Long-press an edited message and choose **Remove Edit History** to show only its current text again. These actions are distinct from Discord's ephemeral-message dismissal; Sage Eyes does not mark its history rows as ephemeral.
 

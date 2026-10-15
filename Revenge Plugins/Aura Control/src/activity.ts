@@ -17,11 +17,11 @@ export const DISPLAY_TYPES = [
 ] as const;
 
 export const TIMESTAMP_MODES = [
-	{ label: "Since last connection", value: "connection" },
-	{ label: "Since last presence update", value: "update" },
-	{ label: "Since Aura Control started", value: "startup" },
-	{ label: "Your local time", value: "local" },
-	{ label: "Custom timestamp", value: "custom" },
+	{ label: "Since Last Connection", value: "connection" },
+	{ label: "Since Last Presence Update", value: "update" },
+	{ label: "Since Aura Control Started", value: "startup" },
+	{ label: "Your Local Time", value: "local" },
+	{ label: "Custom Timestamp", value: "custom" },
 ] as const;
 
 const SOCKET_ID = "AuraControl@tenshiavi";

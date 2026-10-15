@@ -44,19 +44,19 @@ export default function Settings() {
 		<RN.ScrollView style={{ flex: 1 }} contentContainerStyle={{ paddingBottom: 24 }}>
 			<FormSection title="Privacy" titleStyleType="no_border">
 				<FormSwitchRow
-					label="Anonymize uploaded file names"
+					label="Anonymize Uploaded File Names"
 					subLabel="Replace attachment names before the client uploads them."
 					value={Boolean(storage.anonymiseByDefault)}
 					onValueChange={(value: boolean) => { storage.anonymiseByDefault = value; }}
 				/>
 				<FormSwitchRow
-					label="Remove tracking parameters from sent URLs"
+					label="Remove Tracking Parameters From Sent URLs"
 					subLabel="Clean common advertising and click-tracking parameters when sending or editing messages."
 					value={Boolean(storage.clearTrackingUrls)}
 					onValueChange={(value: boolean) => { storage.clearTrackingUrls = value; }}
 				/>
 				<FormSwitchRow
-					label="Enable /leave silent command"
+					label="Enable Silent /leave Command"
 					subLabel="Adds a command to leave the current group DM without sending a visible leave message."
 					value={Boolean(storage.enableSilentLeave)}
 					onValueChange={(value: boolean) => { storage.enableSilentLeave = value; }}
@@ -71,7 +71,7 @@ export default function Settings() {
 					}}
 				/>
 			</FormSection>
-			<FormSection title="Anonymization method" titleStyleType="no_border">
+			<FormSection title="Anonymization Method" titleStyleType="no_border">
 				{METHODS.map((method) => (
 					<FormRow
 						key={method.value}
@@ -81,7 +81,7 @@ export default function Settings() {
 				))}
 				{storage.method === "random" && (
 					<TextSetting
-						label="Random name length (1-64)"
+						label="Random Name Length (1-64)"
 						storageKey="randomizedLength"
 						placeholder="7"
 						keyboardType="numeric"
@@ -89,7 +89,7 @@ export default function Settings() {
 				)}
 				{storage.method === "consistent" && (
 					<TextSetting
-						label="Replacement name"
+						label="Replacement Name"
 						storageKey="consistentName"
 						placeholder="file"
 					/>

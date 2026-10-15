@@ -2,17 +2,17 @@
 
 Ephemeral Entity is a Revenge mobile plugin by tenshiavi that replaces file names just before Discord uploads attachments. It preserves the original file extension, including compound extensions such as `.tar.gz`.
 
-## Anonymization methods
+## Anonymization Methods
 
-- **Random characters** creates a new random name for each file.
-- **Consistent name** uses the configured replacement name for every file.
+- **Random Characters** creates a new random name for each file.
+- **Consistent Name** uses the configured replacement name for every file.
 - **Timestamp** uses the current time as the replacement name.
 
 File-name anonymization is enabled by default and can be disabled in the plugin settings. The method and name length/replacement name are configurable there as well.
 
-The **Remove tracking parameters from sent URLs** switch is enabled by default. It removes common advertising/click-tracking query parameters from URLs in messages before they are sent or edited. This uses an embedded set of common parameter names; it does not download external rules or send message content to a third party. URL cleaning can be disabled independently in settings. URLs without a recognized tracking parameter are left as-is.
+The **Remove Tracking Parameters From Sent URLs** switch is enabled by default. It removes common advertising/click-tracking query parameters from URLs in messages before they are sent or edited. This uses an embedded set of common parameter names; it does not download external rules or send message content to a third party. URL cleaning can be disabled independently in settings. URLs without a recognized tracking parameter are left as-is.
 
-The **Enable /leave silent command** switch registers a `/leave silent` command for group DMs. Running it asks Discord to close the current group DM with the `silent=true` request parameter. Discord's server behavior for silent leaving can change independently of the plugin.
+The **Enable Silent /leave Command** switch registers a `/leave silent` command for group DMs. Running it asks Discord to close the current group DM with the `silent=true` request parameter. Discord's server behavior for silent leaving can change independently of the plugin.
 
 The **Silent Typing** switch prevents typing-start events from being sent while enabled and leaves normal typing-stop behavior unchanged. It is enabled by default and can be toggled in the Privacy settings or with the mobile-compatible `/silenttype` command.
 

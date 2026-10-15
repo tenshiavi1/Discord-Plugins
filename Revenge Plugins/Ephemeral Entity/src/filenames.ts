@@ -1,8 +1,8 @@
 export type AnonymizationMethod = "random" | "consistent" | "timestamp";
 
 export const METHODS: { label: string; value: AnonymizationMethod }[] = [
-	{ label: "Random characters", value: "random" },
-	{ label: "Consistent name", value: "consistent" },
+	{ label: "Random Characters", value: "random" },
+	{ label: "Consistent Name", value: "consistent" },
 	{ label: "Timestamp", value: "timestamp" },
 ];
 

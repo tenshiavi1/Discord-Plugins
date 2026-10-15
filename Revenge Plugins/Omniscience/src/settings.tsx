@@ -147,7 +147,7 @@ export default function Settings() {
 
         <TableRowGroup title="Plugin Settings">
           <TableSwitchRow
-            label="Show in Settings"
+            label="Show In Settings"
             subLabel="Add a shortcut to this plugin in settings page"
             value={storage.showInSettings}
             onValueChange={(v: boolean) => { storage.showInSettings = v; forceUpdate(); }}
@@ -331,7 +331,7 @@ export default function Settings() {
             onValueChange={(v: boolean) => { storage.caseSensitive = v; forceUpdate(); }}
           />
           <TableSwitchRow
-            label="Match in a Sentence"
+            label="Match In A Sentence"
             subLabel="The keyword can be detected even if it is part of a longer word"
             value={storage.inSentence}
             onValueChange={(v: boolean) => { storage.inSentence = v; forceUpdate(); }}
@@ -340,13 +340,13 @@ export default function Settings() {
 
         <TableRowGroup title="Advanced Notifications">
           <TableSwitchRow
-            label="Send Notifications to Channel"
+            label="Send Notifications To Channel"
             subLabel="Send detected messages to a specific channel"
             value={storage.sendNotificationToChannel}
             onValueChange={(v: boolean) => { storage.sendNotificationToChannel = v; forceUpdate(); }}
           />
           <TableSwitchRow
-            label="Send Notifications to Webhook"
+            label="Send Notifications To Webhook"
             subLabel="Send detected messages to a webhook"
             value={storage.sendNotificationToWebhook}
             onValueChange={(v: boolean) => { storage.sendNotificationToWebhook = v; forceUpdate(); }}
