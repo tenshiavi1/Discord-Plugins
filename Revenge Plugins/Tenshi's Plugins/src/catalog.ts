@@ -17,6 +17,45 @@ const GITHUB_CONTENTS_URL =
 const GITHUB_RAW_ROOT =
 	"https://raw.githubusercontent.com/tenshiavi1/Discord-Plugins/main/Revenge%20Plugins";
 
+export async function fetchWithRetry(url: string, init?: RequestInit): Promise<Response> {
+	const maxAttempts = 3;
+	let lastError: unknown;
+
+	for (let attempt = 0; attempt < maxAttempts; attempt++) {
+		let timeout: ReturnType<typeof setTimeout> | undefined;
+		let response: Response | undefined;
+		try {
+			const request = fetch(url, { ...init, cache: "no-store" });
+			response = await Promise.race([
+				request,
+				new Promise<Response>((_, reject) => {
+					timeout = setTimeout(() => {
+						reject(new Error(`Request timed out while fetching ${url}.`));
+					}, 12_000);
+				}),
+			]);
+		} catch (error) {
+			lastError = error;
+		} finally {
+			if (timeout !== undefined) clearTimeout(timeout);
+		}
+
+		if (response?.ok) return response;
+		if (response) {
+			lastError = new Error(`Request for ${url} returned HTTP ${response.status}.`);
+			if (response.status !== 408 && response.status !== 429 && response.status < 500) {
+				throw lastError;
+			}
+		}
+
+		if (attempt < maxAttempts - 1) {
+			await new Promise((resolve) => setTimeout(resolve, 250 * (attempt + 1)));
+		}
+	}
+
+	throw lastError instanceof Error ? lastError : new Error(`Could not fetch ${url}.`);
+}
+
 const PLUGIN_SEARCH_TERMS: Record<string, string> = {
 	"Aura Control": "rich presence custom rpc activity application id application name connect disconnect update presence playing streaming listening watching competing display name state details urls twitch youtube party size maximum timestamp since connection startup local time custom start end large image small image image asset key hover text buttons button labels urls activity sharing",
 	"Ephemeral Entity": "anonymize anonymise upload uploads attachment file filename file name random randomized length consistent replacement name remove tracking parameters tracking url query strings send edit message silent leave leave group dm command silent typing typing status hide typing",
@@ -38,7 +77,7 @@ function catalogEntry(name: string, description: string, directoryName = name): 
 }
 
 export async function discoverManagedPlugins(): Promise<ManagedPlugin[]> {
-	const directoryResponse = await fetch(GITHUB_CONTENTS_URL, {
+	const directoryResponse = await fetchWithRetry(GITHUB_CONTENTS_URL, {
 		headers: { Accept: "application/vnd.github+json" },
 	});
 	if (!directoryResponse.ok) {
@@ -65,10 +104,7 @@ export async function discoverManagedPlugins(): Promise<ManagedPlugin[]> {
 
 	return Promise.all(pluginDirectories.map(async ({ name }) => {
 		const manifestUrl = `${GITHUB_RAW_ROOT}/${encodeURIComponent(name)}/manifest.json`;
-		const manifestResponse = await fetch(manifestUrl);
-		if (!manifestResponse.ok) {
-			throw new Error(`GitHub returned ${manifestResponse.status} for the ${name} plugin manifest.`);
-		}
+		const manifestResponse = await fetchWithRetry(manifestUrl);
 		const manifest: unknown = await manifestResponse.json();
 		if (
 			typeof manifest !== "object" ||

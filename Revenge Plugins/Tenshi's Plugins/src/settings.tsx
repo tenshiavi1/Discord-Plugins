@@ -8,7 +8,7 @@ import { showConfirmationAlert } from "@vendetta/ui/alerts";
 import { getAssetIDByName } from "@vendetta/ui/assets";
 import StableTextInput from "../../StableTextInput";
 import { showToast } from "@vendetta/ui/toasts";
-import { discoverManagedPlugins, MANAGED_PLUGINS, type ManagedPlugin } from "./catalog";
+import { discoverManagedPlugins, fetchWithRetry, MANAGED_PLUGINS, type ManagedPlugin } from "./catalog";
 import { clearLastCrash, getCrashReasons, getLastCrash } from "./crashLog";
 import { reloadAndReturnToManager } from "./managerNavigation";
 
@@ -22,42 +22,6 @@ type PluginManifest = {
 	hash: string;
 	[key: string]: unknown;
 };
-
-async function fetchWithRetry(url: string): Promise<Response> {
-	const maxAttempts = 3;
-	let lastError: unknown;
-
-	for (let attempt = 0; attempt < maxAttempts; attempt++) {
-		const controller = new AbortController();
-		const timeout = setTimeout(() => controller.abort(), 12_000);
-		let response: Response;
-		try {
-			response = await fetch(url, { cache: "no-store", signal: controller.signal });
-		} catch (error) {
-			lastError = controller.signal.aborted
-				? new Error(`Request timed out while fetching ${url}.`, { cause: error })
-				: error;
-			clearTimeout(timeout);
-			if (attempt < maxAttempts - 1) {
-				await new Promise((resolve) => setTimeout(resolve, 250 * (attempt + 1)));
-				continue;
-			}
-			break;
-		}
-		clearTimeout(timeout);
-
-		if (response.ok) return response;
-		lastError = new Error(`Request for ${url} returned HTTP ${response.status}.`);
-		if (response.status !== 408 && response.status !== 429 && response.status < 500) {
-			throw lastError;
-		}
-		if (attempt < maxAttempts - 1) {
-			await new Promise((resolve) => setTimeout(resolve, 250 * (attempt + 1)));
-		}
-	}
-
-	throw lastError instanceof Error ? lastError : new Error(`Could not fetch ${url}.`);
-}
 
 async function fetchPluginBundle(url: string, expectedName: string): Promise<{ manifest: PluginManifest; js: string }> {
 	const baseUrl = url.endsWith("/") ? url : `${url}/`;
