@@ -31,6 +31,10 @@ function findInstalledPlugin(entry: ManagedPlugin) {
 	return undefined;
 }
 
+function getPluginSettings(installed: NonNullable<ReturnType<typeof findInstalledPlugin>>) {
+	return getSettings(installed.instance?.id ?? installed.key);
+}
+
 function IconButton({
 	assetNames,
 	fallback,
@@ -226,8 +230,7 @@ export default function Settings() {
 		const installed = findInstalledPlugin(entry);
 		if (!installed) return;
 
-		const pluginId = installed.instance?.id ?? installed.key;
-		const PluginSettings = getSettings(pluginId);
+		const PluginSettings = getPluginSettings(installed);
 		if (!PluginSettings) {
 			showToast(`${entry.name} has no settings page`, getAssetIDByName("Warning"));
 			return;
@@ -291,7 +294,7 @@ export default function Settings() {
 		}
 
 		const options = [];
-		const PluginSettings = installed ? getSettings(installed.key) : undefined;
+		const PluginSettings = installed ? getPluginSettings(installed) : undefined;
 
 		if (PluginSettings && installed) {
 			options.push({
@@ -470,6 +473,7 @@ export default function Settings() {
 			<FormSection title="Revenge Plugins">
 				{visiblePlugins.map((entry) => {
 					const installed = findInstalledPlugin(entry);
+					const PluginSettings = installed ? getPluginSettings(installed) : undefined;
 					const isBusy = !!busy[entry.url];
 					const contentWidth = Math.max(0, screenWidth - 60);
 					const titleFontSize = Math.max(
@@ -515,7 +519,7 @@ export default function Settings() {
 										assetNames={["WrenchIcon", "SettingsIcon", "ic_settings_24px"]}
 										fallback="🔧"
 										label={`Open ${entry.name} Settings`}
-										disabled={!installed || fetchingAll}
+										disabled={!PluginSettings || fetchingAll}
 										onPress={() => openPluginSettings(entry)}
 									/>
 									<RN.View style={{ width: 8 }} />
