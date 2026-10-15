@@ -22,6 +22,12 @@ type GuildRecord = {
 	ownerId?: string;
 	owner_id?: string;
 	description?: string;
+	icon?: string | null;
+	banner?: string | null;
+	bannerColor?: string | number | null;
+	banner_color?: string | null;
+	accentColor?: number | null;
+	accent_color?: number | null;
 	memberCount?: number;
 	approximateMemberCount?: number;
 	premiumTier?: number;
@@ -29,6 +35,26 @@ type GuildRecord = {
 	vanityURLCode?: string;
 	vanity_url_code?: string;
 };
+
+function getGuildAssetUrl(guildId: string, hash: string, asset: "icons" | "banners", size: number) {
+	const extension = hash.startsWith("a_") ? "gif" : "png";
+	return `https://cdn.discordapp.com/${asset}/${guildId}/${hash}.${extension}?size=${size}`;
+}
+
+function getDefaultAvatarIndex(guildId: string) {
+	return [...guildId].reduce((remainder, digit) => (remainder * 10 + Number(digit)) % 6, 0);
+}
+
+function getBannerColor(guild?: GuildRecord) {
+	const color = guild?.bannerColor ?? guild?.banner_color ?? guild?.accentColor ?? guild?.accent_color;
+	if (typeof color === "number" && Number.isFinite(color)) {
+		return `#${Math.max(0, color).toString(16).padStart(6, "0").slice(-6)}`;
+	}
+	if (typeof color === "string" && /^#?[0-9a-f]{6}$/i.test(color)) {
+		return color.startsWith("#") ? color : `#${color}`;
+	}
+	return "#2b2d31";
+}
 
 function formatCount(value: unknown) {
 	return typeof value === "number" && Number.isFinite(value) ? value.toLocaleString() : "—";
@@ -61,6 +87,8 @@ function InfoRow({ label, value, onPress }: { label: string; value: string; onPr
 
 function ServerInfoSheet({ guildId }: { guildId: string }) {
 	const guild = guildStore?.getGuild?.(guildId) as GuildRecord | undefined;
+	const [bannerFailed, setBannerFailed] = React.useState(false);
+	const [iconFailed, setIconFailed] = React.useState(false);
 	const ownerId = guild?.ownerId ?? guild?.owner_id;
 	const owner = ownerId ? userStore?.getUser?.(ownerId) : undefined;
 	const member = ownerId ? guildMemberStore?.getMember?.(guildId, ownerId) : undefined;
@@ -77,6 +105,10 @@ function ServerInfoSheet({ guildId }: { guildId: string }) {
 	const channelCount = channels && typeof channels === "object" ? Object.keys(channels).length : undefined;
 	const boostTier = guild?.premiumTier;
 	const boostCount = guild?.premiumSubscriptionCount;
+	const bannerColor = getBannerColor(guild);
+	const guildIcon = guild?.icon
+		? getGuildAssetUrl(guildId, guild.icon, "icons", 256)
+		: `https://cdn.discordapp.com/embed/avatars/${getDefaultAvatarIndex(guildId)}.png`;
 
 	const copyGuildId = () => {
 		try {
@@ -107,6 +139,51 @@ function ServerInfoSheet({ guildId }: { guildId: string }) {
 					)}
 			</RN.View>
 			<RN.ScrollView>
+				<RN.View style={{ height: 158, marginHorizontal: 16, marginTop: 8, marginBottom: 12 }}>
+					<RN.View style={{ height: 128, borderRadius: 8, backgroundColor: bannerColor, overflow: "hidden" }}>
+						{guild?.banner && !bannerFailed
+							? (
+								<RN.Image
+									source={{ uri: getGuildAssetUrl(guildId, guild.banner, "banners", 1024) }}
+									onError={() => setBannerFailed(true)}
+									resizeMode="cover"
+									style={{ width: "100%", height: "100%" }}
+								/>
+							)
+							: null}
+					</RN.View>
+					<RN.View
+						style={{
+							position: "absolute",
+							left: 16,
+							bottom: 0,
+							width: 76,
+							height: 76,
+							borderRadius: 38,
+							borderWidth: 4,
+							borderColor: "#2b2d31",
+							backgroundColor: bannerColor,
+							alignItems: "center",
+							justifyContent: "center",
+							overflow: "hidden",
+						}}
+					>
+						{!iconFailed
+							? (
+								<RN.Image
+									source={{ uri: guildIcon }}
+									onError={() => setIconFailed(true)}
+									resizeMode="cover"
+									style={{ width: "100%", height: "100%" }}
+								/>
+							)
+							: (
+								<RN.Text style={{ color: "#f2f3f5", fontSize: 28, fontWeight: "700" }}>
+									{guild?.name?.slice(0, 1) ?? "?"}
+								</RN.Text>
+							)}
+					</RN.View>
+				</RN.View>
 				<RN.View style={{ padding: 16 }}>
 					<RN.Text style={{ color: "#f2f3f5", fontSize: 22, fontWeight: "700" }}>
 						{guild?.name ?? "Server"}
