@@ -285,10 +285,6 @@ export default {
 		} else {
 			storage.deletedIndicatorText ??= "This message was deleted";
 		}
-		if (storage.editedPrefixTag === "[ EDITED ]" || storage.editedPrefixTag === "`[ EDITED ]`") {
-			storage.editedPrefixTag = "(edited)";
-		}
-		storage.editedPrefixTag ??= "(edited)";
 		if (!Array.isArray(storage.ignoredUserIds)) storage.ignoredUserIds = [];
 
 		initializeMessageHistory(storage);

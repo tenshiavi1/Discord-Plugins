@@ -46,7 +46,6 @@ type MessageHistorySettings = {
 	ignoredUserIds: string[];
 	timestampForEdits: boolean;
 	deletedIndicatorText: string;
-	editedPrefixTag: string;
 };
 
 const deletedMessages = new Map<string, DeletedRecord>();
@@ -61,7 +60,6 @@ let settings: MessageHistorySettings = {
 	ignoredUserIds: [],
 	timestampForEdits: false,
 	deletedIndicatorText: "This message was deleted",
-	editedPrefixTag: "(edited)",
 };
 
 function getMessageKey(channelId: string, messageId: string) {
@@ -191,7 +189,6 @@ function handleDispatch(args: unknown[]): unknown[] | void {
 	}
 	rememberMessage(editHistory, key, record);
 
-	const prefix = settings.editedPrefixTag.trim() || "(edited)";
 	const originalContent = record.previous[0]?.content ?? record.currentContent;
 	const originalTimestamp = settings.timestampForEdits
 		? ` (${getRelativeTimestamp(record.previous[0]?.editedAt)})`
@@ -199,7 +196,7 @@ function handleDispatch(args: unknown[]): unknown[] | void {
 	const currentTimestamp = settings.timestampForEdits
 		? ` (${getRelativeTimestamp(record.currentEditedAt)})`
 		: "";
-	const displayContent = `${originalContent}${originalTimestamp} ${prefix}\n↓\n${record.currentContent}${currentTimestamp} ${prefix}`;
+	const displayContent = `${originalContent}${originalTimestamp}\n↓\n${record.currentContent}${currentTimestamp}`;
 	event.message = {
 		...original,
 		...message,
@@ -394,7 +391,6 @@ export function initializeMessageHistory(pluginSettings: {
 	ignoredUserIds?: unknown;
 	timestampForEdits?: boolean;
 	deletedIndicatorText?: string;
-	editedPrefixTag?: string;
 }): boolean {
 	settings = {
 		keepDeletedMessages: pluginSettings.keepDeletedMessages,
@@ -406,7 +402,6 @@ export function initializeMessageHistory(pluginSettings: {
 			: [],
 		timestampForEdits: pluginSettings.timestampForEdits ?? false,
 		deletedIndicatorText: pluginSettings.deletedIndicatorText ?? "This message was deleted",
-		editedPrefixTag: pluginSettings.editedPrefixTag ?? "(edited)",
 	};
 
 	if (typeof FluxDispatcher?.dispatch !== "function") {

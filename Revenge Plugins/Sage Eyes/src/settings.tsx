@@ -135,15 +135,6 @@ export function Settings() {
 						updateMessageHistorySettings({ deletedIndicatorText: value });
 					}}
 				/>
-				<TextSetting
-					label="Edited prefix tag"
-					value={String(storage.editedPrefixTag ?? "(edited)")}
-					placeholder="(edited)"
-					onChangeText={(value) => {
-						storage.editedPrefixTag = value;
-						updateMessageHistorySettings({ editedPrefixTag: value });
-					}}
-				/>
 			</FormSection>
 			<FormSection
 				title={`Ignored Users (${Array.isArray(storage.ignoredUserIds) ? storage.ignoredUserIds.length : 0})`}

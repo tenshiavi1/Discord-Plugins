@@ -23,11 +23,11 @@ Sage Eyes changes client-side display and navigation behavior only. It does not 
 - **Log edited messages** toggles inline display of earlier message content.
 - **Ignore bot messages** and **Ignore your messages** skip those messages during history capture.
 - **Add timestamp for edits** shows relative timestamps beside the original and latest edit text.
-- **Custom Buffers** lets you edit the deleted indicator text and edited marker.
+- **Custom Buffers** lets you edit the deleted indicator text.
 - **Ignored Users** lists users excluded through their profile menu and provides a Remove action for each.
 - **Clear message-history tracking** forgets retained edit versions and deleted-message records. Content already applied to the current channel's message store may remain visible until that channel is reloaded.
 
-Deleted messages retain their original content and show the native deleted-warning row. Edited messages display the original text, the configured edited marker, a downward arrow, and the latest text; intermediate versions are retained internally but are not expanded in chat. Long-press a deleted message and choose **Remove Deleted Message** to remove it with one action. Long-press an edited message and choose **Remove Edit History** to show only its current text again. These actions are distinct from Discord's ephemeral-message dismissal; Sage Eyes does not mark its history rows as ephemeral.
+Deleted messages retain their original content and show the native deleted-warning row. Edited messages display the original text, a downward arrow, and the latest text; Discord's small native edited badge appears once for the combined message. Intermediate versions are retained internally but are not expanded in chat. Long-press a deleted message and choose **Remove Deleted Message** to remove it with one action. Long-press an edited message and choose **Remove Edit History** to show only its current text again. These actions are distinct from Discord's ephemeral-message dismissal; Sage Eyes does not mark its history rows as ephemeral.
 
 ## Source
 
