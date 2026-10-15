@@ -2,7 +2,7 @@
 
 Tenshi's Plugins adds a shortcut to Revenge's main settings with a catalog of the Revenge plugins published in the [Discord-Plugins repository](https://github.com/tenshiavi1/Discord-Plugins).
 
-Each catalog item is displayed in a separate card with a plugin-specific emoji beside its title, controls in the header, and a full-width description below. It provides:
+Each catalog item is displayed in a separate card with a responsive title, controls in the header, and a full-width description below. The title and controls share a row when space allows and stack cleanly on narrow screens or with larger system font settings. Each card provides:
 
 - A settings button for opening the installed plugin's own settings.
 - An information/action menu with the plugin description and available plugin actions. Installed plugins offer Configure (when supported), Refetch, Copy URL, update controls, Clear Data, and Delete. Uninstalled plugins can be installed from the menu.

@@ -73,6 +73,7 @@ export default function Settings() {
 	const [busy, setBusy] = React.useState<Record<string, boolean>>({});
 	const [searchQuery, setSearchQuery] = React.useState("");
 	const navigation = NavigationNative.useNavigation();
+	const { width: screenWidth, fontScale } = RN.useWindowDimensions();
 	const normalizedQuery = searchQuery.trim().toLocaleLowerCase();
 	const visiblePlugins = MANAGED_PLUGINS
 		.filter((entry) =>
@@ -363,6 +364,18 @@ export default function Settings() {
 				{visiblePlugins.map((entry) => {
 					const installed = findInstalledPlugin(entry);
 					const isBusy = !!busy[entry.url];
+					const contentWidth = Math.max(0, screenWidth - 60);
+					const actionGroupWidth = 176;
+					const titleWidthOnRow = Math.max(0, contentWidth - actionGroupWidth - 8);
+					const minimumTitleSize = 14;
+					const estimatedTitleWidth = (fontSize: number, width: number) =>
+						entry.name.length * 0.56 * fontSize * fontScale > width;
+					const stackHeader = estimatedTitleWidth(minimumTitleSize, titleWidthOnRow);
+					const titleWidth = stackHeader ? contentWidth : titleWidthOnRow;
+					const titleFontSize = Math.max(
+						minimumTitleSize,
+						Math.min(22, titleWidth / (entry.name.length * 0.56 * fontScale)),
+					);
 					return (
 						<RN.View
 							key={entry.url}
@@ -374,20 +387,32 @@ export default function Settings() {
 								backgroundColor: "#1c1e2b",
 							}}
 						>
-							<RN.View style={{ flexDirection: "row", alignItems: "center" }}>
+							<RN.View
+								style={{
+									flexDirection: stackHeader ? "column" : "row",
+									alignItems: stackHeader ? "stretch" : "center",
+								}}
+							>
 								<RN.Text
 									style={{
-										flex: 1,
+										flex: stackHeader ? undefined : 1,
 										flexShrink: 1,
-										marginRight: 8,
+										marginRight: stackHeader ? 0 : 8,
 										color: "#f2f3f5",
-										fontSize: 20,
+										fontSize: titleFontSize,
 										fontWeight: "600",
 									}}
 								>
-									{entry.emoji} {entry.name}
+									{entry.name}
 								</RN.Text>
-								<RN.View style={{ flexDirection: "row", alignItems: "center" }}>
+								<RN.View
+									style={{
+										flexDirection: "row",
+										alignItems: "center",
+										alignSelf: stackHeader ? "flex-end" : undefined,
+										marginTop: stackHeader ? 12 : 0,
+									}}
+								>
 									<IconButton
 										assetNames={["WrenchIcon", "SettingsIcon", "ic_settings_24px"]}
 										fallback="🔧"
