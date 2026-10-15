@@ -78,7 +78,7 @@ async function fetchPluginBundle(url: string, expectedName: string): Promise<{ m
 		!("hash" in manifestValue) ||
 		typeof manifestValue.hash !== "string" ||
 		!/^[a-f\d]{64}$/i.test(manifestValue.hash) ||
-		!("main" in manifestValue && manifestValue.main !== undefined && typeof manifestValue.main !== "string")
+		("main" in manifestValue && manifestValue.main !== undefined && typeof manifestValue.main !== "string")
 	) {
 		throw new Error(`The manifest at ${baseUrl} is not a valid ${expectedName} manifest.`);
 	}
@@ -250,12 +250,16 @@ export default function Settings() {
 		setActivityLog(next);
 	};
 
-	const formatActivityLog = () => activityLog
-		.map((record) => {
+	const formatActivityLog = (maxLines: number) => activityLog
+		.flatMap((record: ManagerActivityRecord) => {
 			const timestamp = new Date(record.timestamp).toISOString();
-			return `[${timestamp}] ${record.status.toUpperCase()}: ${record.summary}${record.details ? `\n${record.details}` : ""}`;
+			return [
+				`[${timestamp}] ${record.status.toUpperCase()}: ${record.summary}`,
+				...(record.details ? record.details.split(/\r?\n/) : []),
+			];
 		})
-		.join("\n\n");
+		.slice(0, maxLines)
+		.join("\n");
 
 	const changePlugin = async (entry: ManagedPlugin) => {
 		if (busy[entry.url]) return;
@@ -965,36 +969,22 @@ export default function Settings() {
 						{fetchingAll && fetchTotal > 0 ? ` (${fetchProgress}/${fetchTotal})` : ""}
 					</RN.Text>
 				</RN.View>
-				{activityLog.slice(0, 5).map((record, index) => (
-					<RN.View key={`${record.timestamp}-${index}`} style={{ marginBottom: 8 }}>
-						<RN.Text
-							selectable
-							style={{
-								color: record.status === "failure" ? "#f38ba8" : "#b5bac1",
-								fontSize: 12,
-								fontFamily: "monospace",
-							}}
-						>
-							{`${formatCrashDate(record.timestamp)} · ${record.status.toUpperCase()} · ${record.summary}`}
-						</RN.Text>
-						{record.details && (
-							<RN.Text
-								selectable
-								numberOfLines={3}
-								style={{ color: "#b5bac1", fontSize: 11, marginTop: 2 }}
-							>
-								{record.details}
-							</RN.Text>
-						)}
-					</RN.View>
-				))}
+				{activityLog.length > 0 && (
+					<RN.Text
+						selectable
+						numberOfLines={3}
+						style={{ color: "#b5bac1", fontSize: 11, fontFamily: "monospace" }}
+					>
+						{formatActivityLog(3)}
+					</RN.Text>
+				)}
 				<RN.TouchableOpacity
 					accessibilityRole="button"
 					accessibilityLabel="Copy manager activity log"
 					disabled={activityLog.length === 0}
 					onPress={() => {
 						try {
-							clipboard.setString(formatActivityLog());
+							clipboard.setString(formatActivityLog(10));
 							showToast("Copied the manager activity log.", getAssetIDByName("Check"));
 						} catch (error) {
 							console.error("[Tenshi's Plugins] Could not copy the manager activity log.", error);
