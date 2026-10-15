@@ -79,6 +79,7 @@ async function fetchAndDispatchUser(userId: string): Promise<boolean> {
 		const dispatcher = findByProps("dispatch", "subscribe") ?? findByStoreName("Dispatcher");
 		if (typeof dispatcher?.dispatch !== "function") return false;
 		dispatcher.dispatch({ type: "USER_UPDATE", user });
+		dispatcher.dispatch({ type: "USER_PROFILE_FETCH_FAILURE", userId });
 		retryAfter.delete(userId);
 		return true;
 	} catch (error) {
