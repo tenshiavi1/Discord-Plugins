@@ -2,7 +2,6 @@ import { findByProps } from "@vendetta/metro";
 import { React, ReactNative } from "@vendetta/metro/common";
 import { storage } from "@vendetta/plugin";
 
-const tabsNavigationRef = findByProps("getRootNavigationRef");
 const RETURN_TO_MANAGER_KEY = "returnToManagerAfterReload";
 
 function reloadWithRevengeNativeBridge() {
@@ -34,8 +33,9 @@ function reloadWithRevengeNativeBridge() {
 }
 
 export function navigateToManager(Settings: React.ComponentType) {
+	const tabsNavigationRef = findByProps("getRootNavigationRef");
 	const navigation = tabsNavigationRef?.getRootNavigationRef?.();
-	if (!navigation) return false;
+	if (!navigation || navigation.isReady?.() === false) return false;
 
 	navigation.navigate("VendettaCustomPage", {
 		title: "Tenshi's Plugins",
@@ -61,23 +61,25 @@ export function reloadAndReturnToManager() {
 
 export function resumeManagerAfterReload(Settings: React.ComponentType) {
 	if (!storage[RETURN_TO_MANAGER_KEY]) return;
-	storage[RETURN_TO_MANAGER_KEY] = false;
 
 	let attempts = 0;
 	let lastError: unknown;
 	const tryNavigate = () => {
 		try {
-			if (navigateToManager(Settings)) return;
+			if (navigateToManager(Settings)) {
+				storage[RETURN_TO_MANAGER_KEY] = false;
+				return;
+			}
 		} catch (error) {
 			lastError = error;
 		}
 		attempts++;
-		if (attempts >= 50) {
+		if (attempts >= 240) {
 			console.error("[Tenshi's Plugins] Could not reopen manager after app reload.", lastError);
 			return;
 		}
-		setTimeout(tryNavigate, 100);
+		setTimeout(tryNavigate, 250);
 	};
 
-	setTimeout(tryNavigate, 100);
+	setTimeout(tryNavigate, 250);
 }
