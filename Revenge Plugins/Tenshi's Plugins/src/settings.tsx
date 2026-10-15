@@ -9,7 +9,7 @@ import { getAssetIDByName } from "@vendetta/ui/assets";
 import { Forms } from "@vendetta/ui/components";
 import { showToast } from "@vendetta/ui/toasts";
 import { discoverManagedPlugins, MANAGED_PLUGINS, type ManagedPlugin } from "./catalog";
-import { clearLastCrash, getLastCrash } from "./crashLog";
+import { clearLastCrash, getCrashReasons, getLastCrash } from "./crashLog";
 import { reloadAndReturnToManager } from "./managerNavigation";
 
 const { FormRow, FormSection } = Forms;
@@ -87,13 +87,19 @@ export default function Settings() {
 	const { width: screenWidth, fontScale } = RN.useWindowDimensions();
 	const normalizedQuery = searchQuery.trim().toLocaleLowerCase();
 	const lastCrash = getLastCrash();
-	const crashDate = lastCrash
-		? new Date(lastCrash.timestamp).toLocaleDateString("en-US", {
+	const formatCrashDate = (timestamp: number) =>
+		new Date(timestamp).toLocaleDateString("en-US", {
 			month: "2-digit",
 			day: "2-digit",
 			year: "2-digit",
-		})
-		: undefined;
+		});
+	const crashDate = lastCrash ? formatCrashDate(lastCrash.timestamp) : undefined;
+	const storedCrashReasons = getCrashReasons();
+	const crashReasons = storedCrashReasons.length > 0
+		? storedCrashReasons
+		: lastCrash && lastCrash.pluginName !== "Unknown plugin"
+			? [{ pluginName: lastCrash.pluginName, timestamp: lastCrash.timestamp }]
+			: [];
 	const visiblePlugins = catalog
 		.filter((entry) =>
 			!normalizedQuery ||
@@ -661,12 +667,26 @@ export default function Settings() {
 						color: "#d8dee9",
 						fontFamily: "monospace",
 						fontSize: 14,
-						marginBottom: 10,
 					}}
 				>
 					{lastCrash
 						? `Last Crash: ${lastCrash.pluginName} ${crashDate}`
 						: "Last Crash: None recorded"}
+				</RN.Text>
+				<RN.Text
+					style={{
+						marginTop: 4,
+						marginBottom: 10,
+						color: "#d8dee9",
+						fontFamily: "monospace",
+						fontSize: 14,
+					}}
+				>
+					{crashReasons.length > 0
+						? `Crash Reason: ${crashReasons
+							.map((reason) => `${reason.pluginName} (${formatCrashDate(reason.timestamp)})`)
+							.join(", ")}`
+						: "Crash Reason: None recorded"}
 				</RN.Text>
 				<RN.TouchableOpacity
 					accessibilityLabel="Copy last crash logs"

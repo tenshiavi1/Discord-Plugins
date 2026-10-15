@@ -78,6 +78,15 @@ export default function Settings() {
     <ScrollView style={{ flex: 1 }} contentContainerStyle={{ padding: 10 }}>
       <Stack spacing={8}>
 
+        <TableRowGroup title="Keyword Monitoring">
+          <TableSwitchRow
+            label="Enable Omniscience"
+            subLabel="Turn message keyword monitoring on or off."
+            value={storage.enabled !== false}
+            onValueChange={(v: boolean) => { storage.enabled = v; forceUpdate(); }}
+          />
+        </TableRowGroup>
+
         <TableRowGroup title="Add Keyword">
           <Stack spacing={4}>
             <TextInput

@@ -5,6 +5,7 @@ Omniscience is a Revenge mobile keyword-tracking plugin by tenshiavi. It monitor
 ## Features
 
 - Add, remove, import, and export tracked keywords.
+- Enable or pause keyword monitoring with its master toggle.
 - Choose whether to track everyone, friends, or selected user IDs.
 - Include or exclude servers, channels, and users; choose whether to track embeds or ignore bots.
 - Configure whole-word, exact-match, case-sensitive, and in-sentence matching.

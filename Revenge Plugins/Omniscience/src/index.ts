@@ -24,6 +24,7 @@ const createListModule = findByProps("createList");
 const SettingsOverviewScreen = findByProps("SettingsOverviewScreen");
 
 const defaults = {
+  enabled: true,
   trackServers: true,
   trackGroups: true,
   trackDMs: true,
@@ -265,6 +266,7 @@ export default {
     updateSidebar();
 
     const onMessage = (p: any) => {
+      if (!storage.enabled) return;
       const m = p?.message ?? p;
       if (!m || !storage.keywords || storage.keywords.length === 0) return;
 
