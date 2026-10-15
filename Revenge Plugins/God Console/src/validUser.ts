@@ -1,3 +1,4 @@
+import { FluxDispatcher } from "@vendetta/metro/common";
 import { findByProps, findByStoreName } from "../../compat";
 
 const mentionPattern = /<@!?([0-9]{17,20})>/g;
@@ -178,7 +179,7 @@ function processCurrentChannel() {
 }
 
 function installListeners() {
-	dispatcher = findByProps("dispatch", "subscribe") ?? findByStoreName("Dispatcher");
+	dispatcher = FluxDispatcher;
 	if (typeof dispatcher?.subscribe !== "function" || typeof dispatcher?.unsubscribe !== "function") {
 		console.warn("[God Console] Discord's message dispatcher was not found; automatic mention repair is unavailable.");
 		return;

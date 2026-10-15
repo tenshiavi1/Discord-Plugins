@@ -10,6 +10,10 @@ God Console is a Revenge mobile plugin by tenshiavi with three optional utilitie
 
 Each feature can be enabled or disabled independently in plugin settings. Mention repair processes up to ten uncached users per message, throttles requests, and does not send messages or invent users for IDs Discord cannot resolve.
 
+## Implementation reference
+
+Mention-cache repair is informed by [Vencord's ValidUser plugin](https://github.com/Vendicated/Vencord/tree/main/src/plugins/validUser). God Console independently adapts the user lookup and user-store update flow to Revenge's message events.
+
 ## Installation
 
 Add this integration URL in Revenge:
