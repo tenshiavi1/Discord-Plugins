@@ -9,14 +9,15 @@ import { setHiddenChannelFeatureEnabled } from "./hiddenChannelToggle";
 
 const { FormRow, FormSection, FormSwitchRow } = Forms;
 
-function TextSetting({ label, value, placeholder, onChangeText }: {
+function TextSetting({ label, value, placeholder, disabled, onChangeText }: {
 	label: string;
 	value: string;
 	placeholder: string;
+	disabled: boolean;
 	onChangeText: (value: string) => void;
 }) {
 	return (
-		<RN.View style={{ paddingHorizontal: 16, paddingVertical: 8 }}>
+		<RN.View style={{ paddingHorizontal: 16, paddingVertical: 8, opacity: disabled ? 0.5 : 1 }}>
 			<RN.Text style={{ color: "#b5bac1", fontSize: 14, fontWeight: "600", marginBottom: 6 }}>
 				{label}
 			</RN.Text>
@@ -24,6 +25,7 @@ function TextSetting({ label, value, placeholder, onChangeText }: {
 				value={value}
 				placeholder={placeholder}
 				placeholderTextColor="#949ba4"
+				editable={!disabled}
 				onChangeText={onChangeText}
 				style={{
 					color: "#f2f3f5",
@@ -39,6 +41,8 @@ function TextSetting({ label, value, placeholder, onChangeText }: {
 
 export function Settings() {
 	useProxy(storage);
+	const hiddenChannelsEnabled = Boolean(storage.enableHiddenChannels);
+	const messageHistoryEnabled = Boolean(storage.enableMessageHistory);
 	return (
 		<RN.ScrollView style={{ flex: 1 }}>
 			<FormSection title="Hidden Channels" titleStyleType="no_border">
@@ -46,7 +50,7 @@ export function Settings() {
 					label="Enable Hidden Channels"
 					subLabel="Turn Sage Eyes hidden-channel handling on or off. This does not grant server permissions."
 					leading={<FormRow.Icon source={getAssetIDByName("ic_lock")} />}
-					value={Boolean(storage.enableHiddenChannels)}
+					value={hiddenChannelsEnabled}
 					onValueChange={(value: boolean) => {
 						storage.enableHiddenChannels = value;
 						setHiddenChannelFeatureEnabled(value);
@@ -56,21 +60,38 @@ export function Settings() {
 					label={"Show Lock Icon"}
 					subLabel={"Show a lock beside channels you cannot access. This is a visual indicator only and does not grant permissions."}
 					leading={<FormRow.Icon source={getAssetIDByName("ic_lock")} />}
-					onValueChange={(value) => (storage.showIcon = value)}
+					disabled={!hiddenChannelsEnabled}
+					onValueChange={(value) => {
+						if (hiddenChannelsEnabled) storage.showIcon = value;
+					}}
 					value={storage.showIcon}
 				/>
 				<FormSwitchRow
 					label={"Show Popup on Hidden Channels"}
 					subLabel={"Ask before opening an inaccessible channel and show the channel details available to the client."}
 					leading={<FormRow.Icon source={getAssetIDByName("ic_more_android")} />}
-					onValueChange={(value) => (storage.showPopup = value)}
+					disabled={!hiddenChannelsEnabled}
+					onValueChange={(value) => {
+						if (hiddenChannelsEnabled) storage.showPopup = value;
+					}}
 					value={storage.showPopup}
 				/>
 			</FormSection>
 			<FormSection title="General Logger" titleStyleType="no_border">
 				<FormSwitchRow
+					label="Enable General Logger"
+					subLabel="Turn Sage Eyes message-history features on or off."
+					leading={<FormRow.Icon source={getAssetIDByName("ic_message_copy")} />}
+					value={messageHistoryEnabled}
+					onValueChange={(value: boolean) => {
+						storage.enableMessageHistory = value;
+						setMessageHistoryFeatureEnabled(value);
+					}}
+				/>
+				<FormSwitchRow
 					label="Log deleted messages"
 					subLabel="Replace a deleted message with a simple notice. Long-press the notice to remove it."
+					disabled={!messageHistoryEnabled}
 					value={Boolean(storage.keepDeletedMessages)}
 					onValueChange={(value: boolean) => {
 						storage.keepDeletedMessages = value;
@@ -79,7 +100,8 @@ export function Settings() {
 				/>
 				<FormSwitchRow
 					label="Log edited messages"
-					subLabel="Show the original and latest text with a short edited label. Long-press to remove the label."
+					subLabel="Show the original and latest text separated by a downward arrow. Long-press to remove the history."
+					disabled={!messageHistoryEnabled}
 					value={Boolean(storage.keepEditHistory)}
 					onValueChange={(value: boolean) => {
 						storage.keepEditHistory = value;
@@ -89,6 +111,7 @@ export function Settings() {
 				<FormSwitchRow
 					label="Ignore bot messages"
 					subLabel="Do not retain deletions or edits from bots."
+					disabled={!messageHistoryEnabled}
 					value={Boolean(storage.ignoreBotMessages)}
 					onValueChange={(value: boolean) => {
 						storage.ignoreBotMessages = value;
@@ -98,6 +121,7 @@ export function Settings() {
 				<FormSwitchRow
 					label="Ignore your messages"
 					subLabel="Do not retain deletions or edits to your own messages."
+					disabled={!messageHistoryEnabled}
 					value={Boolean(storage.ignoreOwnMessages)}
 					onValueChange={(value: boolean) => {
 						storage.ignoreOwnMessages = value;
@@ -107,8 +131,10 @@ export function Settings() {
 				<FormRow
 					label="Clear message-history tracking"
 					subLabel="Forget retained edit versions and deleted-message records. History already applied to the current channel may remain until it is reloaded."
+					disabled={!messageHistoryEnabled}
 					trailing={<FormRow.Arrow />}
 					onPress={() => {
+						if (!messageHistoryEnabled) return;
 						clearMessageHistory();
 						showToast("Message history cleared");
 					}}
@@ -118,6 +144,7 @@ export function Settings() {
 				<FormSwitchRow
 					label="Add timestamp for edits"
 					subLabel="Show a relative timestamp beside each captured version."
+					disabled={!messageHistoryEnabled}
 					value={Boolean(storage.timestampForEdits)}
 					onValueChange={(value: boolean) => {
 						storage.timestampForEdits = value;
@@ -130,6 +157,7 @@ export function Settings() {
 					label="Deleted indicator text"
 					value={String(storage.deletedIndicatorText ?? "This message was deleted")}
 					placeholder="This message was deleted"
+					disabled={!messageHistoryEnabled}
 					onChangeText={(value) => {
 						storage.deletedIndicatorText = value;
 						updateMessageHistorySettings({ deletedIndicatorText: value });
@@ -140,29 +168,43 @@ export function Settings() {
 				title={`Ignored Users (${Array.isArray(storage.ignoredUserIds) ? storage.ignoredUserIds.length : 0})`}
 				titleStyleType="no_border"
 			>
+				<FormSwitchRow
+					label="Enable Ignored Users"
+					subLabel="Enable profile-menu controls and skip these users in message history."
+					leading={<FormRow.Icon source={getAssetIDByName("ic_person")} />}
+					disabled={!messageHistoryEnabled}
+					value={Boolean(storage.enableIgnoreUsers)}
+					onValueChange={(value: boolean) => {
+						storage.enableIgnoreUsers = value;
+						updateMessageHistorySettings({ enableIgnoreUsers: value });
+					}}
+				/>
 				{Array.isArray(storage.ignoredUserIds) && storage.ignoredUserIds.length > 0
 					? storage.ignoredUserIds.map((userId: string) => (
 						<FormRow
 							key={userId}
 							label={`User ${userId}`}
 							subLabel="Ignored in Sage Eyes message history."
+							disabled={!messageHistoryEnabled || !storage.enableIgnoreUsers}
 							trailing={
 								<RN.TouchableOpacity
 									accessibilityRole="button"
 									accessibilityLabel={`Remove ${userId} from Sage Eyes ignored users`}
+									disabled={!messageHistoryEnabled || !storage.enableIgnoreUsers}
+									style={{ paddingHorizontal: 12, paddingVertical: 8, opacity: messageHistoryEnabled && storage.enableIgnoreUsers ? 1 : 0.5 }}
 									onPress={() => {
+										if (!messageHistoryEnabled || !storage.enableIgnoreUsers) return;
 										const ignoredUserIds = storage.ignoredUserIds.filter((id: string) => id !== userId);
 										storage.ignoredUserIds = ignoredUserIds;
 										updateMessageHistorySettings({ ignoredUserIds });
 									}}
-									style={{ paddingHorizontal: 12, paddingVertical: 8 }}
 								>
 									<RN.Text style={{ color: "#ed4245", fontWeight: "600" }}>Remove</RN.Text>
 								</RN.TouchableOpacity>
 							}
 						/>
 					))
-					: <FormRow label="No users currently ignored." />}
+					: <FormRow label="No users currently ignored." disabled={!messageHistoryEnabled || !storage.enableIgnoreUsers} />}
 			</FormSection>
 		</RN.ScrollView>
 	);

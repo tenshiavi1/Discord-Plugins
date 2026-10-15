@@ -48,12 +48,14 @@ function IconButton({
 				height: 36,
 				alignItems: "center",
 				justifyContent: "center",
+				borderRadius: 12,
+				backgroundColor: "#292b38",
 				opacity: disabled ? 0.4 : 1,
 			}}
 		>
 			{icon
-				? <RN.Image source={icon} style={{ width: 20, height: 20 }} />
-				: <RN.Text style={{ fontSize: 20 }}>{fallback}</RN.Text>}
+				? <RN.Image source={icon} style={{ width: 20, height: 20, tintColor: "#f2f3f5" }} />
+				: <RN.Text style={{ color: "#f2f3f5", fontSize: 20 }}>{fallback}</RN.Text>}
 		</RN.TouchableOpacity>
 	);
 }
@@ -119,7 +121,13 @@ export default function Settings() {
 			return;
 		}
 
-		navigation.navigate("VendettaCustomPage", {
+		if (typeof navigation.push !== "function") {
+			console.error("[Tenshi's Plugins] Stack navigation is unavailable for plugin settings.");
+			showToast("Plugin settings navigation is unavailable", getAssetIDByName("Warning"));
+			return;
+		}
+
+		navigation.push("VendettaCustomPage", {
 			title: entry.name,
 			render: () => React.createElement(PluginSettings),
 		});

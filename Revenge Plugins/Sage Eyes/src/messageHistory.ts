@@ -41,6 +41,7 @@ type DeletedRecord = {
 type MessageHistorySettings = {
 	keepDeletedMessages: boolean;
 	keepEditHistory: boolean;
+	enableIgnoreUsers: boolean;
 	ignoreBotMessages: boolean;
 	ignoreOwnMessages: boolean;
 	ignoredUserIds: string[];
@@ -51,10 +52,12 @@ type MessageHistorySettings = {
 const deletedMessages = new Map<string, DeletedRecord>();
 const editHistory = new Map<string, EditRecord>();
 const unpatches: (() => void)[] = [];
+const ignoredUserUnpatches: (() => void)[] = [];
 let dispatcherPatchInstalled = false;
 let settings: MessageHistorySettings = {
 	keepDeletedMessages: true,
 	keepEditHistory: true,
+	enableIgnoreUsers: true,
 	ignoreBotMessages: false,
 	ignoreOwnMessages: false,
 	ignoredUserIds: [],
@@ -87,7 +90,7 @@ function shouldIgnore(author: MessageRecord["author"]) {
 	if (settings.ignoreBotMessages && author.bot) return true;
 	const currentUserId = UserStore?.getCurrentUser?.()?.id;
 	if (settings.ignoreOwnMessages && currentUserId && author.id === currentUserId) return true;
-	return settings.ignoredUserIds.includes(author.id ?? "");
+	return settings.enableIgnoreUsers && settings.ignoredUserIds.includes(author.id ?? "");
 }
 
 function getRelativeTimestamp(value?: string | null) {
@@ -356,10 +359,11 @@ function getProfileMenuItems(result: any): any[] | undefined {
 }
 
 function installIgnoredUserMenuPatches() {
+	if (!settings.enableIgnoreUsers || ignoredUserUnpatches.length) return;
 	for (const name of PROFILE_MENU_NAMES) {
 		const module = findByName(name, false);
 		if (!module) continue;
-		unpatches.push(after("default", module, (args, result) => {
+		ignoredUserUnpatches.push(after("default", module, (args, result) => {
 			const userId = args[0]?.user?.id ?? args[0]?.userId;
 			if (typeof userId !== "string") return result;
 			const items = getProfileMenuItems(result);
@@ -386,6 +390,7 @@ function installIgnoredUserMenuPatches() {
 export function initializeMessageHistory(pluginSettings: {
 	keepDeletedMessages: boolean;
 	keepEditHistory: boolean;
+	enableIgnoreUsers?: boolean;
 	ignoreBotMessages?: boolean;
 	ignoreOwnMessages?: boolean;
 	ignoredUserIds?: unknown;
@@ -395,6 +400,7 @@ export function initializeMessageHistory(pluginSettings: {
 	settings = {
 		keepDeletedMessages: pluginSettings.keepDeletedMessages,
 		keepEditHistory: pluginSettings.keepEditHistory,
+		enableIgnoreUsers: pluginSettings.enableIgnoreUsers ?? true,
 		ignoreBotMessages: Boolean(pluginSettings.ignoreBotMessages),
 		ignoreOwnMessages: Boolean(pluginSettings.ignoreOwnMessages),
 		ignoredUserIds: Array.isArray(pluginSettings.ignoredUserIds)
@@ -428,7 +434,14 @@ export function initializeMessageHistory(pluginSettings: {
 }
 
 export function updateMessageHistorySettings(patch: Partial<MessageHistorySettings>) {
+	const enableIgnoreUsers = patch.enableIgnoreUsers;
 	settings = { ...settings, ...patch };
+	if (enableIgnoreUsers === undefined || !dispatcherPatchInstalled) return;
+	if (enableIgnoreUsers) {
+		installIgnoredUserMenuPatches();
+	} else {
+		for (const unpatch of ignoredUserUnpatches.splice(0).reverse()) unpatch();
+	}
 }
 
 export function clearMessageHistory() {
@@ -436,10 +449,11 @@ export function clearMessageHistory() {
 	editHistory.clear();
 }
 
-export function removeMessageHistoryPatch() {
+export function removeMessageHistoryPatch(clearHistory = true) {
 	for (const unpatch of unpatches.splice(0).reverse()) unpatch();
+	for (const unpatch of ignoredUserUnpatches.splice(0).reverse()) unpatch();
 	dispatcherPatchInstalled = false;
-	clearMessageHistory();
+	if (clearHistory) clearMessageHistory();
 }
 
 export function isMessageHistoryPatchInstalled() {

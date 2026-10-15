@@ -9,6 +9,7 @@ import { showConfirmationAlert } from "@vendetta/ui/alerts";
 import { storage } from "@vendetta/plugin";
 import { initializeMessageHistory, removeMessageHistoryPatch } from "./messageHistory";
 import { registerHiddenChannelFeatureToggle } from "./hiddenChannelToggle";
+import { registerMessageHistoryFeatureToggle } from "./messageHistoryToggle";
 
 const Permissions = findByProps("getChannelPermissions", "can");
 const channelTypes = findByProps("ChannelTypes")?.ChannelTypes;
@@ -20,6 +21,7 @@ const getChannel = typeof channelModule === "function"
 		: undefined;
 const internalPermissionChecks = new WeakSet<object>();
 let hiddenChannelFeatureEnabled = false;
+let messageHistoryFeatureEnabled = false;
 const skipChannels = [
 	channelTypes?.DM ?? 1,
 	channelTypes?.GROUP_DM ?? 3,
@@ -178,6 +180,26 @@ function restorePrivateChannelObfuscation() {
 	obfuscationOriginals = new WeakMap<object, Set<string>>();
 }
 
+function setMessageHistoryFeatureEnabled(enabled: boolean) {
+	if (enabled === messageHistoryFeatureEnabled) return;
+
+	if (!enabled) {
+		removeMessageHistoryPatch(false);
+		messageHistoryFeatureEnabled = false;
+		return;
+	}
+
+	if (!initializeMessageHistory(storage)) {
+		removeMessageHistoryPatch();
+		messageHistoryFeatureEnabled = false;
+		storage.enableMessageHistory = false;
+		showToast("Could not enable message history");
+		return;
+	}
+
+	messageHistoryFeatureEnabled = true;
+}
+
 export function setHiddenChannelFeatureEnabled(enabled: boolean) {
 	if (enabled === hiddenChannelFeatureEnabled) return;
 	hiddenChannelFeatureEnabled = enabled;
@@ -269,14 +291,17 @@ export function setHiddenChannelFeatureEnabled(enabled: boolean) {
 }
 
 registerHiddenChannelFeatureToggle(setHiddenChannelFeatureEnabled);
+registerMessageHistoryFeatureToggle(setMessageHistoryFeatureEnabled);
 
 export default {
 	onLoad: () => {
 		storage.enableHiddenChannels ??= true;
+		storage.enableMessageHistory ??= true;
 		storage.showIcon ??= true;
 		storage.showPopup ??= true;
 		storage.keepDeletedMessages ??= true;
 		storage.keepEditHistory ??= true;
+		storage.enableIgnoreUsers ??= true;
 		storage.ignoreBotMessages ??= false;
 		storage.ignoreOwnMessages ??= false;
 		storage.timestampForEdits ??= false;
@@ -287,11 +312,12 @@ export default {
 		}
 		if (!Array.isArray(storage.ignoredUserIds)) storage.ignoredUserIds = [];
 
-		initializeMessageHistory(storage);
+		setMessageHistoryFeatureEnabled(Boolean(storage.enableMessageHistory));
 		setHiddenChannelFeatureEnabled(Boolean(storage.enableHiddenChannels));
 	},
 	onUnload: () => {
 		setHiddenChannelFeatureEnabled(false);
+		setMessageHistoryFeatureEnabled(false);
 		removeMessageHistoryPatch();
 	},
 	settings: Settings,
