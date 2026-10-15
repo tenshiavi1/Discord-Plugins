@@ -1,5 +1,5 @@
 import { findByProps } from "@vendetta/metro";
-import { clipboard, React, ReactNative as RN } from "@vendetta/metro/common";
+import { clipboard, NavigationNative, React, ReactNative as RN } from "@vendetta/metro/common";
 import { fetchPlugin, getSettings, installPlugin, plugins, removePlugin, startPlugin, stopPlugin } from "@vendetta/plugins";
 import { createMMKVBackend } from "@vendetta/storage";
 import { useProxy } from "@vendetta/storage";
@@ -11,9 +11,17 @@ import { MANAGED_PLUGINS, type ManagedPlugin } from "./catalog";
 import { reloadAndReturnToManager } from "./managerNavigation";
 
 const { FormRow, FormSection } = Forms;
-const tabsNavigationRef = findByProps("getRootNavigationRef");
 const showSimpleActionSheet = findByProps("showSimpleActionSheet")?.showSimpleActionSheet;
 const hideActionSheet = findByProps("openLazy", "hideActionSheet")?.hideActionSheet;
+
+function findStackNavigation(navigation: any) {
+	let current = navigation;
+	while (current) {
+		if (typeof current.push === "function") return current;
+		current = current.getParent?.();
+	}
+	return undefined;
+}
 
 function findInstalledPlugin(entry: ManagedPlugin) {
 	for (const url of [entry.url, ...entry.legacyUrls]) {
@@ -64,7 +72,7 @@ export default function Settings() {
 	useProxy(plugins);
 	const [busy, setBusy] = React.useState<Record<string, boolean>>({});
 	const [searchQuery, setSearchQuery] = React.useState("");
-	const navigation = tabsNavigationRef?.getRootNavigationRef?.();
+	const navigation = NavigationNative.useNavigation();
 	const normalizedQuery = searchQuery.trim().toLocaleLowerCase();
 	const visiblePlugins = MANAGED_PLUGINS
 		.filter((entry) =>
@@ -115,19 +123,14 @@ export default function Settings() {
 			showToast(`${entry.name} has no settings page`, getAssetIDByName("Warning"));
 			return;
 		}
-		if (!navigation) {
-			console.warn("[Tenshi's Plugins] Plugin settings navigation is unavailable.");
-			showToast("Settings navigation is unavailable", getAssetIDByName("Warning"));
-			return;
-		}
-
-		if (typeof navigation.push !== "function") {
+		const stackNavigation = findStackNavigation(navigation);
+		if (!stackNavigation) {
 			console.error("[Tenshi's Plugins] Stack navigation is unavailable for plugin settings.");
 			showToast("Plugin settings navigation is unavailable", getAssetIDByName("Warning"));
 			return;
 		}
 
-		navigation.push("VendettaCustomPage", {
+		stackNavigation.push("VendettaCustomPage", {
 			title: entry.name,
 			render: () => React.createElement(PluginSettings),
 		});
