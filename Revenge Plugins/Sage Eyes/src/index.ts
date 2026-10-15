@@ -1,4 +1,4 @@
-import { find, findByProps, findByName } from "../../compat";
+import { find, findByProps, findByName, findByStoreName } from "../../compat";
 import { constants, React, ReactNative as RN } from "@vendetta/metro/common";
 import AlertContent from "./AlertContent";
 import { Settings } from "./settings";
@@ -13,7 +13,7 @@ import { registerHiddenChannelFeatureToggle } from "./hiddenChannelToggle";
 import { registerMessageHistoryFeatureToggle } from "./messageHistoryToggle";
 import { setServerInfoFeatureEnabled } from "./serverInfo";
 
-const Permissions = findByProps("getChannelPermissions", "can");
+const Permissions = findByStoreName("PermissionStore") ?? findByProps("getChannelPermissions", "can");
 const channelTypes = findByProps("ChannelTypes")?.ChannelTypes;
 const channelModule = findByProps("getChannel") ?? findByName("getChannel", false);
 const getChannel = typeof channelModule === "function"
@@ -143,14 +143,16 @@ function patchPrivateChannelObfuscation() {
 		}
 	}
 
-	const guildChannelStore = findByProps("isChannelGated", "getChannels") || findByProps("isChannelGated");
+	const guildChannelStore = findByStoreName("GuildChannelStore")
+		?? findByProps("isChannelGated", "getChannels")
+		?? findByProps("isChannelGated");
 	if (typeof guildChannelStore?.isChannelGated === "function") {
 		hiddenChannelUnpatches.push(after("isChannelGated", guildChannelStore, () => false));
 	}
 	if (typeof guildChannelStore?.getChannels === "function") {
 		hiddenChannelUnpatches.push(instead("getChannels", guildChannelStore, (args, original) => {
 			const normalizedArgs = args.map((arg) => disablePrivateChannelObfuscation(arg));
-			const result = original(normalizedArgs[0], true, ...normalizedArgs.slice(2));
+			const result = original(...normalizedArgs);
 			if (result && typeof result.then === "function") {
 				return result.then((channels: any) => disablePrivateChannelObfuscation(channels));
 			}
@@ -158,7 +160,9 @@ function patchPrivateChannelObfuscation() {
 		}));
 	}
 
-	const channelStore = findByProps("getChannel", "getChannels") || findByProps("getChannel");
+	const channelStore = findByStoreName("ChannelStore")
+		?? findByProps("getChannel", "getChannels")
+		?? findByProps("getChannel");
 	if (typeof channelStore?.getChannel === "function") {
 		hiddenChannelUnpatches.push(after("getChannel", channelStore, (_args, channel) => disablePrivateChannelObfuscation(channel)));
 	}
