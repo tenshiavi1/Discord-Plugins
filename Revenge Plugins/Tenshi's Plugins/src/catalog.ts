@@ -1,6 +1,7 @@
 export type ManagedPlugin = {
 	name: string;
 	description: string;
+	searchTerms: string;
 	url: string;
 	legacyUrls: string[];
 };
@@ -16,11 +17,20 @@ const GITHUB_CONTENTS_URL =
 const GITHUB_RAW_ROOT =
 	"https://raw.githubusercontent.com/tenshiavi1/Discord-Plugins/main/Revenge%20Plugins";
 
+const PLUGIN_SEARCH_TERMS: Record<string, string> = {
+	"Aura Control": "rich presence custom rpc activity application id application name connect disconnect update presence playing streaming listening watching competing display name state details urls twitch youtube party size maximum timestamp since connection startup local time custom start end large image small image image asset key hover text buttons button labels urls activity sharing",
+	"Ephemeral Entity": "anonymize anonymise upload uploads attachment file filename file name random randomized length consistent replacement name remove tracking parameters tracking url query strings send edit message silent leave leave group dm command silent typing typing status hide typing",
+	Omniscience: "keyword keywords phrase keyword tracking track monitor messages message create server servers guild group groups group dm direct message friends custom users ids ignore bots embeds channel channels webhook webhooks local notifications tracking target exact match whole words case sensitive in sentence imports export json",
+	"Sage Eyes": "hidden channels inaccessible channel access lock icon popup view anyway permissions general logger deleted messages edit edited message history deleted message history retain logs ignore bot own messages ignored users timestamps cleanup cleanup actions feature toggle",
+	"Tenshi's Plugins": "plugin manager install remove delete refetch fetch all restart search configure settings actions clear data crash logs",
+};
+
 function catalogEntry(name: string, description: string, directoryName = name): ManagedPlugin {
 	const encodedName = encodeURIComponent(directoryName);
 	return {
 		name,
 		description,
+		searchTerms: PLUGIN_SEARCH_TERMS[name] ?? "",
 		url: `${PUBLISHED_ROOT}/${encodedName}/`,
 		legacyUrls: LEGACY_ROOTS.map((root) => `${root}/${encodedName}/`),
 	};

@@ -31,6 +31,7 @@ const MAX_TEXT_LENGTH = 128;
 const dispatcher = FluxDispatcher ?? findByProps("dispatch", "subscribe");
 const applicationAssets = findByProps("fetchAssetIds");
 let pluginStartedAt = Date.now();
+let activityRevision = 0;
 
 export type ActivityConfiguration = {
 	enabled: boolean;
@@ -166,11 +167,33 @@ export async function publishActivity(): Promise<void> {
 	if (typeof dispatcher?.dispatch !== "function") {
 		throw new Error("Discord's activity dispatcher is unavailable.");
 	}
+	const revision = ++activityRevision;
 	if (storage.enabled) storage.timestampLastUpdate = Date.now();
-	const activity = await createActivity(storage as ActivityConfiguration);
+	const configuration = { ...storage } as ActivityConfiguration;
+	let activity: Record<string, unknown> | null;
+	try {
+		activity = await createActivity(configuration);
+	} catch (error) {
+		if (revision !== activityRevision) return;
+		throw error;
+	}
+	if (revision !== activityRevision) return;
 	dispatcher.dispatch({
 		type: "LOCAL_ACTIVITY_UPDATE",
 		activity,
+		pid: PROCESS_ID,
+		socketId: SOCKET_ID,
+	});
+}
+
+export function clearActivity(): void {
+	if (typeof dispatcher?.dispatch !== "function") {
+		throw new Error("Discord's activity dispatcher is unavailable.");
+	}
+	activityRevision++;
+	dispatcher.dispatch({
+		type: "LOCAL_ACTIVITY_UPDATE",
+		activity: null,
 		pid: PROCESS_ID,
 		socketId: SOCKET_ID,
 	});

@@ -1,5 +1,5 @@
 import { storage } from "@vendetta/plugin";
-import { publishActivity, resetPluginStartTime } from "./activity";
+import { clearActivity, publishActivity, resetPluginStartTime } from "./activity";
 import Settings from "./settings";
 
 const defaults = {
@@ -42,17 +42,13 @@ export default {
 		if (storage.enabled) {
 			void publishActivity().catch((error) => {
 				console.error("[Aura Control] Could not publish saved activity.", error);
+				storage.enabled = false;
+				try {
+					clearActivity();
+				} catch (clearError) {
+					console.error("[Aura Control] Could not clear activity after startup failed.", clearError);
+				}
 			});
-		}
-	},
-	onUnload() {
-		try {
-			storage.enabled = false;
-			void publishActivity().catch((error) => {
-				console.error("[Aura Control] Could not clear the published activity.", error);
-			});
-		} catch (error) {
-			console.error("[Aura Control] Could not clear the published activity.", error);
 		}
 	},
 	settings: Settings,

@@ -6,6 +6,7 @@ import { showToast } from "@vendetta/ui/toasts";
 import {
 	ACTIVITY_TYPES,
 	DISPLAY_TYPES,
+	clearActivity,
 	publishActivity,
 	TIMESTAMP_MODES,
 	validateConfiguration,
@@ -45,30 +46,47 @@ function TextSetting({ label, storageKey, placeholder, limit = 128 }: {
 async function publishWithFeedback(successMessage: string): Promise<boolean> {
 	const errors = validateConfiguration(storage as ActivityConfiguration);
 	if (storage.enabled && errors.length > 0) {
-		showToast(errors[0]);
+		storage.enabled = false;
+		try {
+			clearActivity();
+		} catch (error) {
+			console.error("[Aura Control] Could not clear activity after validation failed.", error);
+		}
+		showToast(`${errors[0]} Aura Control was disconnected.`);
 		return false;
 	}
 	try {
 		await publishActivity();
+		if (!storage.enabled) return false;
 		showToast(successMessage);
 		return true;
 	} catch (error) {
 		console.error("[Aura Control] Failed to update the activity.", error);
-		showToast(error instanceof Error ? error.message : "Could not update activity.");
+		storage.enabled = false;
+		try {
+			clearActivity();
+		} catch (clearError) {
+			console.error("[Aura Control] Could not clear activity after publishing failed.", clearError);
+		}
+		showToast(`${error instanceof Error ? error.message : "Could not update activity."} Aura Control was disconnected.`);
 		return false;
 	}
 }
 
 async function connect(): Promise<void> {
 	storage.enabled = true;
-	if (!await publishWithFeedback("Connected and publishing Aura Control activity.")) {
-		storage.enabled = false;
-	}
+	await publishWithFeedback("Connected and publishing Aura Control activity.");
 }
 
 async function disconnect(): Promise<void> {
 	storage.enabled = false;
-	await publishWithFeedback("Disconnected and cleared the activity.");
+	try {
+		clearActivity();
+		showToast("Disconnected and cleared the activity.");
+	} catch (error) {
+		console.error("[Aura Control] Could not disconnect the activity.", error);
+		showToast("Aura Control disconnected, but Discord's activity could not be cleared.");
+	}
 }
 
 async function updatePresence(): Promise<void> {

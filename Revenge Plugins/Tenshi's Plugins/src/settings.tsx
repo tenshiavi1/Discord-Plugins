@@ -103,8 +103,9 @@ export default function Settings() {
 	const visiblePlugins = catalog
 		.filter((entry) =>
 			!normalizedQuery ||
-			entry.name.toLocaleLowerCase().includes(normalizedQuery) ||
-			entry.description.toLocaleLowerCase().includes(normalizedQuery),
+			normalizedQuery.split(/\s+/).every((term) =>
+				`${entry.name} ${entry.description} ${entry.searchTerms}`.toLocaleLowerCase().includes(term),
+			),
 		)
 		.sort((left, right) => left.name.localeCompare(right.name));
 
