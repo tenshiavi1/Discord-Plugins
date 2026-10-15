@@ -151,7 +151,7 @@ export function Settings() {
 					onPress={() => {
 						if (!messageHistoryEnabled) return;
 						clearMessageHistory();
-						showToast("Message history cleared");
+						showToast("Cleared Sage Eyes message-history tracking.");
 					}}
 				/>
 			</TableRowGroup>

@@ -194,7 +194,7 @@ function setMessageHistoryFeatureEnabled(enabled: boolean) {
 		removeMessageHistoryPatch();
 		messageHistoryFeatureEnabled = false;
 		storage.enableMessageHistory = false;
-		showToast("Could not enable message history");
+		showToast("Could not enable Sage Eyes message history. Check the console for details.");
 		return;
 	}
 
@@ -287,7 +287,7 @@ export function setHiddenChannelFeatureEnabled(enabled: boolean) {
 		restorePrivateChannelObfuscation();
 		hiddenChannelFeatureEnabled = false;
 		storage.enableHiddenChannels = false;
-		showToast("Could not update hidden-channel feature");
+		showToast("Could not enable Sage Eyes hidden-channel details. Check the console for details.");
 	}
 }
 

@@ -474,16 +474,16 @@ export default {
           }
         }
 
-        showToast(`${authorName} sent a tracked message`);
+        showToast(`Omniscience detected a tracked message from ${authorName}.`);
       } else {
-        let locationStr = "DM";
+        let locationStr = "a direct message";
         if (c.guild_id) {
           const g = GuildStore?.getGuild?.(c.guild_id);
-          locationStr = `Server: ${g?.name} #${c.name}`;
+          locationStr = `${c.name ? `#${c.name}` : "a server channel"} in ${g?.name ?? "a server"}`;
         } else if (c.type === 3) {
-          locationStr = `Group: ${c.name || 'Unnamed'}`;
+          locationStr = `the group “${c.name || "Unnamed Group"}”`;
         }
-        showToast(`${authorName} said "${matchedKeyword}" in ${locationStr}`);
+        showToast(`Omniscience detected “${matchedKeyword}” from ${authorName} in ${locationStr}.`);
       }
     };
 

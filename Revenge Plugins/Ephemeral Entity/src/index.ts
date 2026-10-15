@@ -26,7 +26,7 @@ const apiUtils = findByProps("getAPIBaseURL", "del");
 function setSilentTyping(enabled: boolean) {
 	storage.hideTypingStatus = enabled;
 	setTypingStatusHidden(enabled);
-	showToast(`Silent Typing ${enabled ? "enabled" : "disabled"}.`);
+	showToast(`Silent typing is ${enabled ? "enabled" : "disabled"}.`);
 }
 
 function normalizeSettings() {
@@ -68,7 +68,7 @@ export default {
 					execute: async (_args: unknown, context: any) => {
 						const channelId = context?.channel?.id;
 						if (!channelId) {
-							showToast("Could not find the current Group DM.");
+							showToast("Could not find the current group DM. Open the conversation and try again.");
 							return;
 						}
 						try {
@@ -76,10 +76,10 @@ export default {
 								url: `/channels/${channelId}`,
 								query: "silent=true",
 							});
-							showToast("Left Group DM successfully.");
+							showToast("You left the group DM.");
 						} catch (error) {
 							console.error("[Ephemeral Entity] Could not silently leave the Group DM.", error);
-							showToast("Failed to leave Group DM.");
+							showToast("Could not leave the group DM. Check your connection and try again.");
 						}
 					},
 				}));

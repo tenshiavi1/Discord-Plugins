@@ -114,10 +114,10 @@ function ServerInfoSheet({ guildId }: { guildId: string }) {
 		try {
 			clipboard.setString(guildId);
 			actionSheet?.hideActionSheet?.();
-			showToast("Server ID copied");
+			showToast("Copied the server ID to your clipboard.");
 		} catch (error) {
 			console.error("[Sage Eyes] Could not copy the server ID.", error);
-			showToast("Could not copy server ID");
+			showToast("Could not copy the server ID to your clipboard.");
 		}
 	};
 
@@ -213,7 +213,7 @@ function ServerInfoSheet({ guildId }: { guildId: string }) {
 function openServerInfo(guildId: string) {
 	if (typeof actionSheet?.openLazy !== "function") {
 		console.error("[Sage Eyes] Discord's action-sheet API is unavailable; server information cannot be opened.");
-		showToast("Server information is unavailable");
+		showToast("Could not open server information because Discord's action sheet is unavailable.");
 		return;
 	}
 
@@ -267,6 +267,6 @@ export function setServerInfoFeatureEnabled(enabled: boolean) {
 		console.error("[Sage Eyes] Could not enable Server Info.", error);
 		for (const unpatch of unpatches.splice(0).reverse()) unpatch();
 		serverInfoEnabled = false;
-		showToast("Could not enable Server Info");
+		showToast("Could not enable Server Info. Check the console for details.");
 	}
 }

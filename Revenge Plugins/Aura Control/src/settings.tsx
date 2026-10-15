@@ -59,7 +59,7 @@ async function publishWithFeedback(successMessage: string): Promise<boolean> {
 		} catch (error) {
 			console.error("[Aura Control] Could not clear activity after validation failed.", error);
 		}
-		showToast(`${errors[0]} Aura Control was disconnected.`);
+		showToast(`Aura Control was disconnected because its configuration is invalid: ${errors[0]}`);
 		return false;
 	}
 	try {
@@ -75,7 +75,10 @@ async function publishWithFeedback(successMessage: string): Promise<boolean> {
 		} catch (clearError) {
 			console.error("[Aura Control] Could not clear activity after publishing failed.", clearError);
 		}
-		showToast(`${error instanceof Error ? error.message : "Could not update activity."} Aura Control was disconnected.`);
+		const reason = error instanceof Error
+			? error.message.replace(/[.!?]+$/, "")
+			: "an unexpected error occurred";
+		showToast(`Aura Control was disconnected because the activity could not be updated: ${reason}.`);
 		return false;
 	}
 }
@@ -90,7 +93,7 @@ async function disconnect(): Promise<void> {
 	storage.enabled = false;
 	try {
 		clearActivity();
-		showToast("Disconnected and cleared the activity.");
+		showToast("Aura Control disconnected, and its activity was cleared.");
 	} catch (error) {
 		console.error("[Aura Control] Could not disconnect the activity.", error);
 		showToast("Aura Control disconnected, but Discord's activity could not be cleared.");
@@ -99,10 +102,10 @@ async function disconnect(): Promise<void> {
 
 async function updatePresence(): Promise<void> {
 	if (!storage.enabled) {
-		showToast("Connect before updating the activity.");
+		showToast("Connect Aura Control before updating the activity.");
 		return;
 	}
-	await publishWithFeedback("Presence updated.");
+	await publishWithFeedback("Aura Control activity updated.");
 }
 
 export default function Settings() {

@@ -1,4 +1,4 @@
-import { stylesheet, constants, moment, toasts, clipboard } from "@vendetta/metro/common";
+import { stylesheet, constants, moment, clipboard } from "@vendetta/metro/common";
 import { findByProps } from "../../compat";
 import { semanticColors } from '@vendetta/ui';
 import { getAssetIDByName } from "@vendetta/ui/assets";
@@ -46,13 +46,13 @@ function FancyDate({ date }) {
 	return (
 		<Text onPress={() => {
 				showToast(
-					moment(date).toLocaleString(), getAssetIDByName("ic_clock")
+					`Full timestamp: ${moment(date).toLocaleString()}.`, getAssetIDByName("ic_clock")
 				);
 			}}
 			onLongPress={() => {
 				clipboard.setString(date.getTime().toString());
 				showToast(
-					"Copied Timestamp to Clipboard", getAssetIDByName("ic_message_copy")
+					"Copied the timestamp to your clipboard.", getAssetIDByName("ic_message_copy")
 				);
 			}} style={[MessageStyles.highlight]}>{moment(date).fromNow()}</Text>
 

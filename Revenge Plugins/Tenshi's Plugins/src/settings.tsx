@@ -16,6 +16,10 @@ const { TableRow, TableRowGroup } = findByProps("TableRow", "TableRowGroup");
 const showSimpleActionSheet = findByProps("showSimpleActionSheet")?.showSimpleActionSheet;
 const hideActionSheet = findByProps("openLazy", "hideActionSheet")?.hideActionSheet;
 
+function pluralize(count: number, singular: string): string {
+	return `${count} ${singular}${count === 1 ? "" : "s"}`;
+}
+
 type PluginManifest = {
 	name: string;
 	main?: string;
@@ -193,14 +197,17 @@ export default function Settings() {
 		try {
 			if (installed) {
 				await removePlugin(installed.key);
-				showToast(`${entry.name} deleted`, getAssetIDByName("Check"));
+				showToast(`${entry.name} was removed.`, getAssetIDByName("Check"));
 			} else {
 				await installPlugin(entry.url, true);
-				showToast(`${entry.name} installed`, getAssetIDByName("Check"));
+				showToast(`${entry.name} was installed.`, getAssetIDByName("Check"));
 			}
 		} catch (error) {
 			console.error(`[Tenshi's Plugins] Failed to ${installed ? "delete" : "install"} ${entry.name}.`, error);
-			showToast(`Failed to ${installed ? "delete" : "install"} ${entry.name}`, getAssetIDByName("Warning"));
+			showToast(
+				`Could not ${installed ? "remove" : "install"} ${entry.name}. Check your connection and try again.`,
+				getAssetIDByName("Warning"),
+			);
 		} finally {
 			setBusy((current) => ({ ...current, [entry.url]: false }));
 		}
@@ -365,18 +372,18 @@ export default function Settings() {
 
 			if (failedPlugins.length > 0) {
 				showToast(
-					`Catalog updated; updated ${updatedCount}, already current ${unchangedCount}, failed ${failedPlugins.length}, ${availableCount} available to install`,
+					`Plugin catalog refreshed. ${pluralize(updatedCount, "plugin")} updated, ${pluralize(unchangedCount, "plugin")} already up to date, and ${pluralize(availableCount, "plugin")} available to install. ${pluralize(failedPlugins.length, "plugin")} failed: ${failedPlugins.join(", ")}.`,
 					getAssetIDByName("Warning"),
 				);
 			} else {
 				showToast(
-					`Catalog updated; updated ${updatedCount}, already current ${unchangedCount}, ${availableCount} available to install`,
+					`Plugin catalog refreshed. ${pluralize(updatedCount, "plugin")} updated, ${pluralize(unchangedCount, "plugin")} already up to date, and ${pluralize(availableCount, "plugin")} available to install.`,
 					getAssetIDByName("Check"),
 				);
 			}
 		} catch (error) {
 			console.error("[Tenshi's Plugins] Failed to fetch the plugin catalog.", error);
-			showToast("Failed to fetch plugin catalog", getAssetIDByName("Warning"));
+			showToast("Could not refresh the plugin catalog. Check your connection and try again.", getAssetIDByName("Warning"));
 		} finally {
 			setFetchingAll(false);
 		}
@@ -402,7 +409,9 @@ export default function Settings() {
 		});
 		if (targets.length === 0) {
 			showToast(
-				action === "install" ? "All listed plugins are already installed" : "No installed plugins to manage",
+				action === "install"
+					? "Every plugin in the catalog is already installed."
+					: "There are no installed plugins available for this action.",
 				getAssetIDByName("Check"),
 			);
 			return;
@@ -450,14 +459,18 @@ export default function Settings() {
 			setFetchingAll(false);
 		}
 
-		const actionLabel = action === "install" ? "installed" : action === "remove" ? "removed" : "cleared";
+		const completionMessage = action === "install"
+			? `${pluralize(completed, "plugin")} installed`
+			: action === "remove"
+				? `${pluralize(completed, "plugin")} removed`
+				: `${pluralize(completed, "plugin")} had their data cleared`;
 		if (failedPlugins.length > 0) {
 			showToast(
-				`${actionLabel}: ${completed}; failed: ${failedPlugins.join(", ")}`,
+				`Bulk action partially completed. ${completionMessage}. Could not complete the action for: ${failedPlugins.join(", ")}.`,
 				getAssetIDByName("Warning"),
 			);
 		} else {
-			showToast(`${completed} plugins ${actionLabel}`, getAssetIDByName("Check"));
+			showToast(`Bulk action complete. ${completionMessage}.`, getAssetIDByName("Check"));
 		}
 	};
 
@@ -489,7 +502,7 @@ export default function Settings() {
 	const showManageActions = () => {
 		if (!showSimpleActionSheet) {
 			console.error("[Tenshi's Plugins] Revenge's plugin action sheet is unavailable.");
-			showToast("Plugin management actions are unavailable", getAssetIDByName("Warning"));
+			showToast("Could not open plugin management actions because the action menu is unavailable.", getAssetIDByName("Warning"));
 			return;
 		}
 
@@ -550,7 +563,7 @@ export default function Settings() {
 					reloadAndReturnToManager();
 				} catch (error) {
 					console.error("[Tenshi's Plugins] Could not reload Revenge.", error);
-					showToast("Could not reload Revenge", getAssetIDByName("Warning"));
+					showToast("Could not restart Revenge. Check the console for details.", getAssetIDByName("Warning"));
 				}
 			},
 		});
@@ -572,13 +585,13 @@ export default function Settings() {
 
 		const PluginSettings = getPluginSettings(installed);
 		if (!PluginSettings) {
-			showToast(`${entry.name} has no settings page`, getAssetIDByName("Warning"));
+			showToast(`${entry.name} does not provide a settings page.`, getAssetIDByName("Warning"));
 			return;
 		}
 		const stackNavigation = findStackNavigation(navigation);
 		if (!stackNavigation) {
 			console.error("[Tenshi's Plugins] Stack navigation is unavailable for plugin settings.");
-			showToast("Plugin settings navigation is unavailable", getAssetIDByName("Warning"));
+			showToast("Could not open plugin settings because the settings navigation is unavailable.", getAssetIDByName("Warning"));
 			return;
 		}
 
@@ -598,10 +611,10 @@ export default function Settings() {
 				void (async () => {
 					try {
 						await clearPluginData(entry, installed);
-						showToast(`${entry.name} data cleared`, getAssetIDByName("Check"));
+						showToast(`Cleared the saved data for ${entry.name}.`, getAssetIDByName("Check"));
 					} catch (error) {
 						console.error(`[Tenshi's Plugins] Failed to clear ${entry.name} data.`, error);
-						showToast(`Failed to clear ${entry.name} data`, getAssetIDByName("Warning"));
+						showToast(`Could not clear the saved data for ${entry.name}. Check the console for details.`, getAssetIDByName("Warning"));
 					}
 				})();
 			},
@@ -612,7 +625,7 @@ export default function Settings() {
 		const installed = findInstalledPlugin(entry);
 		if (!showSimpleActionSheet) {
 			console.error("[Tenshi's Plugins] Revenge's plugin action sheet is unavailable.");
-			showToast("Plugin actions are unavailable", getAssetIDByName("Warning"));
+			showToast("Could not open plugin actions because the action menu is unavailable.", getAssetIDByName("Warning"));
 			return;
 		}
 
@@ -641,12 +654,14 @@ export default function Settings() {
 							try {
 								const updated = await refetchPlugin(entry, installed);
 								showToast(
-									updated ? `${entry.name} refetched` : `${entry.name} is already up to date`,
+									updated
+										? `${entry.name} was refreshed successfully.`
+										: `${entry.name} is already up to date.`,
 									getAssetIDByName("Check"),
 								);
 							} catch (error) {
 								console.error(`[Tenshi's Plugins] Failed to refetch ${entry.name}.`, error);
-								showToast(`Failed to refetch ${entry.name}`, getAssetIDByName("Warning"));
+								showToast(`Could not refresh ${entry.name}. Check your connection and try again.`, getAssetIDByName("Warning"));
 							}
 						})();
 					},
@@ -656,7 +671,7 @@ export default function Settings() {
 					icon: getAssetIDByName("LinkIcon"),
 					onPress: () => {
 						clipboard.setString(installed.key);
-						showToast("Plugin URL copied", getAssetIDByName("Check"));
+						showToast(`Copied the install URL for ${entry.name} to your clipboard.`, getAssetIDByName("Check"));
 					},
 				},
 				{
@@ -665,7 +680,7 @@ export default function Settings() {
 					onPress: () => {
 						installed.instance.update = installed.instance.update === false;
 						showToast(
-							`${entry.name} updates ${installed.instance.update ? "enabled" : "disabled"}`,
+							`Automatic updates for ${entry.name} are ${installed.instance.update ? "enabled" : "disabled"}.`,
 							getAssetIDByName("Check"),
 						);
 					},
@@ -859,10 +874,10 @@ export default function Settings() {
 						if (!lastCrash) return;
 						try {
 							clipboard.setString(lastCrash.logs);
-							showToast("Crash logs copied", getAssetIDByName("Check"));
+							showToast("Copied the last crash log to your clipboard.", getAssetIDByName("Check"));
 						} catch (error) {
 							console.error("[Tenshi's Plugins] Could not copy the last crash logs.", error);
-							showToast("Could not copy crash logs", getAssetIDByName("Warning"));
+							showToast("Could not copy the last crash log to your clipboard.", getAssetIDByName("Warning"));
 						}
 					}}
 					style={{

@@ -38,10 +38,10 @@ export default function Settings() {
 			onConfirm: () => {
 				if (enableNativeSwitcher()) {
 					storage.enabled = true;
-					showToast("Discord's native account switcher enabled", getAssetIDByName("Check"));
+					showToast("Discord's native account switcher is enabled.", getAssetIDByName("Check"));
 				} else {
 					storage.enabled = false;
-					showToast("Discord's account switcher is unavailable in this client", getAssetIDByName("Warning"));
+					showToast("Discord's native account switcher is unavailable in this client.", getAssetIDByName("Warning"));
 				}
 			},
 		});
@@ -66,8 +66,8 @@ export default function Settings() {
 		if (opened) {
 			showToast(
 				action === "login"
-					? "Opened Discord's native account login"
-					: "Opened Discord's native account manager",
+					? "Discord's native account login screen is open."
+					: "Discord's native account manager is open.",
 				getAssetIDByName("Check"),
 			);
 			pendingActionTimer.current = setTimeout(() => {
@@ -82,8 +82,8 @@ export default function Settings() {
 		setPendingAction(null);
 		showToast(
 			action === "login"
-				? "Discord's native account login is unavailable in this client"
-				: "Discord's account manager is unavailable in this client",
+				? "Discord's native account login is unavailable in this client."
+				: "Discord's native account manager is unavailable in this client.",
 			getAssetIDByName("Warning"),
 		);
 	};
@@ -103,7 +103,7 @@ export default function Settings() {
 							}
 							disableNativeSwitcher();
 							storage.enabled = false;
-							showToast("Discord's native account switcher disabled", getAssetIDByName("Check"));
+							showToast("Discord's native account switcher is disabled.", getAssetIDByName("Check"));
 						}}
 					/>
 					<TableRow

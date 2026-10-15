@@ -248,11 +248,11 @@ function removeDeletedMessage(channelId: string, messageId: string) {
 			otherPluginBypass: true,
 		});
 		actionSheet.hideActionSheet();
-		showToast("Deleted-message log removed", getAssetIDByName("TrashIcon"));
+		showToast("Removed the deleted-message record.", getAssetIDByName("TrashIcon"));
 	} catch (error) {
 		rememberMessage(deletedMessages, key, record);
 		console.error("[Sage Eyes] Could not remove the deleted-message log.", error);
-		showToast("Could not remove deleted-message log");
+		showToast("Could not remove the deleted-message record.");
 	}
 }
 
@@ -263,7 +263,7 @@ function removeEditHistory(channelId: string, messageId: string) {
 
 	const message = getStoredMessage(channelId, messageId);
 	if (!message) {
-		showToast("Original message is no longer available");
+		showToast("The original message is no longer available, so its edit history cannot be removed.");
 		return;
 	}
 
@@ -283,11 +283,11 @@ function removeEditHistory(channelId: string, messageId: string) {
 			otherPluginBypass: true,
 		});
 		actionSheet.hideActionSheet();
-		showToast("Edit history removed", getAssetIDByName("ic_edit_24px"));
+		showToast("Removed the message's edit history.", getAssetIDByName("ic_edit_24px"));
 	} catch (error) {
 		rememberMessage(editHistory, key, record);
 		console.error("[Sage Eyes] Could not remove edit history.", error);
-		showToast("Could not remove edit history");
+		showToast("Could not remove the message's edit history.");
 	}
 }
 
@@ -379,7 +379,9 @@ function installIgnoredUserMenuPatches() {
 						: [...settings.ignoredUserIds, userId];
 					storage.ignoredUserIds = settings.ignoredUserIds;
 					updateMessageHistorySettings({ ignoredUserIds: settings.ignoredUserIds });
-					showToast(isIgnored ? "User removed from Sage Eyes ignore list" : "User ignored by Sage Eyes");
+					showToast(isIgnored
+						? "Removed this user from the Sage Eyes ignore list."
+						: "Added this user to the Sage Eyes ignore list.");
 				},
 			});
 			return result;

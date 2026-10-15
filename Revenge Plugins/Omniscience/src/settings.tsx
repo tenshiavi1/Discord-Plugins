@@ -31,7 +31,7 @@ export default function Settings() {
 
   const addKeyword = () => {
     if (!newKeyword.trim()) {
-      showToast("Please enter a keyword", getAssetIDByName("Small"));
+      showToast("Enter a keyword before adding it.", getAssetIDByName("Small"));
       return;
     }
 
@@ -41,21 +41,21 @@ export default function Settings() {
       setNewKeyword("");
       setKeywordInputReset((current) => current + 1);
       forceUpdate();
-      showToast("Keyword added", getAssetIDByName("Check"));
+      showToast(`Added “${kw}” to keyword tracking.`, getAssetIDByName("Check"));
     } else {
-      showToast("Keyword already exists", getAssetIDByName("Warning"));
+      showToast(`“${kw}” is already in your keyword list.`, getAssetIDByName("Warning"));
     }
   };
 
   const removeKeyword = (kw: string) => {
     storage.keywords = storage.keywords.filter((k: string) => k !== kw);
     forceUpdate();
-    showToast("Keyword removed", getAssetIDByName("Check"));
+    showToast(`Removed “${kw}” from keyword tracking.`, getAssetIDByName("Check"));
   };
 
   const exportKeywords = () => {
     Clipboard.setString(JSON.stringify(storage.keywords));
-    showToast("Exported to clipboard", getAssetIDByName("Check"));
+    showToast("Exported your keywords to the clipboard.", getAssetIDByName("Check"));
   };
 
   const importKeywords = async () => {
@@ -64,22 +64,22 @@ export default function Settings() {
       text = await Clipboard.getString();
     } catch (error) {
       console.error("[Omniscience] Could not read keywords from the clipboard.", error);
-      showToast("Could not read clipboard", getAssetIDByName("Warning"));
+      showToast("Could not read keyword data from the clipboard.", getAssetIDByName("Warning"));
       return;
     }
 
     try {
       const parsed: unknown = JSON.parse(text);
       if (!Array.isArray(parsed) || !parsed.every((keyword) => typeof keyword === "string")) {
-        showToast("Import must be a JSON array of strings", getAssetIDByName("Warning"));
+        showToast("Could not import keywords. The clipboard must contain a JSON array of strings.", getAssetIDByName("Warning"));
         return;
       }
       storage.keywords = [...new Set(parsed.map((keyword: string) => keyword.trim()).filter(Boolean))];
       forceUpdate();
-      showToast("Imported successfully", getAssetIDByName("Check"));
+      showToast("Imported the keyword list from the clipboard.", getAssetIDByName("Check"));
     } catch (error) {
       console.warn("[Omniscience] Clipboard content is not a valid keyword list.", error);
-      showToast("Invalid JSON format", getAssetIDByName("Warning"));
+      showToast("Could not import keywords because the clipboard does not contain valid JSON.", getAssetIDByName("Warning"));
     }
   };
 
