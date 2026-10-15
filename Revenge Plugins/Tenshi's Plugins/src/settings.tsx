@@ -248,7 +248,7 @@ export default function Settings() {
 		showConfirmationAlert({
 			title: "Fetch All Plugins?",
 			content: "This refreshes the plugin list from the repository and refetches plugins already installed. New plugins will appear with an Install button and will not be installed automatically. Installed plugins may briefly stop while they are updated.",
-			confirmText: "Okay",
+			confirmText: "Fetch All",
 			cancelText: "Cancel",
 			onConfirm: () => { void fetchAllPlugins(); },
 		});

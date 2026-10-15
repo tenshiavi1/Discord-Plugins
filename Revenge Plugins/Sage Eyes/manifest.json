@@ -1,6 +1,6 @@
 {
     "name": "Sage Eyes",
-    "description": "Inspect hidden channels and configure deleted-message and edit-history logs, styling, and cleanup actions.",
+    "description": "View hidden-channel details, server info, and local message edit/deletion history.",
     "authors": [
         {
             "name": "tenshiavi"

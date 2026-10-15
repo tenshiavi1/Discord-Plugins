@@ -6,6 +6,7 @@ import { getAssetIDByName } from "@vendetta/ui/assets";
 import { showToast } from "@vendetta/ui/toasts";
 import { clearMessageHistory, updateMessageHistorySettings } from "./messageHistory";
 import { setHiddenChannelFeatureEnabled } from "./hiddenChannelToggle";
+import { setServerInfoFeatureEnabled } from "./serverInfo";
 
 const { FormRow, FormSection, FormSwitchRow } = Forms;
 
@@ -72,6 +73,17 @@ export function Settings() {
 						if (hiddenChannelsEnabled) storage.showPopup = value;
 					}}
 					value={storage.showPopup}
+				/>
+			</FormSection>
+			<FormSection title="Server Info" titleStyleType="no_border">
+				<FormSwitchRow
+					label="Enable Server Info"
+					subLabel="Add a Server Info action when long-pressing a server icon in the server list."
+					value={Boolean(storage.enableServerInfo)}
+					onValueChange={(value: boolean) => {
+						storage.enableServerInfo = value;
+						setServerInfoFeatureEnabled(value);
+					}}
 				/>
 			</FormSection>
 			<FormSection title="General Logger" titleStyleType="no_border">

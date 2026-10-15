@@ -10,6 +10,7 @@ import { storage } from "@vendetta/plugin";
 import { initializeMessageHistory, removeMessageHistoryPatch } from "./messageHistory";
 import { registerHiddenChannelFeatureToggle } from "./hiddenChannelToggle";
 import { registerMessageHistoryFeatureToggle } from "./messageHistoryToggle";
+import { setServerInfoFeatureEnabled } from "./serverInfo";
 
 const Permissions = findByProps("getChannelPermissions", "can");
 const channelTypes = findByProps("ChannelTypes")?.ChannelTypes;
@@ -297,6 +298,7 @@ export default {
 	onLoad: () => {
 		storage.enableHiddenChannels ??= true;
 		storage.enableMessageHistory ??= true;
+		storage.enableServerInfo ??= true;
 		storage.showIcon ??= true;
 		storage.showPopup ??= true;
 		storage.keepDeletedMessages ??= true;
@@ -314,8 +316,10 @@ export default {
 
 		setMessageHistoryFeatureEnabled(Boolean(storage.enableMessageHistory));
 		setHiddenChannelFeatureEnabled(Boolean(storage.enableHiddenChannels));
+		setServerInfoFeatureEnabled(Boolean(storage.enableServerInfo));
 	},
 	onUnload: () => {
+		setServerInfoFeatureEnabled(false);
 		setHiddenChannelFeatureEnabled(false);
 		setMessageHistoryFeatureEnabled(false);
 		removeMessageHistoryPatch();

@@ -1,6 +1,6 @@
 {
   "name": "Ephemeral Entity",
-  "description": "Anonymize file names before uploading from Revenge.",
+  "description": "Anonymize uploads, clean tracking URLs, hide typing, and leave group DMs silently.",
   "authors": [
     {
       "name": "tenshiavi"

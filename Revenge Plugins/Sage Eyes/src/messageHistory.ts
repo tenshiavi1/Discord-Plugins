@@ -455,7 +455,3 @@ export function removeMessageHistoryPatch(clearHistory = true) {
 	dispatcherPatchInstalled = false;
 	if (clearHistory) clearMessageHistory();
 }
-
-export function isMessageHistoryPatchInstalled() {
-	return dispatcherPatchInstalled;
-}

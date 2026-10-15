@@ -1,6 +1,6 @@
 {
     "name": "Omniscience",
-    "description": "Track keywords and get notified when mentioned.",
+    "description": "Track message keywords across DMs and servers, with optional channel and webhook alerts.",
     "authors": [
         {
             "name": "tenshiavi"
