@@ -340,6 +340,7 @@ export default function Settings() {
 				<RN.TextInput
 					accessibilityLabel="Search plugins"
 					placeholder="Search plugins by name or description"
+					placeholderTextColor="#949ba4"
 					value={searchQuery}
 					onChangeText={setSearchQuery}
 					autoCapitalize="none"
@@ -363,11 +364,29 @@ export default function Settings() {
 					const installed = findInstalledPlugin(entry);
 					const isBusy = !!busy[entry.url];
 					return (
-						<FormRow
+						<RN.View
 							key={entry.url}
-							label={entry.name}
-							subLabel={entry.description}
-							trailing={
+							style={{
+								marginHorizontal: 4,
+								marginBottom: 12,
+								padding: 16,
+								borderRadius: 20,
+								backgroundColor: "#1c1e2b",
+							}}
+						>
+							<RN.View style={{ flexDirection: "row", alignItems: "center" }}>
+								<RN.Text
+									style={{
+										flex: 1,
+										flexShrink: 1,
+										marginRight: 8,
+										color: "#f2f3f5",
+										fontSize: 20,
+										fontWeight: "600",
+									}}
+								>
+									{entry.name}
+								</RN.Text>
 								<RN.View style={{ flexDirection: "row", alignItems: "center" }}>
 									<IconButton
 										assetNames={["WrenchIcon", "SettingsIcon", "ic_settings_24px"]}
@@ -376,22 +395,25 @@ export default function Settings() {
 										disabled={!installed}
 										onPress={() => openPluginSettings(entry)}
 									/>
+									<RN.View style={{ width: 8 }} />
 									<IconButton
 										assetNames={["InfoIcon", "InformationIcon", "ic_info_24px"]}
 										fallback="ⓘ"
 										label={`Actions for ${entry.name}`}
 										onPress={() => showPluginActions(entry)}
 									/>
+									<RN.View style={{ width: 8 }} />
 									<RN.TouchableOpacity
 										accessibilityRole="button"
 										disabled={isBusy}
 										onPress={() => installed ? confirmDelete(entry) : void changePlugin(entry)}
 										style={{
-											minWidth: 76,
-											paddingHorizontal: 10,
-											paddingVertical: 8,
-											borderRadius: 8,
+											minWidth: 88,
+											height: 40,
+											paddingHorizontal: 12,
+											borderRadius: 12,
 											alignItems: "center",
+											justifyContent: "center",
 											backgroundColor: installed ? "#ed4245" : "#5865f2",
 											opacity: isBusy ? 0.6 : 1,
 										}}
@@ -401,8 +423,18 @@ export default function Settings() {
 										</RN.Text>
 									</RN.TouchableOpacity>
 								</RN.View>
-							}
-						/>
+							</RN.View>
+							<RN.Text
+								style={{
+									marginTop: 12,
+									color: "#b5bac1",
+									fontSize: 16,
+									lineHeight: 23,
+								}}
+							>
+								{entry.description}
+							</RN.Text>
+						</RN.View>
 					);
 				})}
 				{visiblePlugins.length === 0 && (
