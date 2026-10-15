@@ -7,6 +7,7 @@ import { showToast } from "@vendetta/ui/toasts";
 import { clearMessageHistory, updateMessageHistorySettings } from "./messageHistory";
 import { setHiddenChannelFeatureEnabled } from "./hiddenChannelToggle";
 import { setServerInfoFeatureEnabled } from "./serverInfo";
+import StableTextInput from "../../StableTextInput";
 
 const { TableRow, TableRowGroup, TableSwitchRow, Stack } = findByProps(
 	"TableRow",
@@ -27,10 +28,10 @@ function TextSetting({ label, value, placeholder, disabled, onChangeText }: {
 			<RN.Text style={{ color: "#b5bac1", fontSize: 14, fontWeight: "600", marginBottom: 6 }}>
 				{label}
 			</RN.Text>
-			<RN.TextInput
+			<StableTextInput
+				key={label}
 				value={value}
 				placeholder={placeholder}
-				placeholderTextColor="#949ba4"
 				editable={!disabled}
 				onChangeText={onChangeText}
 				style={{

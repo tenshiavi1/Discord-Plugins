@@ -3,6 +3,7 @@ import { storage } from "@vendetta/plugin";
 import { useProxy } from "@vendetta/storage";
 import { findByProps } from "../../compat";
 import { showToast } from "@vendetta/ui/toasts";
+import StableTextInput from "../../StableTextInput";
 import {
 	ACTIVITY_TYPES,
 	DISPLAY_TYPES,
@@ -30,12 +31,12 @@ function TextSetting({ label, storageKey, placeholder, limit = 128 }: {
 	return (
 		<RN.View style={{ padding: 10 }}>
 			<RN.Text style={{ color: "#f2f3f5", fontSize: 14, marginBottom: 6 }}>{label}</RN.Text>
-			<RN.TextInput
+			<StableTextInput
+				key={storageKey}
 				value={typeof storage[storageKey] === "string" ? storage[storageKey] : ""}
 				placeholder={placeholder ?? label}
-				placeholderTextColor="#949ba4"
+				keyboardType={storageKey === "partySize" || storageKey === "partyMaxSize" ? "numeric" : "default"}
 				maxLength={limit}
-				autoCapitalize="none"
 				onChangeText={(value: string) => { storage[storageKey] = value; }}
 				style={{
 					color: "#f2f3f5",

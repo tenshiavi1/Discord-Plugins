@@ -4,6 +4,7 @@ import { findByProps } from "../../compat";
 import { showToast } from "@vendetta/ui/toasts";
 import { useProxy } from "@vendetta/storage";
 import { getAssetIDByName } from "@vendetta/ui/assets";
+import StableTextInput from "../../StableTextInput";
 
 const { ScrollView } = findByProps("ScrollView");
 const { TableRowGroup, TableRow, TableSwitchRow, Stack, TextInput } = findByProps(
@@ -94,6 +95,8 @@ export default function Settings() {
               value={newKeyword}
               onChange={setNewKeyword}
               isClearable
+              autoCapitalize="none"
+              autoCorrect={false}
               onSubmitEditing={addKeyword}
               returnKeyType="done"
             />
@@ -293,10 +296,12 @@ export default function Settings() {
         {storage.ignoreServersEnabled && (
           <TableRowGroup title="Ignored Server IDs">
             <Stack spacing={4} style={{ padding: 10 }}>
-              <TextInput
+              <StableTextInput
+                key="ignoredServerIds"
                 placeholder="1205207689832038522, 1196075698301968455"
-                value={storage.ignoredServerIds}
-                onChange={(v: string) => { storage.ignoredServerIds = v; forceUpdate(); }}
+                value={String(storage.ignoredServerIds ?? "")}
+                onChangeText={(value: string) => { storage.ignoredServerIds = value; }}
+                style={{ color: "#f2f3f5", backgroundColor: "#1e1f22", borderRadius: 8, paddingHorizontal: 12, paddingVertical: 10 }}
               />
             </Stack>
           </TableRowGroup>
@@ -305,10 +310,12 @@ export default function Settings() {
         {storage.ignoreChannelsEnabled && (
           <TableRowGroup title="Ignored Channel IDs">
             <Stack spacing={4} style={{ padding: 10 }}>
-              <TextInput
+              <StableTextInput
+                key="ignoredChannelIds"
                 placeholder="1306947192594108467, 1284131216156655646"
-                value={storage.ignoredChannelIds}
-                onChange={(v: string) => { storage.ignoredChannelIds = v; forceUpdate(); }}
+                value={String(storage.ignoredChannelIds ?? "")}
+                onChangeText={(value: string) => { storage.ignoredChannelIds = value; }}
+                style={{ color: "#f2f3f5", backgroundColor: "#1e1f22", borderRadius: 8, paddingHorizontal: 12, paddingVertical: 10 }}
               />
             </Stack>
           </TableRowGroup>
@@ -317,10 +324,12 @@ export default function Settings() {
         {storage.ignoreUsersEnabled && (
           <TableRowGroup title="Ignored User IDs">
             <Stack spacing={4} style={{ padding: 10 }}>
-              <TextInput
+              <StableTextInput
+                key="ignoredUserIds"
                 placeholder="1099039269391171765, 845374453939568720"
-                value={storage.ignoredUserIds}
-                onChange={(v: string) => { storage.ignoredUserIds = v; forceUpdate(); }}
+                value={String(storage.ignoredUserIds ?? "")}
+                onChangeText={(value: string) => { storage.ignoredUserIds = value; }}
+                style={{ color: "#f2f3f5", backgroundColor: "#1e1f22", borderRadius: 8, paddingHorizontal: 12, paddingVertical: 10 }}
               />
             </Stack>
           </TableRowGroup>
@@ -371,10 +380,12 @@ export default function Settings() {
         {storage.sendNotificationToChannel && (
           <TableRowGroup title="Target Channel ID">
             <Stack spacing={4} style={{ padding: 10 }}>
-              <TextInput
+              <StableTextInput
+                key="targetChannelId"
                 placeholder="Enter Target Channel ID..."
-                value={storage.targetChannelId}
-                onChange={(v: string) => { storage.targetChannelId = v; forceUpdate(); }}
+                value={String(storage.targetChannelId ?? "")}
+                onChangeText={(value: string) => { storage.targetChannelId = value; }}
+                style={{ color: "#f2f3f5", backgroundColor: "#1e1f22", borderRadius: 8, paddingHorizontal: 12, paddingVertical: 10 }}
               />
               <Text style={{ color: "#f23f42", fontSize: 12, marginTop: 4, fontWeight: "bold" }}>
                 WARNING: You must own the target channel to maintain privacy and prevent spamming others!!
@@ -386,10 +397,12 @@ export default function Settings() {
         {storage.sendNotificationToWebhook && (
           <TableRowGroup title="Webhook URL">
             <Stack spacing={4} style={{ padding: 10 }}>
-              <TextInput
+              <StableTextInput
+                key="webhookUrl"
                 placeholder="Enter Webhook URL..."
-                value={storage.webhookUrl}
-                onChange={(v: string) => { storage.webhookUrl = v; forceUpdate(); }}
+                value={String(storage.webhookUrl ?? "")}
+                onChangeText={(value: string) => { storage.webhookUrl = value; }}
+                style={{ color: "#f2f3f5", backgroundColor: "#1e1f22", borderRadius: 8, paddingHorizontal: 12, paddingVertical: 10 }}
               />
             </Stack>
           </TableRowGroup>

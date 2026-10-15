@@ -4,6 +4,7 @@ import { useProxy } from "@vendetta/storage";
 import { findByProps } from "../../compat";
 import { METHODS } from "./filenames";
 import { setTypingStatusHidden } from "./privacy";
+import StableTextInput from "../../StableTextInput";
 
 const { TableRow, TableRowGroup, TableSwitchRow, Stack } = findByProps(
 	"TableRow",
@@ -21,12 +22,11 @@ function TextSetting({ label, storageKey, placeholder, keyboardType = "default" 
 	return (
 		<RN.View style={{ padding: 10 }}>
 			<RN.Text style={{ color: "#f2f3f5", fontSize: 14, marginBottom: 6 }}>{label}</RN.Text>
-			<RN.TextInput
+			<StableTextInput
+				key={storageKey}
 				value={String(storage[storageKey] ?? "")}
 				placeholder={placeholder}
-				placeholderTextColor="#949ba4"
 				keyboardType={keyboardType}
-				autoCapitalize="none"
 				onChangeText={(value: string) => {
 					storage[storageKey] = keyboardType === "numeric" ? Number(value) || 0 : value;
 				}}
