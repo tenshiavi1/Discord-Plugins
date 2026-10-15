@@ -6,13 +6,12 @@ import { createMMKVBackend } from "@vendetta/storage";
 import { useProxy } from "@vendetta/storage";
 import { showConfirmationAlert } from "@vendetta/ui/alerts";
 import { getAssetIDByName } from "@vendetta/ui/assets";
-import { Forms } from "@vendetta/ui/components";
 import { showToast } from "@vendetta/ui/toasts";
 import { discoverManagedPlugins, MANAGED_PLUGINS, type ManagedPlugin } from "./catalog";
 import { clearLastCrash, getCrashReasons, getLastCrash } from "./crashLog";
 import { reloadAndReturnToManager } from "./managerNavigation";
 
-const { FormRow, FormSection } = Forms;
+const { TableRow, TableRowGroup } = findByProps("TableRow", "TableRowGroup");
 const showSimpleActionSheet = findByProps("showSimpleActionSheet")?.showSimpleActionSheet;
 const hideActionSheet = findByProps("openLazy", "hideActionSheet")?.hideActionSheet;
 
@@ -578,6 +577,9 @@ export default function Settings() {
 					alignItems: "center",
 					justifyContent: "space-between",
 					marginBottom: 12,
+					padding: 10,
+					borderRadius: 16,
+					backgroundColor: "#2b2d31",
 				}}
 			>
 				<RN.View style={{ flexDirection: "row", alignItems: "center" }}>
@@ -624,8 +626,8 @@ export default function Settings() {
 					alignItems: "center",
 					marginBottom: 12,
 					paddingHorizontal: 12,
-					borderRadius: 8,
-					backgroundColor: "#1e1f22",
+					borderRadius: 16,
+					backgroundColor: "#2b2d31",
 				}}
 			>
 				<RN.TextInput
@@ -657,7 +659,7 @@ export default function Settings() {
 					borderRadius: 8,
 					borderWidth: 1,
 					borderColor: "#343946",
-					backgroundColor: "#0d1017",
+					backgroundColor: "#2b2d31",
 				}}
 			>
 				<RN.Text
@@ -715,7 +717,7 @@ export default function Settings() {
 					</RN.Text>
 				</RN.TouchableOpacity>
 			</RN.View>
-			<FormSection title="Revenge Plugins">
+			<TableRowGroup title="Revenge Plugins">
 				{visiblePlugins.map((entry) => {
 					const installed = findInstalledPlugin(entry);
 					const PluginSettings = installed ? getPluginSettings(installed) : undefined;
@@ -733,7 +735,7 @@ export default function Settings() {
 								marginBottom: 12,
 								padding: 16,
 								borderRadius: 20,
-								backgroundColor: "#1c1e2b",
+								backgroundColor: "#2b2d31",
 							}}
 						>
 							<RN.Text
@@ -810,12 +812,12 @@ export default function Settings() {
 					);
 				})}
 				{visiblePlugins.length === 0 && (
-					<FormRow
+					<TableRow
 						label="No Plugins Found"
 						subLabel="Try a different plugin name or description."
 					/>
 				)}
-			</FormSection>
+			</TableRowGroup>
 		</RN.ScrollView>
 	);
 }

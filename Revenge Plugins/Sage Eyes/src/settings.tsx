@@ -1,14 +1,19 @@
 import { React, ReactNative as RN } from "@vendetta/metro/common";
 import { useProxy } from "@vendetta/storage";
 import { storage } from "@vendetta/plugin";
-import { Forms } from "@vendetta/ui/components";
+import { findByProps } from "../../compat";
 import { getAssetIDByName } from "@vendetta/ui/assets";
 import { showToast } from "@vendetta/ui/toasts";
 import { clearMessageHistory, updateMessageHistorySettings } from "./messageHistory";
 import { setHiddenChannelFeatureEnabled } from "./hiddenChannelToggle";
 import { setServerInfoFeatureEnabled } from "./serverInfo";
 
-const { FormRow, FormSection, FormSwitchRow } = Forms;
+const { TableRow, TableRowGroup, TableSwitchRow, Stack } = findByProps(
+	"TableRow",
+	"TableRowGroup",
+	"TableSwitchRow",
+	"Stack",
+);
 
 function TextSetting({ label, value, placeholder, disabled, onChangeText }: {
 	label: string;
@@ -18,7 +23,7 @@ function TextSetting({ label, value, placeholder, disabled, onChangeText }: {
 	onChangeText: (value: string) => void;
 }) {
 	return (
-		<RN.View style={{ paddingHorizontal: 16, paddingVertical: 8, opacity: disabled ? 0.5 : 1 }}>
+		<RN.View style={{ padding: 10, opacity: disabled ? 0.5 : 1 }}>
 			<RN.Text style={{ color: "#b5bac1", fontSize: 14, fontWeight: "600", marginBottom: 6 }}>
 				{label}
 			</RN.Text>
@@ -45,9 +50,10 @@ export function Settings() {
 	const hiddenChannelsEnabled = Boolean(storage.enableHiddenChannels);
 	const messageHistoryEnabled = Boolean(storage.enableMessageHistory);
 	return (
-		<RN.ScrollView style={{ flex: 1 }}>
-			<FormSection title="Hidden Channels" titleStyleType="no_border">
-				<FormSwitchRow
+		<RN.ScrollView style={{ flex: 1 }} contentContainerStyle={{ padding: 10, paddingBottom: 24 }}>
+			<Stack spacing={8}>
+			<TableRowGroup title="Hidden Channels">
+				<TableSwitchRow
 					label="Enable Hidden Channels"
 					subLabel="Turn Sage Eyes hidden-channel handling on or off. This does not grant server permissions."
 					value={hiddenChannelsEnabled}
@@ -56,7 +62,7 @@ export function Settings() {
 						setHiddenChannelFeatureEnabled(value);
 					}}
 				/>
-				<FormSwitchRow
+				<TableSwitchRow
 					label="Show Lock Icon"
 					subLabel={"Show a lock beside channels you cannot access. This is a visual indicator only and does not grant permissions."}
 					disabled={!hiddenChannelsEnabled}
@@ -65,7 +71,7 @@ export function Settings() {
 					}}
 					value={storage.showIcon}
 				/>
-				<FormSwitchRow
+				<TableSwitchRow
 					label="Show Popup On Hidden Channels"
 					subLabel={"Ask before opening an inaccessible channel and show the channel details available to the client."}
 					disabled={!hiddenChannelsEnabled}
@@ -74,9 +80,9 @@ export function Settings() {
 					}}
 					value={storage.showPopup}
 				/>
-			</FormSection>
-			<FormSection title="Server Info" titleStyleType="no_border">
-				<FormSwitchRow
+			</TableRowGroup>
+			<TableRowGroup title="Server Info">
+				<TableSwitchRow
 					label="Enable Server Info"
 					subLabel="Add a Server Info action when long-pressing a server icon in the server list."
 					value={Boolean(storage.enableServerInfo)}
@@ -85,9 +91,9 @@ export function Settings() {
 						setServerInfoFeatureEnabled(value);
 					}}
 				/>
-			</FormSection>
-			<FormSection title="General Logger" titleStyleType="no_border">
-				<FormSwitchRow
+			</TableRowGroup>
+			<TableRowGroup title="General Logger">
+				<TableSwitchRow
 					label="Enable General Logger"
 					subLabel="Turn Sage Eyes message-history features on or off."
 					value={messageHistoryEnabled}
@@ -96,7 +102,7 @@ export function Settings() {
 						setMessageHistoryFeatureEnabled(value);
 					}}
 				/>
-				<FormSwitchRow
+				<TableSwitchRow
 					label="Log Deleted Messages"
 					subLabel="Replace a deleted message with a simple notice. Long-press the notice to remove it."
 					disabled={!messageHistoryEnabled}
@@ -106,7 +112,7 @@ export function Settings() {
 						updateMessageHistorySettings({ keepDeletedMessages: value });
 					}}
 				/>
-				<FormSwitchRow
+				<TableSwitchRow
 					label="Log Edited Messages"
 					subLabel="Show the original and latest text separated by a downward arrow. Long-press to remove the history."
 					disabled={!messageHistoryEnabled}
@@ -116,7 +122,7 @@ export function Settings() {
 						updateMessageHistorySettings({ keepEditHistory: value });
 					}}
 				/>
-				<FormSwitchRow
+				<TableSwitchRow
 					label="Ignore Bot Messages"
 					subLabel="Do not retain deletions or edits from bots."
 					disabled={!messageHistoryEnabled}
@@ -126,7 +132,7 @@ export function Settings() {
 						updateMessageHistorySettings({ ignoreBotMessages: value });
 					}}
 				/>
-				<FormSwitchRow
+				<TableSwitchRow
 					label="Ignore Your Messages"
 					subLabel="Do not retain deletions or edits to your own messages."
 					disabled={!messageHistoryEnabled}
@@ -136,20 +142,20 @@ export function Settings() {
 						updateMessageHistorySettings({ ignoreOwnMessages: value });
 					}}
 				/>
-				<FormRow
+				<TableRow
 					label="Clear Message-History Tracking"
 					subLabel="Forget retained edit versions and deleted-message records. History already applied to the current channel may remain until it is reloaded."
 					disabled={!messageHistoryEnabled}
-					trailing={<FormRow.Arrow />}
+					trailing={<TableRow.Arrow />}
 					onPress={() => {
 						if (!messageHistoryEnabled) return;
 						clearMessageHistory();
 						showToast("Message history cleared");
 					}}
 				/>
-			</FormSection>
-			<FormSection title="Display" titleStyleType="no_border">
-				<FormSwitchRow
+			</TableRowGroup>
+			<TableRowGroup title="Display">
+				<TableSwitchRow
 					label="Add Timestamp For Edits"
 					subLabel="Show a relative timestamp beside each captured version."
 					disabled={!messageHistoryEnabled}
@@ -159,8 +165,8 @@ export function Settings() {
 						updateMessageHistorySettings({ timestampForEdits: value });
 					}}
 				/>
-			</FormSection>
-			<FormSection title="Custom Buffers" titleStyleType="no_border">
+			</TableRowGroup>
+			<TableRowGroup title="Custom Buffers">
 				<TextSetting
 					label="Deleted Indicator Text"
 					value={String(storage.deletedIndicatorText ?? "This message was deleted")}
@@ -171,15 +177,14 @@ export function Settings() {
 						updateMessageHistorySettings({ deletedIndicatorText: value });
 					}}
 				/>
-			</FormSection>
-			<FormSection
+			</TableRowGroup>
+			<TableRowGroup
 				title={`Ignored Users (${Array.isArray(storage.ignoredUserIds) ? storage.ignoredUserIds.length : 0})`}
-				titleStyleType="no_border"
 			>
-				<FormSwitchRow
+				<TableSwitchRow
 					label="Enable Ignored Users"
 					subLabel="Enable profile-menu controls and skip these users in message history."
-					leading={<FormRow.Icon source={getAssetIDByName("ic_person")} />}
+					leading={<TableRow.Icon source={getAssetIDByName("ic_person")} />}
 					disabled={!messageHistoryEnabled}
 					value={Boolean(storage.enableIgnoreUsers)}
 					onValueChange={(value: boolean) => {
@@ -189,7 +194,7 @@ export function Settings() {
 				/>
 				{Array.isArray(storage.ignoredUserIds) && storage.ignoredUserIds.length > 0
 					? storage.ignoredUserIds.map((userId: string) => (
-						<FormRow
+						<TableRow
 							key={userId}
 							label={`User ${userId}`}
 							subLabel="Ignored in Sage Eyes message history."
@@ -212,8 +217,9 @@ export function Settings() {
 							}
 						/>
 					))
-					: <FormRow label="No Users Currently Ignored." disabled={!messageHistoryEnabled || !storage.enableIgnoreUsers} />}
-			</FormSection>
+					: <TableRow label="No Users Currently Ignored." disabled={!messageHistoryEnabled || !storage.enableIgnoreUsers} />}
+			</TableRowGroup>
+			</Stack>
 		</RN.ScrollView>
 	);
 }

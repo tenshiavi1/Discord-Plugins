@@ -1,7 +1,7 @@
 import { React, ReactNative as RN } from "@vendetta/metro/common";
 import { storage } from "@vendetta/plugin";
 import { useProxy } from "@vendetta/storage";
-import { Forms } from "@vendetta/ui/components";
+import { findByProps } from "../../compat";
 import { showToast } from "@vendetta/ui/toasts";
 import {
 	ACTIVITY_TYPES,
@@ -13,7 +13,12 @@ import {
 	type ActivityConfiguration,
 } from "./activity";
 
-const { FormRow, FormSection, FormSwitchRow } = Forms;
+const { TableRow, TableRowGroup, TableSwitchRow, Stack } = findByProps(
+	"TableRow",
+	"TableRowGroup",
+	"TableSwitchRow",
+	"Stack",
+);
 
 function TextSetting({ label, storageKey, placeholder, limit = 128 }: {
 	label: string;
@@ -22,7 +27,7 @@ function TextSetting({ label, storageKey, placeholder, limit = 128 }: {
 	limit?: number;
 }) {
 	return (
-		<RN.View style={{ paddingHorizontal: 16, paddingVertical: 8 }}>
+		<RN.View style={{ padding: 10 }}>
 			<RN.Text style={{ color: "#f2f3f5", fontSize: 14, marginBottom: 6 }}>{label}</RN.Text>
 			<RN.TextInput
 				value={typeof storage[storageKey] === "string" ? storage[storageKey] : ""}
@@ -101,33 +106,36 @@ export default function Settings() {
 	useProxy(storage);
 
 	return (
-		<RN.ScrollView style={{ flex: 1 }} contentContainerStyle={{ paddingBottom: 24 }}>
-			<FormSection title="Application" titleStyleType="no_border">
+		<RN.ScrollView style={{ flex: 1 }} contentContainerStyle={{ padding: 10, paddingBottom: 24 }}>
+			<Stack spacing={8}>
+			<TableRowGroup title="Application">
 				<TextSetting label="Application ID (Optional)" storageKey="applicationId" placeholder="Defaults to Discord-CustomRP's public application" limit={21} />
 				<RN.Text style={{ color: "#b5bac1", paddingHorizontal: 16, paddingTop: 8 }}>
 					Leave blank to connect with the public default application. Enter your own ID to use assets uploaded to your application.
 				</RN.Text>
 				<TextSetting label="Name" storageKey="applicationName" />
-			</FormSection>
-			<FormSection title="Activity Type" titleStyleType="no_border">
+			</TableRowGroup>
+			<TableRowGroup title="Activity Type">
 				{ACTIVITY_TYPES.map((type) => (
-					<FormRow
+					<TableRow
 						key={`activity-type-${type.value}`}
 						label={`${Number(storage.activityType) === type.value ? "(Selected) " : ""}${type.label}`}
+						trailing={<TableRow.Arrow />}
 						onPress={() => { storage.activityType = type.value; }}
 					/>
 				))}
-			</FormSection>
-			<FormSection title="Display" titleStyleType="no_border">
+			</TableRowGroup>
+			<TableRowGroup title="Display">
 				{DISPLAY_TYPES.map((type) => (
-					<FormRow
+					<TableRow
 						key={`display-type-${type.value}`}
 						label={`${Number(storage.displayType) === type.value ? "(Selected) " : ""}${type.label}`}
+						trailing={<TableRow.Arrow />}
 						onPress={() => { storage.displayType = type.value; }}
 					/>
 				))}
-			</FormSection>
-			<FormSection title="Details And State" titleStyleType="no_border">
+			</TableRowGroup>
+			<TableRowGroup title="Details And State">
 				<TextSetting label="Details" storageKey="details" />
 				<TextSetting label="Details URL" storageKey="detailsUrl" placeholder="https://example.com" limit={512} />
 				<TextSetting label="State" storageKey="state" />
@@ -135,19 +143,20 @@ export default function Settings() {
 				{storage.activityType === 1 && (
 					<TextSetting label="Stream URL (Twitch Or YouTube)" storageKey="streamUrl" placeholder="https://twitch.tv/..." limit={512} />
 				)}
-			</FormSection>
-			<FormSection title="Party" titleStyleType="no_border">
+			</TableRowGroup>
+			<TableRowGroup title="Party">
 				<TextSetting 				label="Current Party Size" storageKey="partySize" placeholder="Optional whole number" limit={9} />
 				<TextSetting 				label="Party Maximum" storageKey="partyMaxSize" placeholder="Optional whole number" limit={9} />
-			</FormSection>
-			<FormSection title="Timestamp" titleStyleType="no_border">
-				<RN.Text style={{ color: "#b5bac1", paddingHorizontal: 16, paddingTop: 8 }}>
+			</TableRowGroup>
+			<TableRowGroup title="Timestamp">
+				<RN.Text style={{ color: "#b5bac1", padding: 12 }}>
 					"Since last connection" starts when Aura Control is enabled in this client session.
 				</RN.Text>
 				{TIMESTAMP_MODES.map((mode) => (
-					<FormRow
+					<TableRow
 						key={`timestamp-${mode.value}`}
 						label={`${storage.timestampMode === mode.value ? "(Selected) " : ""}${mode.label}`}
+						trailing={<TableRow.Arrow />}
 						onPress={() => { storage.timestampMode = mode.value; }}
 					/>
 				))}
@@ -159,7 +168,7 @@ export default function Settings() {
 							placeholder="2026-10-14 19:00"
 							limit={16}
 						/>
-						<FormSwitchRow
+						<TableSwitchRow
 							label="Set End Timestamp"
 							value={Boolean(storage.timestampEndEnabled)}
 							onValueChange={(value: boolean) => { storage.timestampEndEnabled = value; }}
@@ -174,52 +183,56 @@ export default function Settings() {
 						)}
 					</>
 				)}
-			</FormSection>
-			<FormSection title="Large Image" titleStyleType="no_border">
-				<RN.Text style={{ color: "#b5bac1", paddingHorizontal: 16, paddingTop: 8 }}>
+			</TableRowGroup>
+			<TableRowGroup title="Large Image">
+				<RN.Text style={{ color: "#b5bac1", padding: 12 }}>
 					Choose an asset key uploaded to this application's Rich Presence settings.
 				</RN.Text>
 				<TextSetting label="Key" storageKey="largeImageKey" limit={256} />
 				<TextSetting label="Text" storageKey="largeImageText" />
 				<TextSetting label="URL" storageKey="largeImageUrl" placeholder="https://example.com" limit={512} />
-			</FormSection>
-			<FormSection title="Small Image" titleStyleType="no_border">
+			</TableRowGroup>
+			<TableRowGroup title="Small Image">
 				<TextSetting label="Key" storageKey="smallImageKey" limit={256} />
 				<TextSetting label="Text" storageKey="smallImageText" />
 				<TextSetting label="URL" storageKey="smallImageUrl" placeholder="https://example.com" limit={512} />
-			</FormSection>
-			<FormSection title="Button 1" titleStyleType="no_border">
+			</TableRowGroup>
+			<TableRowGroup title="Button 1">
 				<TextSetting label="Text" storageKey="buttonOneLabel" limit={32} />
 				<TextSetting label="URL" storageKey="buttonOneUrl" placeholder="https://example.com" limit={512} />
-			</FormSection>
-			<FormSection title="Button 2" titleStyleType="no_border">
+			</TableRowGroup>
+			<TableRowGroup title="Button 2">
 				<TextSetting label="Text" storageKey="buttonTwoLabel" limit={32} />
 				<TextSetting label="URL" storageKey="buttonTwoUrl" placeholder="https://example.com" limit={512} />
-			</FormSection>
-			<FormSection title="Presence" titleStyleType="no_border">
-				<FormRow
+			</TableRowGroup>
+			<TableRowGroup title="Presence">
+				<TableRow
 					label="Activity Sharing"
 					subLabel="Enable Activity Sharing in Discord privacy settings so other people can see this activity."
 				/>
-				<FormRow
+				<TableRow
 					label="Connect"
 					subLabel="Validate the configuration and start publishing."
+					trailing={<TableRow.Arrow />}
 					onPress={connect}
 					disabled={Boolean(storage.enabled)}
 				/>
-				<FormRow
+				<TableRow
 					label="Disconnect"
 					subLabel="Clear Aura Control's activity."
+					trailing={<TableRow.Arrow />}
 					onPress={disconnect}
 					disabled={!storage.enabled}
 				/>
-				<FormRow
+				<TableRow
 					label="Update Presence"
 					subLabel="Publish the latest configuration while connected."
+					trailing={<TableRow.Arrow />}
 					onPress={updatePresence}
 					disabled={!storage.enabled}
 				/>
-			</FormSection>
+			</TableRowGroup>
+			</Stack>
 		</RN.ScrollView>
 	);
 }

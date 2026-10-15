@@ -1,11 +1,16 @@
 import { React, ReactNative as RN } from "@vendetta/metro/common";
 import { storage } from "@vendetta/plugin";
 import { useProxy } from "@vendetta/storage";
-import { Forms } from "@vendetta/ui/components";
+import { findByProps } from "../../compat";
 import { METHODS } from "./filenames";
 import { setTypingStatusHidden } from "./privacy";
 
-const { FormRow, FormSection, FormSwitchRow } = Forms;
+const { TableRow, TableRowGroup, TableSwitchRow, Stack } = findByProps(
+	"TableRow",
+	"TableRowGroup",
+	"TableSwitchRow",
+	"Stack",
+);
 
 function TextSetting({ label, storageKey, placeholder, keyboardType = "default" }: {
 	label: string;
@@ -14,7 +19,7 @@ function TextSetting({ label, storageKey, placeholder, keyboardType = "default" 
 	keyboardType?: "default" | "numeric";
 }) {
 	return (
-		<RN.View style={{ paddingHorizontal: 16, paddingVertical: 8 }}>
+		<RN.View style={{ padding: 10 }}>
 			<RN.Text style={{ color: "#f2f3f5", fontSize: 14, marginBottom: 6 }}>{label}</RN.Text>
 			<RN.TextInput
 				value={String(storage[storageKey] ?? "")}
@@ -41,27 +46,28 @@ export default function Settings() {
 	useProxy(storage);
 
 	return (
-		<RN.ScrollView style={{ flex: 1 }} contentContainerStyle={{ paddingBottom: 24 }}>
-			<FormSection title="Privacy" titleStyleType="no_border">
-				<FormSwitchRow
+		<RN.ScrollView style={{ flex: 1 }} contentContainerStyle={{ padding: 10, paddingBottom: 24 }}>
+			<Stack spacing={8}>
+			<TableRowGroup title="Privacy">
+				<TableSwitchRow
 					label="Anonymize Uploaded File Names"
 					subLabel="Replace attachment names before the client uploads them."
 					value={Boolean(storage.anonymiseByDefault)}
 					onValueChange={(value: boolean) => { storage.anonymiseByDefault = value; }}
 				/>
-				<FormSwitchRow
+				<TableSwitchRow
 					label="Remove Tracking Parameters From Sent URLs"
 					subLabel="Clean common advertising and click-tracking parameters when sending or editing messages."
 					value={Boolean(storage.clearTrackingUrls)}
 					onValueChange={(value: boolean) => { storage.clearTrackingUrls = value; }}
 				/>
-				<FormSwitchRow
+				<TableSwitchRow
 					label="Enable Silent /leave Command"
 					subLabel="Adds a command to leave the current group DM without sending a visible leave message."
 					value={Boolean(storage.enableSilentLeave)}
 					onValueChange={(value: boolean) => { storage.enableSilentLeave = value; }}
 				/>
-				<FormSwitchRow
+				<TableSwitchRow
 					label="Silent Typing"
 					subLabel="Suppress typing-start events while enabled; normal typing-stop behavior is preserved. Toggle here or with /silenttype."
 					value={Boolean(storage.hideTypingStatus)}
@@ -70,12 +76,13 @@ export default function Settings() {
 						setTypingStatusHidden(value);
 					}}
 				/>
-			</FormSection>
-			<FormSection title="Anonymization Method" titleStyleType="no_border">
+			</TableRowGroup>
+			<TableRowGroup title="Anonymization Method">
 				{METHODS.map((method) => (
-					<FormRow
+					<TableRow
 						key={method.value}
 						label={`${storage.method === method.value ? "(Selected) " : ""}${method.label}`}
+						trailing={<TableRow.Arrow />}
 						onPress={() => { storage.method = method.value; }}
 					/>
 				))}
@@ -94,10 +101,13 @@ export default function Settings() {
 						placeholder="file"
 					/>
 				)}
-			</FormSection>
-			<RN.Text style={{ color: "#b5bac1", paddingHorizontal: 16, paddingTop: 8 }}>
-				File extensions are preserved. This changes names only; it does not remove metadata from file contents.
-			</RN.Text>
+			</TableRowGroup>
+			<TableRowGroup title="About">
+				<RN.Text style={{ color: "#b5bac1", padding: 12 }}>
+					File extensions are preserved. This changes names only; it does not remove metadata from file contents.
+				</RN.Text>
+			</TableRowGroup>
+			</Stack>
 		</RN.ScrollView>
 	);
 }
