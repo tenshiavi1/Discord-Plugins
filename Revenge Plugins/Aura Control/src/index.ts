@@ -1,5 +1,5 @@
 import { storage } from "@vendetta/plugin";
-import { clearActivity, publishActivity, resetPluginStartTime } from "./activity";
+import { installActivitySessionRestore, restoreActivitySession } from "./activity";
 import Settings from "./settings";
 
 const defaults = {
@@ -15,6 +15,7 @@ const defaults = {
 	streamUrl: "",
 	timestampMode: "connection",
 	timestampConnection: 0,
+	timestampStartup: 0,
 	timestampLastUpdate: 0,
 	timestampCustomStart: "",
 	timestampCustomEnd: "",
@@ -33,23 +34,19 @@ const defaults = {
 	partyMaxSize: "",
 };
 
+let removeSessionRestore: (() => void) | undefined;
+
 export default {
 	onLoad() {
 		for (const [key, value] of Object.entries(defaults)) {
 			if (storage[key] === undefined) storage[key] = value;
 		}
-		resetPluginStartTime();
-		if (storage.enabled) {
-			void publishActivity().catch((error) => {
-				console.error("[Aura Control] Could not publish saved activity.", error);
-				storage.enabled = false;
-				try {
-					clearActivity();
-				} catch (clearError) {
-					console.error("[Aura Control] Could not clear activity after startup failed.", clearError);
-				}
-			});
-		}
+		restoreActivitySession();
+		removeSessionRestore = installActivitySessionRestore();
+	},
+	onUnload() {
+		removeSessionRestore?.();
+		removeSessionRestore = undefined;
 	},
 	settings: Settings,
 };

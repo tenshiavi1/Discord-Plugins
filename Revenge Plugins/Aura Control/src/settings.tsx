@@ -8,6 +8,7 @@ import {
 	DISPLAY_TYPES,
 	clearActivity,
 	publishActivity,
+	resetPluginStartTime,
 	TIMESTAMP_MODES,
 	validateConfiguration,
 	type ActivityConfiguration,
@@ -79,6 +80,7 @@ async function publishWithFeedback(successMessage: string): Promise<boolean> {
 }
 
 async function connect(): Promise<void> {
+	resetPluginStartTime();
 	storage.enabled = true;
 	await publishWithFeedback("Connected and publishing Aura Control activity.");
 }

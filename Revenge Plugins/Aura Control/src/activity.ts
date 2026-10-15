@@ -32,6 +32,8 @@ const dispatcher = FluxDispatcher ?? findByProps("dispatch", "subscribe");
 const applicationAssets = findByProps("fetchAssetIds");
 let pluginStartedAt = Date.now();
 let activityRevision = 0;
+let restoreTimer: ReturnType<typeof setTimeout> | undefined;
+let restoreGeneration = 0;
 
 export type ActivityConfiguration = {
 	enabled: boolean;
@@ -46,6 +48,7 @@ export type ActivityConfiguration = {
 	streamUrl: string;
 	timestampMode: string;
 	timestampConnection: number;
+	timestampStartup: number;
 	timestampLastUpdate: number;
 	timestampCustomStart: string;
 	timestampCustomEnd: string;
@@ -163,12 +166,12 @@ export async function createActivity(config: ActivityConfiguration): Promise<Rec
 	return activity;
 }
 
-export async function publishActivity(): Promise<void> {
+export async function publishActivity(updateTimestamp = true): Promise<void> {
 	if (typeof dispatcher?.dispatch !== "function") {
 		throw new Error("Discord's activity dispatcher is unavailable.");
 	}
 	const revision = ++activityRevision;
-	if (storage.enabled) storage.timestampLastUpdate = Date.now();
+	if (updateTimestamp && storage.enabled) storage.timestampLastUpdate = Date.now();
 	const configuration = { ...storage } as ActivityConfiguration;
 	let activity: Record<string, unknown> | null;
 	try {
@@ -213,7 +216,69 @@ async function resolveAssetKey(key: string, applicationId: string): Promise<stri
 
 export function resetPluginStartTime(): void {
 	pluginStartedAt = Date.now();
+	storage.timestampStartup = pluginStartedAt;
 	storage.timestampConnection = pluginStartedAt;
+}
+
+export function restoreActivitySession(): void {
+	const persistedStartup = Number(storage.timestampStartup);
+	pluginStartedAt = Number.isFinite(persistedStartup) && persistedStartup > 0
+		? persistedStartup
+		: Date.now();
+	storage.timestampStartup = pluginStartedAt;
+	const persistedConnection = Number(storage.timestampConnection);
+	if (!Number.isFinite(persistedConnection) || persistedConnection <= 0) {
+		storage.timestampConnection = pluginStartedAt;
+	}
+}
+
+export function installActivitySessionRestore(): () => void {
+	const supportsSubscriptions =
+		typeof dispatcher?.subscribe === "function" &&
+		typeof dispatcher?.unsubscribe === "function";
+	if (!supportsSubscriptions) {
+		console.error("[Aura Control] Discord's session event dispatcher is unavailable; automatic activity recovery is disabled.");
+	}
+
+	const scheduleRestore = () => {
+		if (!storage.enabled) return;
+		const generation = ++restoreGeneration;
+		if (restoreTimer) clearTimeout(restoreTimer);
+
+		const delays = [750, 1750, 3500];
+		let attempt = 0;
+		const publish = () => {
+			restoreTimer = undefined;
+			if (generation !== restoreGeneration || !storage.enabled) return;
+			void publishActivity(false).catch((error) => {
+				attempt++;
+				if (attempt < delays.length) {
+					restoreTimer = setTimeout(publish, delays[attempt]);
+					return;
+				}
+				restoreTimer = undefined;
+				console.error("[Aura Control] Could not restore activity after a Discord session change.", error);
+			});
+		};
+
+		restoreTimer = setTimeout(publish, delays[0]);
+	};
+
+	if (supportsSubscriptions) {
+		dispatcher.subscribe("START_SESSION", scheduleRestore);
+		dispatcher.subscribe("CONNECTION_OPEN", scheduleRestore);
+	}
+	scheduleRestore();
+
+	return () => {
+		restoreGeneration++;
+		if (restoreTimer) clearTimeout(restoreTimer);
+		restoreTimer = undefined;
+		if (supportsSubscriptions) {
+			dispatcher.unsubscribe("START_SESSION", scheduleRestore);
+			dispatcher.unsubscribe("CONNECTION_OPEN", scheduleRestore);
+		}
+	};
 }
 
 function getTimestamp(config: ActivityConfiguration): { start?: number; end?: number } | undefined {
