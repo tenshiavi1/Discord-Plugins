@@ -1,54 +1,40 @@
-import { FluxDispatcher } from "@vendetta/metro/common";
+import { React } from "@vendetta/metro/common";
+import { after } from "@vendetta/patcher";
 import { findByProps, findByStoreName } from "../../compat";
 
-const mentionPattern = /<@!?([0-9]{17,20})>/g;
-const messageEvents = ["MESSAGE_CREATE", "MESSAGE_UPDATE", "LOAD_MESSAGES_SUCCESS", "LOAD_MESSAGES"];
+const mentionPattern = /<@!?([0-9]{17,20})>/;
 const maxPendingUsers = 100;
-const maxUsersPerMessage = 10;
-const maxInitialMessages = 50;
 const inFlightUsers = new Map<string, Promise<boolean>>();
 const retryAfter = new Map<string, number>();
 let requestQueue: Promise<void> = Promise.resolve();
 let lastRequestAt = 0;
 let enabled = false;
-let dispatcher: any;
-let channelMessages: any;
-const eventHandlers = new Map<string, (payload: any) => void>();
+let unpatchMention: (() => void) | undefined;
+let retryTimer: ReturnType<typeof setInterval> | undefined;
+let retryCount = 0;
 
 function isCached(userId: string): boolean {
 	return Boolean(findByStoreName("UserStore")?.getUser?.(userId));
 }
 
-function extractMentionIds(message: any): string[] {
-	const texts: string[] = [];
-	if (typeof message?.content === "string") texts.push(message.content);
-	for (const embed of Array.isArray(message?.embeds) ? message.embeds : []) {
-		for (const value of [embed?.rawTitle, embed?.rawDescription, embed?.title, embed?.description]) {
-			if (typeof value === "string") texts.push(value);
+function extractMentionId(value: unknown, depth = 0, seen = new WeakSet<object>()): string | undefined {
+	if (depth > 8 || value == null) return undefined;
+	if (typeof value === "string") return value.match(mentionPattern)?.[1];
+	if (typeof value !== "object" || seen.has(value)) return undefined;
+	seen.add(value);
+	if (Array.isArray(value)) {
+		for (const child of value) {
+			const id = extractMentionId(child, depth + 1, seen);
+			if (id) return id;
 		}
-		for (const field of Array.isArray(embed?.fields) ? embed.fields : []) {
-			for (const value of [field?.rawName, field?.rawValue, field?.name, field?.value]) {
-				if (typeof value === "string") texts.push(value);
-			}
-		}
+		return undefined;
 	}
-	const pendingComponents = Array.isArray(message?.components) ? [...message.components] : [];
-	let inspectedComponents = 0;
-	while (pendingComponents.length > 0 && inspectedComponents < 1000) {
-		const component = pendingComponents.pop();
-		inspectedComponents++;
-		if (typeof component?.content === "string") texts.push(component.content);
-		if (Array.isArray(component?.components)) pendingComponents.push(...component.components);
+	const props = value as Record<string, unknown>;
+	for (const key of ["content", "children", "props", "data", "text"]) {
+		const id = extractMentionId(props[key], depth + 1, seen);
+		if (id) return id;
 	}
-	for (const snapshot of Array.isArray(message?.messageSnapshots) ? message.messageSnapshots : []) {
-		if (typeof snapshot?.message?.content === "string") texts.push(snapshot.message.content);
-	}
-
-	const ids = new Set<string>();
-	for (const text of texts) {
-		for (const match of text.matchAll(mentionPattern)) ids.add(match[1]);
-	}
-	return [...ids];
+	return undefined;
 }
 
 function rememberFailure(userId: string, error?: any) {
@@ -81,14 +67,17 @@ async function fetchAndDispatchUser(userId: string): Promise<boolean> {
 	if (!enabled) return false;
 
 	const restApi = findByProps("get", "post", "del", "patch") ?? findByProps("get");
-	if (typeof restApi?.get !== "function" || typeof dispatcher?.dispatch !== "function") return false;
+	if (typeof restApi?.get !== "function") return false;
 	try {
 		const response = await restApi.get({ url: `/users/${userId}` });
-		const user = response?.body;
-		if (!enabled || response?.status !== 200 || typeof user?.id !== "string" || user.id !== userId) {
+		const user = response?.body ?? response;
+		if (!enabled || (response?.status != null && (response.status < 200 || response.status >= 300))
+			|| typeof user?.id !== "string" || user.id !== userId) {
 			if (enabled) rememberFailure(userId, response);
 			return false;
 		}
+		const dispatcher = findByProps("dispatch", "subscribe") ?? findByStoreName("Dispatcher");
+		if (typeof dispatcher?.dispatch !== "function") return false;
 		dispatcher.dispatch({ type: "USER_UPDATE", user });
 		retryAfter.delete(userId);
 		return true;
@@ -124,96 +113,87 @@ function resolveUser(userId: string): Promise<boolean> {
 	return request;
 }
 
-function collectMessages(value: any, depth = 0): any[] {
-	if (depth > 3 || value == null) return [];
-	if (Array.isArray(value)) return value.flatMap((item) => collectMessages(item, depth + 1));
-	if (value instanceof Map) return collectMessages([...value.values()], depth + 1);
-	if (typeof value?.toArray === "function") {
-		try {
-			return collectMessages(value.toArray(), depth + 1);
-		} catch {
-			return [];
+function MentionResolution({
+	userId,
+	mentionProps,
+	fallback,
+	UserMention,
+}: {
+	userId: string;
+	mentionProps: Record<string, any>;
+	fallback: any;
+	UserMention: any;
+}) {
+	const [resolved, setResolved] = React.useState(isCached(userId));
+	React.useEffect(() => {
+		let active = true;
+		if (isCached(userId)) {
+			setResolved(true);
+		} else {
+			void resolveUser(userId).then(() => {
+				if (active && enabled && isCached(userId)) setResolved(true);
+			});
 		}
-	}
-	if (typeof value?.valueSeq === "function") {
-		try {
-			return collectMessages(value.valueSeq().toArray(), depth + 1);
-		} catch {
-			return [];
-		}
-	}
-	if (Array.isArray(value?._array)) return collectMessages(value._array, depth + 1);
-	if (value && typeof value === "object" && (
-		typeof value.content === "string" ||
-		Array.isArray(value.embeds) ||
-		Array.isArray(value.components)
-	)) {
-		return [value];
-	}
-	if (typeof value === "object") return Object.values(value).flatMap((item) => collectMessages(item, depth + 1));
-	return [];
+		return () => { active = false; };
+	}, [userId]);
+
+	if (!enabled || !resolved || !isCached(userId) || typeof UserMention !== "function") return fallback;
+	return React.createElement(UserMention, {
+		...mentionProps,
+		userId,
+		channelId: mentionProps.channelId,
+		inlinePreview: mentionProps.inlinePreview,
+		className: mentionProps.className ?? "mention",
+	});
 }
 
-function processMessage(message: any) {
-	if (!enabled || !message || typeof message !== "object") return;
-	for (const userId of extractMentionIds(message).slice(0, maxUsersPerMessage)) {
-		if (!isCached(userId)) void resolveUser(userId);
-	}
+function findMentionModule(): any {
+	const module = findByProps("RoleMention", "UserMention");
+	return typeof module?.RoleMention === "function" && typeof module?.UserMention === "function"
+		? module
+		: undefined;
 }
 
-function processEvent(payload: any) {
-	if (!enabled || !payload || typeof payload !== "object") return;
-	if (payload.message && typeof payload.message === "object") processMessage(payload.message);
-	else if (payload.messages != null) {
-		for (const message of collectMessages(payload.messages)) processMessage(message);
-	}
+function installMentionPatch(): boolean {
+	const module = findMentionModule();
+	if (!module) return false;
+	unpatchMention = after("RoleMention", module, ([props]: any[], fallback: any) => {
+		if (!enabled || props?.userId) return fallback;
+		const userId = extractMentionId(props);
+		if (!userId) return fallback;
+		return React.createElement(MentionResolution, {
+			key: `god-console-mention-${userId}`,
+			userId,
+			mentionProps: props,
+			fallback,
+			UserMention: module.UserMention,
+		});
+	});
+	return true;
 }
 
-function processCurrentChannel() {
-	const channelId = findByStoreName("SelectedChannelStore")?.getChannelId?.();
-	if (typeof channelId !== "string") return;
-	const messageStore = findByStoreName("MessageStore");
-	const stored = channelMessages?._channelMessages?.get?.(channelId);
-	const messages = collectMessages(stored ?? messageStore?.getMessages?.(channelId));
-	for (const message of messages.slice(-maxInitialMessages)) processMessage(message);
-}
-
-function installListeners() {
-	dispatcher = FluxDispatcher;
-	if (typeof dispatcher?.subscribe !== "function" || typeof dispatcher?.unsubscribe !== "function") {
-		console.warn("[God Console] Discord's message dispatcher was not found; automatic mention repair is unavailable.");
-		return;
+function stopMentionPatch() {
+	if (retryTimer) clearInterval(retryTimer);
+	retryTimer = undefined;
+	if (unpatchMention) {
+		unpatchMention();
+		unpatchMention = undefined;
 	}
-	channelMessages = findByProps("_channelMessages");
-	for (const eventName of messageEvents) {
-		const handler = (payload: any) => processEvent(payload);
-		dispatcher.subscribe(eventName, handler);
-		eventHandlers.set(eventName, handler);
-	}
-	processCurrentChannel();
-}
-
-function removeListeners() {
-	for (const [eventName, handler] of eventHandlers) {
-		try {
-			dispatcher?.unsubscribe?.(eventName, handler);
-		} catch (error) {
-			console.warn(`[God Console] Could not unsubscribe from ${eventName}.`, error);
-		}
-	}
-	eventHandlers.clear();
-	dispatcher = undefined;
-	channelMessages = undefined;
 }
 
 export function setValidUserEnabled(value: boolean) {
 	if (enabled === value) return;
 	enabled = value;
 	if (enabled) {
-		installListeners();
+		if (installMentionPatch()) return;
+		retryCount = 0;
+		retryTimer = setInterval(() => {
+			retryCount++;
+			if (installMentionPatch() || retryCount >= 30) stopMentionPatch();
+		}, 1000);
 		return;
 	}
-	removeListeners();
+	stopMentionPatch();
 	inFlightUsers.clear();
 	retryAfter.clear();
 }
