@@ -8,6 +8,6 @@
   ],
   "main": "src/index.ts",
   "vendetta": {
-    "icon": "ic_person"
+    "icon": "ic_person_waving"
   }
 }
