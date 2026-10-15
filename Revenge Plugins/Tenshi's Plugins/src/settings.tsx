@@ -7,7 +7,7 @@ import { showConfirmationAlert } from "@vendetta/ui/alerts";
 import { getAssetIDByName } from "@vendetta/ui/assets";
 import { Forms } from "@vendetta/ui/components";
 import { showToast } from "@vendetta/ui/toasts";
-import { MANAGED_PLUGINS, type ManagedPlugin } from "./catalog";
+import { discoverManagedPlugins, MANAGED_PLUGINS, type ManagedPlugin } from "./catalog";
 import { reloadAndReturnToManager } from "./managerNavigation";
 
 const { FormRow, FormSection } = Forms;
@@ -73,11 +73,13 @@ export default function Settings() {
 	const [busy, setBusy] = React.useState<Record<string, boolean>>({});
 	const [fetchingAll, setFetchingAll] = React.useState(false);
 	const [fetchProgress, setFetchProgress] = React.useState(0);
+	const [fetchTotal, setFetchTotal] = React.useState(0);
+	const [catalog, setCatalog] = React.useState(MANAGED_PLUGINS);
 	const [searchQuery, setSearchQuery] = React.useState("");
 	const navigation = NavigationNative.useNavigation();
 	const { width: screenWidth, fontScale } = RN.useWindowDimensions();
 	const normalizedQuery = searchQuery.trim().toLocaleLowerCase();
-	const visiblePlugins = MANAGED_PLUGINS
+	const visiblePlugins = catalog
 		.filter((entry) =>
 			!normalizedQuery ||
 			entry.name.toLocaleLowerCase().includes(normalizedQuery) ||
@@ -137,46 +139,56 @@ export default function Settings() {
 		if (fetchingAll || Object.values(busy).some(Boolean)) return;
 		setFetchingAll(true);
 		setFetchProgress(0);
-		const orderedPlugins = [...MANAGED_PLUGINS].sort(
-			(left, right) => Number(left.name === "Tenshi's Plugins") - Number(right.name === "Tenshi's Plugins"),
-		);
-		const failedPlugins: string[] = [];
-		let fetchedCount = 0;
-
 		try {
+			const discoveredPlugins = await discoverManagedPlugins();
+			setCatalog(discoveredPlugins);
+			setFetchTotal(discoveredPlugins.length);
+			const orderedPlugins = [...discoveredPlugins].sort(
+				(left, right) => Number(left.name === "Tenshi's Plugins") - Number(right.name === "Tenshi's Plugins"),
+			);
+			const failedPlugins: string[] = [];
+			let fetchedCount = 0;
+			let availableCount = 0;
+
 			for (const [index, entry] of orderedPlugins.entries()) {
 				setFetchProgress(index + 1);
+				const installed = findInstalledPlugin(entry);
+				if (!installed) {
+					availableCount += 1;
+					continue;
+				}
 				try {
-					const installed = findInstalledPlugin(entry);
-					if (installed) {
-						await refetchPlugin(entry, installed);
-					} else {
-						await installPlugin(entry.url, true);
-					}
+					await refetchPlugin(entry, installed);
 					fetchedCount += 1;
 				} catch (error) {
 					console.error(`[Tenshi's Plugins] Fetch All failed for ${entry.name}.`, error);
 					failedPlugins.push(entry.name);
 				}
 			}
+
+			if (failedPlugins.length > 0) {
+				showToast(
+					`Catalog updated; refreshed ${fetchedCount}, failed ${failedPlugins.length}, ${availableCount} available to install`,
+					getAssetIDByName("Warning"),
+				);
+			} else {
+				showToast(
+					`Catalog updated; refreshed ${fetchedCount}, ${availableCount} available to install`,
+					getAssetIDByName("Check"),
+				);
+			}
+		} catch (error) {
+			console.error("[Tenshi's Plugins] Failed to fetch the plugin catalog.", error);
+			showToast("Failed to fetch plugin catalog", getAssetIDByName("Warning"));
 		} finally {
 			setFetchingAll(false);
-		}
-
-		if (failedPlugins.length > 0) {
-			showToast(
-				`Fetched ${fetchedCount}/${orderedPlugins.length}; failed: ${failedPlugins.join(", ")}`,
-				getAssetIDByName("Warning"),
-			);
-		} else {
-			showToast(`Fetched all ${fetchedCount} plugins`, getAssetIDByName("Check"));
 		}
 	};
 
 	const confirmFetchAll = () => {
 		showConfirmationAlert({
 			title: "Fetch All Plugins?",
-			content: "This will refetch all installed plugins and install any missing plugins in the catalog, including Tenshi's Plugins. Plugins may briefly stop while they are updated.",
+			content: "This refreshes the plugin list from the repository and refetches plugins already installed. New plugins will appear with an Install button and will not be installed automatically. Installed plugins may briefly stop while they are updated.",
 			confirmText: "Okay",
 			cancelText: "Cancel",
 			onConfirm: () => { void fetchAllPlugins(); },
@@ -400,7 +412,7 @@ export default function Settings() {
 						}}
 					>
 						<RN.Text style={{ color: "#ffffff", fontWeight: "600" }}>
-							{fetchingAll ? `Fetching ${fetchProgress}/${MANAGED_PLUGINS.length}` : "Fetch All"}
+							{fetchingAll ? `Fetching ${fetchProgress}/${fetchTotal || "..."}` : "Fetch All"}
 						</RN.Text>
 					</RN.TouchableOpacity>
 					<RN.View style={{ width: 8 }} />
