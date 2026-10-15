@@ -2,6 +2,7 @@ import { plugins, startPlugin, stopPlugin } from "@vendetta/plugins";
 import { discoverManagedPlugins, fetchWithRetry, type ManagedPlugin } from "./catalog";
 import { acquireBulkRefetch, acquirePluginRefetch, createRefetchLockState } from "./refetchLock";
 import { getPendingManagerRestart, markManagerRestartRequired } from "./restartState";
+import { needsManagerRestart } from "./restartStateCore";
 
 const REFRESH_LOCK_KEY = "__tenshiPluginsRefetchLockV1";
 
@@ -140,8 +141,7 @@ async function performRefetchPlugin(entry: ManagedPlugin, installed: InstalledPl
 	const manifestChanged = JSON.stringify(existingPlugin?.manifest) !== JSON.stringify(bundle.manifest);
 	const bundleChanged = existingPlugin?.js !== bundle.js;
 	if (!manifestChanged && !bundleChanged) return { updated: false, restartRequired: false };
-	const restartRequired = entry.name === "Tenshi's Plugins" && wasEnabled && bundleChanged;
-	if (restartRequired) markManagerRestartRequired(entry.name);
+	const restartRequired = needsManagerRestart(entry.name, bundleChanged, wasEnabled);
 
 	try {
 		if (bundleChanged && wasEnabled) {
@@ -157,6 +157,7 @@ async function performRefetchPlugin(entry: ManagedPlugin, installed: InstalledPl
 			enabled: wasEnabled,
 			update: existingPlugin?.update ?? true,
 		};
+		if (restartRequired) markManagerRestartRequired(entry.name);
 
 		if (stopped) {
 			await startPlugin(installed.key);

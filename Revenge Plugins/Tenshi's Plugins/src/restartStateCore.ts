@@ -23,3 +23,7 @@ export function isPendingRestartFromPreviousSession(
 ) {
 	return Boolean(pending && pending.sessionId !== currentSessionId);
 }
+
+export function needsManagerRestart(pluginName: string, bundleChanged: boolean, wasEnabled: boolean) {
+	return pluginName === "Tenshi's Plugins" && bundleChanged && wasEnabled;
+}
