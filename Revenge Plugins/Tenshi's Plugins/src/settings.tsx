@@ -139,6 +139,34 @@ export default function Settings() {
 		}
 	};
 
+	const clearPluginData = async (
+		entry: ManagedPlugin,
+		installed: NonNullable<ReturnType<typeof findInstalledPlugin>>,
+	) => {
+		const wasEnabled = !!installed.instance.enabled;
+		let stopped = false;
+		try {
+			if (wasEnabled) {
+				stopPlugin(installed.key, false);
+				stopped = true;
+			}
+			await createMMKVBackend(installed.key).set({});
+			if (stopped) {
+				await startPlugin(installed.key);
+				stopped = false;
+			}
+		} catch (error) {
+			if (stopped) {
+				try {
+					await startPlugin(installed.key);
+				} catch (restartError) {
+					console.error(`[Tenshi's Plugins] Failed to restart ${entry.name} after clearing data.`, restartError);
+				}
+			}
+			throw error;
+		}
+	};
+
 	const fetchAllPlugins = async () => {
 		if (fetchingAll || Object.values(busy).some(Boolean)) return;
 		setFetchingAll(true);
@@ -199,6 +227,137 @@ export default function Settings() {
 		});
 	};
 
+	type BulkAction = "install" | "remove" | "clear";
+
+	const runBulkAction = async (action: BulkAction) => {
+		if (fetchingAll || Object.values(busy).some(Boolean)) return;
+		const targets = catalog.filter((entry) => {
+			const installed = findInstalledPlugin(entry);
+			return action === "install" ? !installed : !!installed;
+		});
+		if (targets.length === 0) {
+			showToast(
+				action === "install" ? "All listed plugins are already installed" : "No installed plugins to manage",
+				getAssetIDByName("Check"),
+			);
+			return;
+		}
+
+		setFetchingAll(true);
+		setFetchProgress(0);
+		setFetchTotal(targets.length);
+		const orderedTargets = [...targets].sort(
+			(left, right) => Number(left.name === "Tenshi's Plugins") - Number(right.name === "Tenshi's Plugins"),
+		);
+		let completed = 0;
+		const failedPlugins: string[] = [];
+
+		try {
+			for (const [index, entry] of orderedTargets.entries()) {
+				setFetchProgress(index + 1);
+				const installed = findInstalledPlugin(entry);
+				try {
+					if (action === "install") {
+						if (!installed) await installPlugin(entry.url, true);
+						else continue;
+					} else if (!installed) {
+						continue;
+					} else if (action === "remove") {
+						await removePlugin(installed.key);
+					} else {
+						await clearPluginData(entry, installed);
+					}
+					completed += 1;
+				} catch (error) {
+					console.error(`[Tenshi's Plugins] Failed to ${action} ${entry.name} during bulk management.`, error);
+					failedPlugins.push(entry.name);
+				}
+			}
+		} finally {
+			setFetchingAll(false);
+		}
+
+		const actionLabel = action === "install" ? "installed" : action === "remove" ? "removed" : "cleared";
+		if (failedPlugins.length > 0) {
+			showToast(
+				`${actionLabel}: ${completed}; failed: ${failedPlugins.join(", ")}`,
+				getAssetIDByName("Warning"),
+			);
+		} else {
+			showToast(`${completed} plugins ${actionLabel}`, getAssetIDByName("Check"));
+		}
+	};
+
+	const confirmBulkAction = (action: BulkAction) => {
+		const confirmation = {
+			install: {
+				title: "Install All Plugins?",
+				content: "This will install every plugin in the list that is not already installed. Existing installations will be left unchanged.",
+				confirmText: "Install All",
+			},
+			remove: {
+				title: "Remove All Plugins?",
+				content: "This will uninstall every installed plugin in the list, including Tenshi's Plugins. You may need to reopen settings after removing the manager.",
+				confirmText: "Remove All",
+			},
+			clear: {
+				title: "Clear All Plugin Data?",
+				content: "This permanently clears saved settings and data for every installed plugin in the list. This cannot be undone, and enabled plugins may briefly stop and restart.",
+				confirmText: "Clear All",
+			},
+		}[action];
+		showConfirmationAlert({
+			...confirmation,
+			cancelText: "Cancel",
+			onConfirm: () => { void runBulkAction(action); },
+		});
+	};
+
+	const showManageActions = () => {
+		if (!showSimpleActionSheet) {
+			console.error("[Tenshi's Plugins] Revenge's plugin action sheet is unavailable.");
+			showToast("Plugin management actions are unavailable", getAssetIDByName("Warning"));
+			return;
+		}
+
+		showSimpleActionSheet({
+			key: "ManagePlugins",
+			header: {
+				title: "Manage Plugins",
+				subtitle: "Choose an action to perform.",
+				onClose: hideActionSheet,
+			},
+			options: [
+				{
+					label: "Install All",
+					icon: getAssetIDByName("DownloadIcon"),
+					onPress: () => {
+						hideActionSheet?.();
+						confirmBulkAction("install");
+					},
+				},
+				{
+					label: "Remove All",
+					icon: getAssetIDByName("TrashIcon"),
+					isDestructive: true,
+					onPress: () => {
+						hideActionSheet?.();
+						confirmBulkAction("remove");
+					},
+				},
+				{
+					label: "Clear All",
+					icon: getAssetIDByName("CopyIcon"),
+					isDestructive: true,
+					onPress: () => {
+						hideActionSheet?.();
+						confirmBulkAction("clear");
+					},
+				},
+			],
+		});
+	};
+
 	const confirmRestart = () => {
 		showConfirmationAlert({
 			title: "Restart Discord?",
@@ -256,28 +415,11 @@ export default function Settings() {
 			cancelText: "Cancel",
 			onConfirm: () => {
 				void (async () => {
-					const wasEnabled = !!installed.instance.enabled;
-					let stopped = false;
 					try {
-						if (wasEnabled) {
-							stopPlugin(installed.key, false);
-							stopped = true;
-						}
-						await createMMKVBackend(installed.key).set({});
-						if (stopped) {
-							await startPlugin(installed.key);
-							stopped = false;
-						}
+						await clearPluginData(entry, installed);
 						showToast(`${entry.name} data cleared`, getAssetIDByName("Check"));
 					} catch (error) {
 						console.error(`[Tenshi's Plugins] Failed to clear ${entry.name} data.`, error);
-						if (stopped) {
-							try {
-								await startPlugin(installed.key);
-							} catch (restartError) {
-								console.error(`[Tenshi's Plugins] Failed to restart ${entry.name} after clearing data.`, restartError);
-							}
-						}
 						showToast(`Failed to clear ${entry.name} data`, getAssetIDByName("Warning"));
 					}
 				})();
@@ -395,10 +537,25 @@ export default function Settings() {
 					marginBottom: 12,
 				}}
 			>
-				<RN.Text style={{ color: "#f2f3f5", fontSize: 20, fontWeight: "700" }}>
-					Tenshi's Plugins
-				</RN.Text>
 				<RN.View style={{ flexDirection: "row", alignItems: "center" }}>
+					<RN.TouchableOpacity
+						accessibilityLabel="Manage Plugins"
+						accessibilityRole="button"
+						disabled={fetchingAll || Object.values(busy).some(Boolean)}
+						onPress={showManageActions}
+						style={{
+							minHeight: 40,
+							paddingHorizontal: 12,
+							alignItems: "center",
+							justifyContent: "center",
+							borderRadius: 12,
+							backgroundColor: "#5865f2",
+							opacity: fetchingAll || Object.values(busy).some(Boolean) ? 0.6 : 1,
+						}}
+					>
+						<RN.Text style={{ color: "#ffffff", fontWeight: "600" }}>Manage</RN.Text>
+					</RN.TouchableOpacity>
+					<RN.View style={{ width: 8 }} />
 					<RN.TouchableOpacity
 						accessibilityLabel="Fetch All Plugins"
 						accessibilityRole="button"
