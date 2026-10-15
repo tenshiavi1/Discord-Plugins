@@ -22,12 +22,45 @@ type PluginManifest = {
 	[key: string]: unknown;
 };
 
+async function fetchWithRetry(url: string): Promise<Response> {
+	const maxAttempts = 3;
+	let lastError: unknown;
+
+	for (let attempt = 0; attempt < maxAttempts; attempt++) {
+		const controller = new AbortController();
+		const timeout = setTimeout(() => controller.abort(), 12_000);
+		let response: Response;
+		try {
+			response = await fetch(url, { cache: "no-store", signal: controller.signal });
+		} catch (error) {
+			lastError = controller.signal.aborted
+				? new Error(`Request timed out while fetching ${url}.`, { cause: error })
+				: error;
+			clearTimeout(timeout);
+			if (attempt < maxAttempts - 1) {
+				await new Promise((resolve) => setTimeout(resolve, 250 * (attempt + 1)));
+				continue;
+			}
+			break;
+		}
+		clearTimeout(timeout);
+
+		if (response.ok) return response;
+		lastError = new Error(`Request for ${url} returned HTTP ${response.status}.`);
+		if (response.status !== 408 && response.status !== 429 && response.status < 500) {
+			throw lastError;
+		}
+		if (attempt < maxAttempts - 1) {
+			await new Promise((resolve) => setTimeout(resolve, 250 * (attempt + 1)));
+		}
+	}
+
+	throw lastError instanceof Error ? lastError : new Error(`Could not fetch ${url}.`);
+}
+
 async function fetchPluginBundle(url: string, expectedName: string): Promise<{ manifest: PluginManifest; js: string }> {
 	const baseUrl = url.endsWith("/") ? url : `${url}/`;
-	const manifestResponse = await fetch(`${baseUrl}manifest.json`, { cache: "no-store" });
-	if (!manifestResponse.ok) {
-		throw new Error(`Manifest request returned HTTP ${manifestResponse.status}.`);
-	}
+	const manifestResponse = await fetchWithRetry(`${baseUrl}manifest.json`);
 	const manifestValue: unknown = await manifestResponse.json();
 	if (
 		typeof manifestValue !== "object" ||
@@ -53,10 +86,7 @@ async function fetchPluginBundle(url: string, expectedName: string): Promise<{ m
 		throw new Error(`The ${expectedName} manifest contains an unsafe bundle path.`);
 	}
 
-	const bundleResponse = await fetch(`${baseUrl}${main}`, { cache: "no-store" });
-	if (!bundleResponse.ok) {
-		throw new Error(`Bundle request returned HTTP ${bundleResponse.status}.`);
-	}
+	const bundleResponse = await fetchWithRetry(`${baseUrl}${main}`);
 	const js = await bundleResponse.text();
 	if (!js.trim() || js.trimStart().startsWith("<")) {
 		throw new Error(`The bundle at ${baseUrl}${main} is empty or is not JavaScript.`);
@@ -254,6 +284,9 @@ export default function Settings() {
 
 			if (stopped) {
 				await startPlugin(installed.key);
+				if (existingPlugin?.enabled && !plugins[installed.key]?.enabled) {
+					throw new Error(`${entry.name} was fetched but Revenge could not restart it.`);
+				}
 				stopped = false;
 			}
 		} catch (error) {
@@ -310,22 +343,54 @@ export default function Settings() {
 			const failedPlugins: string[] = [];
 			let fetchedCount = 0;
 			let availableCount = 0;
+			const targets = orderedPlugins
+				.map((entry) => ({ entry, installed: findInstalledPlugin(entry) }))
+				.filter(
+					(target): target is {
+						entry: ManagedPlugin;
+						installed: NonNullable<ReturnType<typeof findInstalledPlugin>>;
+					} => target.installed !== undefined,
+				);
+			availableCount = orderedPlugins.length - targets.length;
+			setFetchTotal(orderedPlugins.length);
+			let nextTargetIndex = 0;
+			let completedCount = availableCount;
+			const parallelTargets = targets.filter(({ entry }) => entry.name !== "Tenshi's Plugins");
+			const managerTarget = targets.find(({ entry }) => entry.name === "Tenshi's Plugins");
+			setFetchProgress(availableCount);
 
-			for (const [index, entry] of orderedPlugins.entries()) {
-				setFetchProgress(index + 1);
-				const installed = findInstalledPlugin(entry);
-				if (!installed) {
-					availableCount += 1;
-					continue;
+			const worker = async () => {
+				while (nextTargetIndex < parallelTargets.length) {
+					const target = parallelTargets[nextTargetIndex++];
+					try {
+						await refetchPlugin(target.entry, target.installed);
+						fetchedCount++;
+					} catch (error) {
+						console.error(`[Tenshi's Plugins] Fetch All failed for ${target.entry.name}.`, error);
+						failedPlugins.push(target.entry.name);
+					} finally {
+						completedCount++;
+						setFetchProgress(completedCount);
+					}
 				}
+			};
+
+			await Promise.all(
+				Array.from({ length: Math.min(3, parallelTargets.length) }, () => worker()),
+			);
+			if (managerTarget) {
 				try {
-					await refetchPlugin(entry, installed);
-					fetchedCount += 1;
+					await refetchPlugin(managerTarget.entry, managerTarget.installed);
+					fetchedCount++;
 				} catch (error) {
-					console.error(`[Tenshi's Plugins] Fetch All failed for ${entry.name}.`, error);
-					failedPlugins.push(entry.name);
+					console.error(`[Tenshi's Plugins] Fetch All failed for ${managerTarget.entry.name}.`, error);
+					failedPlugins.push(managerTarget.entry.name);
+				} finally {
+					completedCount++;
+					setFetchProgress(completedCount);
 				}
 			}
+			setFetchProgress(orderedPlugins.length);
 
 			if (failedPlugins.length > 0) {
 				showToast(
@@ -723,6 +788,26 @@ export default function Settings() {
 					</RN.TouchableOpacity>
 				</RN.View>
 			</RN.View>
+			{fetchingAll && (
+				<RN.View
+					accessibilityRole="progressbar"
+					accessibilityLabel={`Plugin operation progress: ${fetchProgress} of ${fetchTotal}`}
+					style={{
+						flexDirection: "row",
+						alignItems: "center",
+						paddingHorizontal: 12,
+						paddingVertical: 10,
+						marginBottom: 12,
+						borderRadius: 12,
+						backgroundColor: "#2b2d31",
+					}}
+				>
+					<RN.ActivityIndicator size="small" />
+					<RN.Text style={{ color: "#dbdee1", marginLeft: 10 }}>
+						{fetchTotal > 0 ? `Updating plugins ${fetchProgress}/${fetchTotal}` : "Loading plugin catalog..."}
+					</RN.Text>
+				</RN.View>
+			)}
 			<RN.View
 				style={{
 					flexDirection: "row",
