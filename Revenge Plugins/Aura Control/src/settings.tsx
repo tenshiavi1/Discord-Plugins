@@ -2,7 +2,7 @@ import { React, ReactNative as RN } from "@vendetta/metro/common";
 import { storage } from "@vendetta/plugin";
 import { useProxy } from "@vendetta/storage";
 import { findByProps } from "../../compat";
-import { showToast } from "@vendetta/ui/toasts";
+import { showToast } from "../../shared/toast";
 import StableTextInput from "../../StableTextInput";
 import {
 	ACTIVITY_TYPES,

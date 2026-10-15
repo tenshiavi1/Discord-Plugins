@@ -1,5 +1,5 @@
 import { findByProps } from "../../compat";
-import { showToast } from "@vendetta/ui/toasts";
+import { showToast } from "../../shared/toast";
 import { storage } from "@vendetta/plugin";
 import { React, NavigationNative } from "@vendetta/metro/common";
 import { getAssetIDByName } from "@vendetta/ui/assets";

@@ -4,7 +4,7 @@ import { storage } from "@vendetta/plugin";
 import { after, before } from "@vendetta/patcher";
 import { findInReactTree } from "@vendetta/utils";
 import { getAssetIDByName } from "@vendetta/ui/assets";
-import { showToast } from "@vendetta/ui/toasts";
+import { showToast } from "../../shared/toast";
 
 const channelMessages = findByProps("_channelMessages");
 const messageStore = findByProps("getMessage", "getMessages");

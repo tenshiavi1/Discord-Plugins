@@ -3,6 +3,7 @@ import { constants, React, ReactNative as RN } from "@vendetta/metro/common";
 import AlertContent from "./AlertContent";
 import { Settings } from "./settings";
 import { getAssetIDByName } from "@vendetta/ui/assets";
+import { showToast } from "../../shared/toast";
 
 import { after, instead } from "@vendetta/patcher";
 import { showConfirmationAlert } from "@vendetta/ui/alerts";

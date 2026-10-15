@@ -3,7 +3,7 @@ import { useProxy } from "@vendetta/storage";
 import { storage } from "@vendetta/plugin";
 import { findByProps } from "../../compat";
 import { getAssetIDByName } from "@vendetta/ui/assets";
-import { showToast } from "@vendetta/ui/toasts";
+import { showToast } from "../../shared/toast";
 import { clearMessageHistory, updateMessageHistorySettings } from "./messageHistory";
 import { setHiddenChannelFeatureEnabled } from "./hiddenChannelToggle";
 import { setServerInfoFeatureEnabled } from "./serverInfo";

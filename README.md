@@ -32,6 +32,8 @@ Each Revenge plugin bundle includes a shared module resolver. It prefers Revenge
 module lookups and falls back to capability- and name-based discovery when those lookups
 change, logging when a fallback is used. This helps with module reshuffling, but cannot
 automatically repair removed APIs or changed Discord behavior; those still require a plugin update.
+Revenge plugin notifications use a shared toast helper with a 3-second display time and a
+100-character limit to keep messages readable on mobile.
 
 ## Vencord Plugins
 

@@ -1,7 +1,7 @@
 import { React, ReactNative as RN } from "@vendetta/metro/common";
 import { storage } from "@vendetta/plugin";
 import { findByProps } from "../../compat";
-import { showToast } from "@vendetta/ui/toasts";
+import { showToast } from "../../shared/toast";
 import { useProxy } from "@vendetta/storage";
 import { getAssetIDByName } from "@vendetta/ui/assets";
 import StableTextInput from "../../StableTextInput";

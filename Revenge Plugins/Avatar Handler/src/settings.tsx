@@ -3,7 +3,7 @@ import { storage } from "@vendetta/plugin";
 import { useProxy } from "@vendetta/storage";
 import { showConfirmationAlert } from "@vendetta/ui/alerts";
 import { getAssetIDByName } from "@vendetta/ui/assets";
-import { showToast } from "@vendetta/ui/toasts";
+import { showToast } from "../../shared/toast";
 import { findByProps } from "../../compat";
 import {
 	disableNativeSwitcher,

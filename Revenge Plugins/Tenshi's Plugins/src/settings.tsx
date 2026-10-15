@@ -7,7 +7,7 @@ import { useProxy } from "@vendetta/storage";
 import { showConfirmationAlert } from "@vendetta/ui/alerts";
 import { getAssetIDByName } from "@vendetta/ui/assets";
 import StableTextInput from "../../StableTextInput";
-import { showToast } from "@vendetta/ui/toasts";
+import { showToast } from "../../shared/toast";
 import { discoverManagedPlugins, fetchWithRetry, MANAGED_PLUGINS, type ManagedPlugin } from "./catalog";
 import { clearLastCrash, getCrashReasons, getLastCrash } from "./crashLog";
 import { reloadAndReturnToManager } from "./managerNavigation";
@@ -15,10 +15,6 @@ import { reloadAndReturnToManager } from "./managerNavigation";
 const { TableRow, TableRowGroup } = findByProps("TableRow", "TableRowGroup");
 const showSimpleActionSheet = findByProps("showSimpleActionSheet")?.showSimpleActionSheet;
 const hideActionSheet = findByProps("openLazy", "hideActionSheet")?.hideActionSheet;
-
-function pluralize(count: number, singular: string): string {
-	return `${count} ${singular}${count === 1 ? "" : "s"}`;
-}
 
 type PluginManifest = {
 	name: string;
@@ -31,9 +27,42 @@ function errorMessage(error: unknown): string {
 	return error instanceof Error ? error.message : String(error);
 }
 
-function shortenError(error: unknown): string {
-	const message = errorMessage(error);
-	return message.length > 180 ? `${message.slice(0, 177)}...` : message;
+type ManagerActivityStatus = "success" | "failure" | "info";
+
+type ManagerActivityRecord = {
+	timestamp: number;
+	status: ManagerActivityStatus;
+	summary: string;
+	details?: string;
+};
+
+const MANAGER_ACTIVITY_KEY = "managerActivity";
+const MANAGER_ACTIVITY_LIMIT = 50;
+const MANAGER_ACTIVITY_DETAIL_LIMIT = 8000;
+
+function isManagerActivityRecord(record: unknown): record is ManagerActivityRecord {
+	if (typeof record !== "object" || record === null) return false;
+	if (
+		!("timestamp" in record) ||
+		typeof record.timestamp !== "number" ||
+		!Number.isFinite(record.timestamp) ||
+		Math.abs(record.timestamp) > 8.64e15
+	) return false;
+	if (!("status" in record) || !["success", "failure", "info"].includes(String(record.status))) return false;
+	if (!("summary" in record) || typeof record.summary !== "string") return false;
+	return !("details" in record) || typeof record.details === "string";
+}
+
+function getManagerActivity(): ManagerActivityRecord[] {
+	const records: unknown = storage[MANAGER_ACTIVITY_KEY];
+	return Array.isArray(records)
+		? records.filter(isManagerActivityRecord).slice(0, MANAGER_ACTIVITY_LIMIT)
+		: [];
+}
+
+function errorDetails(error: unknown): string {
+	if (error instanceof Error) return error.stack || `${error.name}: ${error.message}`;
+	return String(error);
 }
 
 async function fetchPluginBundle(url: string, expectedName: string): Promise<{ manifest: PluginManifest; js: string }> {
@@ -165,7 +194,8 @@ export default function Settings() {
 	const [fetchingAll, setFetchingAll] = React.useState(false);
 	const [fetchProgress, setFetchProgress] = React.useState(0);
 	const [fetchTotal, setFetchTotal] = React.useState(0);
-	const [fetchFailures, setFetchFailures] = React.useState<string[]>([]);
+	const [activityLog, setActivityLog] = React.useState<ManagerActivityRecord[]>(getManagerActivity);
+	const [activityStatus, setActivityStatus] = React.useState("");
 	const [catalog, setCatalog] = React.useState(MANAGED_PLUGINS);
 	const [searchQuery, setSearchQuery] = React.useState("");
 	const [searchInputReset, setSearchInputReset] = React.useState(0);
@@ -204,26 +234,55 @@ export default function Settings() {
 		)
 		.sort((left, right) => left.name.localeCompare(right.name));
 
+	const recordActivity = (
+		summary: string,
+		status: ManagerActivityStatus,
+		details?: string,
+	) => {
+		const record: ManagerActivityRecord = {
+			timestamp: Date.now(),
+			status,
+			summary,
+			details: details?.slice(0, MANAGER_ACTIVITY_DETAIL_LIMIT),
+		};
+		const next = [record, ...getManagerActivity()].slice(0, MANAGER_ACTIVITY_LIMIT);
+		storage[MANAGER_ACTIVITY_KEY] = next;
+		setActivityLog(next);
+	};
+
+	const formatActivityLog = () => activityLog
+		.map((record) => {
+			const timestamp = new Date(record.timestamp).toISOString();
+			return `[${timestamp}] ${record.status.toUpperCase()}: ${record.summary}${record.details ? `\n${record.details}` : ""}`;
+		})
+		.join("\n\n");
+
 	const changePlugin = async (entry: ManagedPlugin) => {
 		if (busy[entry.url]) return;
 		setBusy((current) => ({ ...current, [entry.url]: true }));
 		const installed = findInstalledPlugin(entry);
+		const action = installed ? "Remove" : "Install";
+		setActivityStatus(`${action} ${entry.name}…`);
 
 		try {
 			if (installed) {
 				await removePlugin(installed.key);
+				recordActivity(`${entry.name} removed`, "success");
 				showToast(`${entry.name} was removed.`, getAssetIDByName("Check"));
 			} else {
 				await installPlugin(entry.url, true);
+				recordActivity(`${entry.name} installed`, "success");
 				showToast(`${entry.name} was installed.`, getAssetIDByName("Check"));
 			}
 		} catch (error) {
 			console.error(`[Tenshi's Plugins] Failed to ${installed ? "delete" : "install"} ${entry.name}.`, error);
+			recordActivity(`${action} ${entry.name} failed`, "failure", errorDetails(error));
 			showToast(
-				`Could not ${installed ? "remove" : "install"} ${entry.name}. Check your connection and try again.`,
+				`Could not ${action.toLocaleLowerCase()} ${entry.name}. Check the activity log for details.`,
 				getAssetIDByName("Warning"),
 			);
 		} finally {
+			setActivityStatus("");
 			setBusy((current) => ({ ...current, [entry.url]: false }));
 		}
 	};
@@ -323,8 +382,11 @@ export default function Settings() {
 	const fetchAllPlugins = async () => {
 		if (fetchingAll || Object.values(busy).some(Boolean)) return;
 		setFetchingAll(true);
-		setFetchFailures([]);
 		setFetchProgress(0);
+		setFetchTotal(0);
+		setActivityStatus("Loading plugin catalog…");
+		recordActivity("Fetch All started", "info");
+		const failedPlugins: string[] = [];
 		try {
 			const discoveredPlugins = await discoverManagedPlugins();
 			setCatalog(discoveredPlugins);
@@ -332,7 +394,6 @@ export default function Settings() {
 			const orderedPlugins = [...discoveredPlugins].sort(
 				(left, right) => Number(left.name === "Tenshi's Plugins") - Number(right.name === "Tenshi's Plugins"),
 			);
-			const failedPlugins: string[] = [];
 			let updatedCount = 0;
 			let unchangedCount = 0;
 			let availableCount = 0;
@@ -355,6 +416,7 @@ export default function Settings() {
 			const worker = async () => {
 				while (nextTargetIndex < parallelTargets.length) {
 					const target = parallelTargets[nextTargetIndex++];
+					setActivityStatus(`Fetching ${target.entry.name}…`);
 					try {
 						if (await refetchPlugin(target.entry, target.installed)) updatedCount++;
 						else unchangedCount++;
@@ -362,7 +424,7 @@ export default function Settings() {
 						console.error(`[Tenshi's Plugins] Fetch All failed for ${target.entry.name}.`, error);
 						const failure = `${target.entry.name}: ${errorMessage(error)}`;
 						failedPlugins.push(failure);
-						setFetchFailures((current) => [...current, failure]);
+						recordActivity(`${target.entry.name} fetch failed`, "failure", errorDetails(error));
 					} finally {
 						completedCount++;
 						setFetchProgress(completedCount);
@@ -374,6 +436,7 @@ export default function Settings() {
 				Array.from({ length: Math.min(3, parallelTargets.length) }, () => worker()),
 			);
 			if (managerTarget) {
+				setActivityStatus(`Fetching ${managerTarget.entry.name}…`);
 				try {
 					if (await refetchPlugin(managerTarget.entry, managerTarget.installed)) updatedCount++;
 					else unchangedCount++;
@@ -381,7 +444,7 @@ export default function Settings() {
 					console.error(`[Tenshi's Plugins] Fetch All failed for ${managerTarget.entry.name}.`, error);
 					const failure = `${managerTarget.entry.name}: ${errorMessage(error)}`;
 					failedPlugins.push(failure);
-					setFetchFailures((current) => [...current, failure]);
+					recordActivity(`${managerTarget.entry.name} fetch failed`, "failure", errorDetails(error));
 				} finally {
 					completedCount++;
 					setFetchProgress(completedCount);
@@ -390,20 +453,31 @@ export default function Settings() {
 			setFetchProgress(orderedPlugins.length);
 
 			if (failedPlugins.length > 0) {
+				recordActivity(
+					`Fetch All finished with ${failedPlugins.length} failure${failedPlugins.length === 1 ? "" : "s"}`,
+					"failure",
+					failedPlugins.join("\n"),
+				);
 				showToast(
-					`Plugin catalog refreshed, but ${pluralize(failedPlugins.length, "plugin")} could not be fetched. Open Fetch Details to see the errors.`,
+					`Fetch finished with ${failedPlugins.length} error${failedPlugins.length === 1 ? "" : "s"}. See the activity log.`,
 					getAssetIDByName("Warning"),
 				);
 			} else {
+				recordActivity(
+					`Fetch All finished: ${updatedCount} updated, ${unchangedCount} unchanged, ${availableCount} available`,
+					"success",
+				);
 				showToast(
-					`Plugin catalog refreshed. ${pluralize(updatedCount, "plugin")} updated, ${pluralize(unchangedCount, "plugin")} already up to date, and ${pluralize(availableCount, "plugin")} available to install.`,
+					`Fetch complete: ${updatedCount} updated, ${unchangedCount} current, ${availableCount} available.`,
 					getAssetIDByName("Check"),
 				);
 			}
 		} catch (error) {
 			console.error("[Tenshi's Plugins] Failed to fetch the plugin catalog.", error);
+			recordActivity("Fetch All failed", "failure", errorDetails(error));
 			showToast("Could not refresh the plugin catalog. Check your connection and try again.", getAssetIDByName("Warning"));
 		} finally {
+			setActivityStatus("");
 			setFetchingAll(false);
 		}
 	};
@@ -427,6 +501,7 @@ export default function Settings() {
 			return action === "install" ? !installed : !!installed;
 		});
 		if (targets.length === 0) {
+			recordActivity(`${action} All skipped`, "info", "No plugins matched this action.");
 			showToast(
 				action === "install"
 					? "Every plugin in the catalog is already installed."
@@ -439,6 +514,9 @@ export default function Settings() {
 		setFetchingAll(true);
 		setFetchProgress(0);
 		setFetchTotal(targets.length);
+		const actionLabel = `${action.charAt(0).toUpperCase()}${action.slice(1)} All`;
+		setActivityStatus(`${actionLabel}…`);
+		recordActivity(`${actionLabel} started`, "info", `${targets.length} plugin${targets.length === 1 ? "" : "s"} queued.`);
 		const orderedTargets = [...targets].sort(
 			(left, right) => Number(left.name === "Tenshi's Plugins") - Number(right.name === "Tenshi's Plugins"),
 		);
@@ -448,6 +526,7 @@ export default function Settings() {
 		try {
 			for (const [index, entry] of orderedTargets.entries()) {
 				setFetchProgress(index + 1);
+				setActivityStatus(`${actionLabel}: ${entry.name}…`);
 				const installed = findInstalledPlugin(entry);
 				try {
 					if (action === "install") {
@@ -464,6 +543,7 @@ export default function Settings() {
 				} catch (error) {
 					console.error(`[Tenshi's Plugins] Failed to ${action} ${entry.name} during bulk management.`, error);
 					failedPlugins.push(entry.name);
+					recordActivity(`${actionLabel}: ${entry.name} failed`, "failure", errorDetails(error));
 				}
 			}
 			if (action === "clear") {
@@ -472,24 +552,28 @@ export default function Settings() {
 				} catch (error) {
 					console.error("[Tenshi's Plugins] Failed to clear the last crash log.", error);
 					failedPlugins.push("Last crash log");
+					recordActivity("Clear All: crash log failed", "failure", errorDetails(error));
 				}
 			}
 		} finally {
+			setActivityStatus("");
 			setFetchingAll(false);
 		}
 
 		const completionMessage = action === "install"
-			? `${pluralize(completed, "plugin")} installed`
+			? `${completed} installed`
 			: action === "remove"
-				? `${pluralize(completed, "plugin")} removed`
-				: `${pluralize(completed, "plugin")} had their data cleared`;
+				? `${completed} removed`
+				: `${completed} cleared`;
 		if (failedPlugins.length > 0) {
+			recordActivity(`${actionLabel} partially completed: ${completionMessage}`, "failure", `Failed: ${failedPlugins.join(", ")}`);
 			showToast(
-				`Bulk action partially completed. ${completionMessage}. Could not complete the action for: ${failedPlugins.join(", ")}.`,
+				`${actionLabel} partly completed: ${completionMessage}; ${failedPlugins.length} failed. See the activity log.`,
 				getAssetIDByName("Warning"),
 			);
 		} else {
-			showToast(`Bulk action complete. ${completionMessage}.`, getAssetIDByName("Check"));
+			recordActivity(`${actionLabel} complete: ${completionMessage}`, "success");
+			showToast(`${actionLabel} complete: ${completionMessage}.`, getAssetIDByName("Check"));
 		}
 	};
 
@@ -579,9 +663,11 @@ export default function Settings() {
 			cancelText: "Cancel",
 			onConfirm: () => {
 				try {
+					recordActivity("Discord restart requested", "info");
 					reloadAndReturnToManager();
 				} catch (error) {
 					console.error("[Tenshi's Plugins] Could not reload Revenge.", error);
+					recordActivity("Discord restart failed", "failure", errorDetails(error));
 					showToast("Could not restart Revenge. Check the console for details.", getAssetIDByName("Warning"));
 				}
 			},
@@ -628,12 +714,17 @@ export default function Settings() {
 			cancelText: "Cancel",
 			onConfirm: () => {
 				void (async () => {
+					setActivityStatus(`Clearing ${entry.name} data…`);
 					try {
 						await clearPluginData(entry, installed);
+						recordActivity(`${entry.name} data cleared`, "success");
 						showToast(`Cleared the saved data for ${entry.name}.`, getAssetIDByName("Check"));
 					} catch (error) {
 						console.error(`[Tenshi's Plugins] Failed to clear ${entry.name} data.`, error);
-						showToast(`Could not clear the saved data for ${entry.name}. Check the console for details.`, getAssetIDByName("Warning"));
+						recordActivity(`Clear ${entry.name} data failed`, "failure", errorDetails(error));
+						showToast(`Could not clear ${entry.name} data. See the activity log.`, getAssetIDByName("Warning"));
+					} finally {
+						setActivityStatus("");
 					}
 				})();
 			},
@@ -670,9 +761,14 @@ export default function Settings() {
 					onPress: () => {
 						hideActionSheet?.();
 						void (async () => {
-							setFetchFailures([]);
+							setActivityStatus(`Fetching ${entry.name}…`);
+							recordActivity(`${entry.name} refetch started`, "info");
 							try {
 								const updated = await refetchPlugin(entry, installed);
+								recordActivity(
+									updated ? `${entry.name} refetched` : `${entry.name} is already up to date`,
+									"success",
+								);
 								showToast(
 									updated
 										? `${entry.name} was refreshed successfully.`
@@ -681,11 +777,13 @@ export default function Settings() {
 								);
 							} catch (error) {
 								console.error(`[Tenshi's Plugins] Failed to refetch ${entry.name}.`, error);
-								setFetchFailures([`${entry.name}: ${errorMessage(error)}`]);
+								recordActivity(`${entry.name} refetch failed`, "failure", errorDetails(error));
 								showToast(
-									`Could not refresh ${entry.name}: ${shortenError(error)}`,
+									`Could not refresh ${entry.name}. See the activity log.`,
 									getAssetIDByName("Warning"),
 								);
+							} finally {
+								setActivityStatus("");
 							}
 						})();
 					},
@@ -694,8 +792,15 @@ export default function Settings() {
 					label: "Copy URL",
 					icon: getAssetIDByName("LinkIcon"),
 					onPress: () => {
-						clipboard.setString(installed.key);
-						showToast(`Copied the install URL for ${entry.name} to your clipboard.`, getAssetIDByName("Check"));
+						try {
+							clipboard.setString(installed.key);
+							recordActivity(`${entry.name} install URL copied`, "success");
+							showToast(`Copied the install URL for ${entry.name}.`, getAssetIDByName("Check"));
+						} catch (error) {
+							console.error(`[Tenshi's Plugins] Could not copy the install URL for ${entry.name}.`, error);
+							recordActivity(`Copy ${entry.name} URL failed`, "failure", errorDetails(error));
+							showToast(`Could not copy ${entry.name}'s URL.`, getAssetIDByName("Warning"));
+						}
 					},
 				},
 				{
@@ -703,6 +808,10 @@ export default function Settings() {
 					icon: getAssetIDByName("DownloadIcon"),
 					onPress: () => {
 						installed.instance.update = installed.instance.update === false;
+						recordActivity(
+							`Automatic updates ${installed.instance.update ? "enabled" : "disabled"} for ${entry.name}`,
+							"success",
+						);
 						showToast(
 							`Automatic updates for ${entry.name} are ${installed.instance.update ? "enabled" : "disabled"}.`,
 							getAssetIDByName("Check"),
@@ -801,71 +910,6 @@ export default function Settings() {
 					</RN.TouchableOpacity>
 				</RN.View>
 			</RN.View>
-			{fetchingAll && (
-				<RN.View
-					accessibilityRole="progressbar"
-					accessibilityLabel={`Plugin operation progress: ${fetchProgress} of ${fetchTotal}`}
-					style={{
-						flexDirection: "row",
-						alignItems: "center",
-						paddingHorizontal: 12,
-						paddingVertical: 10,
-						marginBottom: 12,
-						borderRadius: 12,
-						backgroundColor: "#2b2d31",
-					}}
-				>
-					<RN.ActivityIndicator size="small" />
-					<RN.Text style={{ color: "#dbdee1", marginLeft: 10 }}>
-						{fetchTotal > 0 ? `Updating plugins ${fetchProgress}/${fetchTotal}` : "Loading plugin catalog..."}
-					</RN.Text>
-				</RN.View>
-			)}
-			{fetchFailures.length > 0 && (
-				<RN.View
-					style={{
-						marginBottom: 12,
-						padding: 12,
-						borderRadius: 12,
-						backgroundColor: "#3b2427",
-					}}
-				>
-					<RN.Text style={{ color: "#f2f3f5", fontSize: 15, fontWeight: "600", marginBottom: 8 }}>
-						Fetch Details
-					</RN.Text>
-					{fetchFailures.map((failure, index) => (
-						<RN.Text
-							key={`${index}-${failure}`}
-							selectable
-							style={{ color: "#f2f3f5", fontSize: 12, marginBottom: 6 }}
-						>
-							{failure}
-						</RN.Text>
-					))}
-					<RN.TouchableOpacity
-						accessibilityRole="button"
-						accessibilityLabel="Copy plugin fetch failure details"
-						onPress={() => {
-							try {
-								clipboard.setString(fetchFailures.join("\n"));
-								showToast("Copied the plugin fetch errors to your clipboard.", getAssetIDByName("Check"));
-							} catch (error) {
-								console.error("[Tenshi's Plugins] Could not copy fetch failure details.", error);
-								showToast("Could not copy the fetch errors. Select the details above to copy them.", getAssetIDByName("Warning"));
-							}
-						}}
-						style={{
-							minHeight: 40,
-							alignItems: "center",
-							justifyContent: "center",
-							borderRadius: 8,
-							backgroundColor: "#292b38",
-						}}
-					>
-						<RN.Text style={{ color: "#f2f3f5", fontWeight: "600" }}>Copy Fetch Errors</RN.Text>
-					</RN.TouchableOpacity>
-				</RN.View>
-			)}
 			<RN.View
 				style={{
 					flexDirection: "row",
@@ -898,6 +942,76 @@ export default function Settings() {
 						<RN.Text style={{ color: "#b5bac1", fontSize: 16 }}>Clear</RN.Text>
 					</RN.TouchableOpacity>
 				)}
+			</RN.View>
+			<RN.View
+				style={{
+					marginBottom: 12,
+					padding: 12,
+					borderRadius: 12,
+					backgroundColor: "#2b2d31",
+				}}
+			>
+				<RN.Text style={{ color: "#f2f3f5", fontSize: 15, fontWeight: "600", marginBottom: 8 }}>
+					Manager Activity
+				</RN.Text>
+				<RN.View
+					accessibilityRole={fetchingAll ? "progressbar" : undefined}
+					accessibilityLabel={fetchingAll ? `Plugin operation progress: ${fetchProgress} of ${fetchTotal}` : undefined}
+					style={{ flexDirection: "row", alignItems: "center", marginBottom: 8 }}
+				>
+					{(fetchingAll || Object.values(busy).some(Boolean)) && <RN.ActivityIndicator size="small" />}
+					<RN.Text style={{ color: "#dbdee1", marginLeft: 8, flex: 1 }}>
+						{activityStatus || activityLog[0]?.summary || "No manager activity recorded."}
+						{fetchingAll && fetchTotal > 0 ? ` (${fetchProgress}/${fetchTotal})` : ""}
+					</RN.Text>
+				</RN.View>
+				{activityLog.slice(0, 5).map((record, index) => (
+					<RN.View key={`${record.timestamp}-${index}`} style={{ marginBottom: 8 }}>
+						<RN.Text
+							selectable
+							style={{
+								color: record.status === "failure" ? "#f38ba8" : "#b5bac1",
+								fontSize: 12,
+								fontFamily: "monospace",
+							}}
+						>
+							{`${formatCrashDate(record.timestamp)} · ${record.status.toUpperCase()} · ${record.summary}`}
+						</RN.Text>
+						{record.details && (
+							<RN.Text
+								selectable
+								numberOfLines={3}
+								style={{ color: "#b5bac1", fontSize: 11, marginTop: 2 }}
+							>
+								{record.details}
+							</RN.Text>
+						)}
+					</RN.View>
+				))}
+				<RN.TouchableOpacity
+					accessibilityRole="button"
+					accessibilityLabel="Copy manager activity log"
+					disabled={activityLog.length === 0}
+					onPress={() => {
+						try {
+							clipboard.setString(formatActivityLog());
+							showToast("Copied the manager activity log.", getAssetIDByName("Check"));
+						} catch (error) {
+							console.error("[Tenshi's Plugins] Could not copy the manager activity log.", error);
+							showToast("Could not copy the activity log.", getAssetIDByName("Warning"));
+						}
+					}}
+					style={{
+						minHeight: 40,
+						alignItems: "center",
+						justifyContent: "center",
+						borderRadius: 8,
+						backgroundColor: "#292b38",
+						opacity: activityLog.length === 0 ? 0.55 : 1,
+					}}
+				>
+					<RN.Text style={{ color: "#f2f3f5", fontWeight: "600" }}>Copy Activity Log</RN.Text>
+				</RN.TouchableOpacity>
 			</RN.View>
 			<RN.View
 				style={{

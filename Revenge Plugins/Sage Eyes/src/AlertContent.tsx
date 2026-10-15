@@ -2,7 +2,7 @@ import { stylesheet, constants, moment, clipboard } from "@vendetta/metro/common
 import { findByProps } from "../../compat";
 import { semanticColors } from '@vendetta/ui';
 import { getAssetIDByName } from "@vendetta/ui/assets";
-import { showToast } from "@vendetta/ui/toasts";
+import { showToast } from "../../shared/toast";
 import { React } from "@vendetta/metro/common";
 const {View, Text, Pressable } = findByProps("Button", "Text", "View");
 

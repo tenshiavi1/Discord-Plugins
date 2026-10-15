@@ -2,7 +2,7 @@ import { findByProps } from "../../compat";
 import { instead } from "@vendetta/patcher";
 import { storage } from "@vendetta/plugin";
 import { registerCommand } from "@vendetta/commands";
-import { showToast } from "@vendetta/ui/toasts";
+import { showToast } from "../../shared/toast";
 import { anonymizeUploadFiles, METHODS, type AnonymizationMethod } from "./filenames";
 import { clearTrackingUrlsInMessage } from "./urls";
 import { clearTypingStatusPatch, setTypingStatusHidden } from "./privacy";

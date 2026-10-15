@@ -2,7 +2,7 @@ import { find, findByProps, findByStoreName } from "../../compat";
 import { clipboard, React, ReactNative as RN } from "@vendetta/metro/common";
 import { after } from "@vendetta/patcher";
 import { getAssetIDByName } from "@vendetta/ui/assets";
-import { showToast } from "@vendetta/ui/toasts";
+import { showToast } from "../../shared/toast";
 
 const guildStore = findByStoreName("GuildStore");
 const guildMemberStore = findByStoreName("GuildMemberStore");
