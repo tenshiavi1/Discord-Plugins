@@ -1,4 +1,4 @@
-import { findByProps } from "@vendetta/metro";
+import { findByProps } from "../../compat";
 import { React } from "@vendetta/metro/common";
 import { after } from "@vendetta/patcher";
 import { getAssetIDByName } from "@vendetta/ui/assets";

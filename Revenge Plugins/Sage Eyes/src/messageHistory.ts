@@ -1,4 +1,4 @@
-import { findByName, findByProps, findByStoreName } from "@vendetta/metro";
+import { findByName, findByProps, findByStoreName } from "../../compat";
 import { FluxDispatcher, React } from "@vendetta/metro/common";
 import { storage } from "@vendetta/plugin";
 import { after, before } from "@vendetta/patcher";

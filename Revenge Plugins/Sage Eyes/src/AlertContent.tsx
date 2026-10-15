@@ -1,5 +1,5 @@
 import { stylesheet, constants, moment, toasts, clipboard } from "@vendetta/metro/common";
-import { findByProps } from "@vendetta/metro";
+import { findByProps } from "../../compat";
 import { semanticColors } from '@vendetta/ui';
 import { getAssetIDByName } from "@vendetta/ui/assets";
 import { showToast } from "@vendetta/ui/toasts";

@@ -1,4 +1,4 @@
-import { find, findByProps, findByName } from "@vendetta/metro";
+import { find, findByProps, findByName } from "../../compat";
 import { constants, React, ReactNative as RN } from "@vendetta/metro/common";
 import AlertContent from "./AlertContent";
 import { Settings } from "./settings";

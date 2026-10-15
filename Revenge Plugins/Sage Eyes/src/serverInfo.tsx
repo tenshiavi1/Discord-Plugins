@@ -1,4 +1,4 @@
-import { find, findByProps, findByStoreName } from "@vendetta/metro";
+import { find, findByProps, findByStoreName } from "../../compat";
 import { clipboard, React, ReactNative as RN } from "@vendetta/metro/common";
 import { after } from "@vendetta/patcher";
 import { getAssetIDByName } from "@vendetta/ui/assets";

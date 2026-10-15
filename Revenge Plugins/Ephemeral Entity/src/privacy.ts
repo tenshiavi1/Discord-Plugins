@@ -1,4 +1,4 @@
-import { findByProps } from "@vendetta/metro";
+import { findByProps } from "../../compat";
 import { instead } from "@vendetta/patcher";
 
 let typingUnpatch: (() => void) | undefined;

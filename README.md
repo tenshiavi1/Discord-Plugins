@@ -24,6 +24,13 @@ Add a plugin's integration URL in Revenge:
 
 The build also publishes the previous singular `Revenge%20Plugin` category path beneath the new repository URL for compatibility.
 
+## Runtime compatibility
+
+Each Revenge plugin bundle includes a shared module resolver. It prefers Revenge's normal
+module lookups and falls back to capability- and name-based discovery when those lookups
+change, logging when a fallback is used. This helps with module reshuffling, but cannot
+automatically repair removed APIs or changed Discord behavior; those still require a plugin update.
+
 ## Vencord Plugins
 
 The [`Vencord Plugins`](./Vencord%20Plugins/README.md) folder is reserved for desktop Vencord plugins and their documentation. These will be maintained separately from the Revenge mobile build.

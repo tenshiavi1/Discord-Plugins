@@ -1,4 +1,4 @@
-import { findByProps } from "@vendetta/metro";
+import { findByProps } from "../../compat";
 import { clipboard, NavigationNative, React, ReactNative as RN } from "@vendetta/metro/common";
 import { storage } from "@vendetta/plugin";
 import { fetchPlugin, getSettings, installPlugin, plugins, removePlugin, startPlugin, stopPlugin } from "@vendetta/plugins";

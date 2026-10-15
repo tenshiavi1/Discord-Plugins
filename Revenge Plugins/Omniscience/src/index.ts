@@ -1,4 +1,4 @@
-import { findByProps } from "@vendetta/metro";
+import { findByProps } from "../../compat";
 import { showToast } from "@vendetta/ui/toasts";
 import { storage } from "@vendetta/plugin";
 import { React, NavigationNative } from "@vendetta/metro/common";
