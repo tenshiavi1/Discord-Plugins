@@ -11,6 +11,7 @@ Mobile plugins compatible with Revenge:
 - [Omniscience](./Revenge%20Plugins/Omniscience/README.md) — Track message keywords across DMs and servers, with optional channel and webhook alerts.
 - [Sage Eyes](./Revenge%20Plugins/Sage%20Eyes/README.md) — View hidden-channel details, server info, and local message edit/deletion history.
 - [Tenshi's Plugins](./Revenge%20Plugins/Tenshi's%20Plugins/README.md) — Manage Revenge plugins, keep Developer Mode on, and review crash reports.
+- [Avatar Handler](./Revenge%20Plugins/Avatar%20Handler/README.md) — Unlock Discord's native mobile account switcher for saved accounts.
 
 Add a plugin's integration URL in Revenge:
 
@@ -21,6 +22,7 @@ Add a plugin's integration URL in Revenge:
 | Omniscience | `https://tenshiavi1.github.io/Discord-Plugins/Revenge%20Plugins/Omniscience/` |
 | Sage Eyes | `https://tenshiavi1.github.io/Discord-Plugins/Revenge%20Plugins/Sage%20Eyes/` |
 | Tenshi's Plugins | `https://tenshiavi1.github.io/Discord-Plugins/Revenge%20Plugins/Tenshi's%20Plugins/` |
+| Avatar Handler | `https://tenshiavi1.github.io/Discord-Plugins/Revenge%20Plugins/Avatar%20Handler/` |
 
 The build also publishes the previous singular `Revenge%20Plugin` category path beneath the new repository URL for compatibility.
 

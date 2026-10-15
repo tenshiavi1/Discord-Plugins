@@ -1,0 +1,13 @@
+{
+  "name": "Avatar Handler",
+  "description": "Unlock Discord's native mobile account switcher for saved accounts.",
+  "authors": [
+    {
+      "name": "tenshiavi"
+    }
+  ],
+  "main": "src/index.ts",
+  "vendetta": {
+    "icon": "ic_person"
+  }
+}

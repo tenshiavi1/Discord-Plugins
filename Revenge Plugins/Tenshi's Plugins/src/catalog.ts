@@ -23,6 +23,7 @@ const PLUGIN_SEARCH_TERMS: Record<string, string> = {
 	Omniscience: "keyword keywords phrase keyword tracking track monitor messages message create server servers guild group groups group dm direct message friends custom users ids ignore bots embeds channel channels webhook webhooks local notifications tracking target exact match whole words case sensitive in sentence imports export json",
 	"Sage Eyes": "hidden channels inaccessible channel access lock icon popup view anyway permissions server info server information server list long press guild details server id owner member count online count channels roles boosts creation date vanity url description general logger deleted messages edit edited message history deleted message history retain logs ignore bot own messages ignored users timestamps cleanup cleanup actions feature toggle",
 	"Tenshi's Plugins": "plugin manager install remove delete refetch fetch all restart search configure settings actions clear data crash logs developer mode developer settings copy id ids advanced discord appearance",
+	"Avatar Handler": "avatar handler multiple accounts alts account switcher switch accounts account manager native saved accounts discord mobile authenticator two factor authentication 2fa login confirmation",
 };
 
 function catalogEntry(name: string, description: string, directoryName = name): ManagedPlugin {
@@ -91,4 +92,5 @@ export const MANAGED_PLUGINS: ManagedPlugin[] = [
 	catalogEntry("Omniscience", "Track message keywords across DMs and servers, with optional channel and webhook alerts."),
 	catalogEntry("Sage Eyes", "View hidden-channel details, server info, and local message edit/deletion history."),
 	catalogEntry("Tenshi's Plugins", "Manage Revenge plugins, keep Developer Mode on, and review crash reports."),
+	catalogEntry("Avatar Handler", "Unlock Discord's native mobile account switcher for saved accounts."),
 ];
