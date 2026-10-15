@@ -71,6 +71,8 @@ function IconButton({
 export default function Settings() {
 	useProxy(plugins);
 	const [busy, setBusy] = React.useState<Record<string, boolean>>({});
+	const [fetchingAll, setFetchingAll] = React.useState(false);
+	const [fetchProgress, setFetchProgress] = React.useState(0);
 	const [searchQuery, setSearchQuery] = React.useState("");
 	const navigation = NavigationNative.useNavigation();
 	const { width: screenWidth, fontScale } = RN.useWindowDimensions();
@@ -101,6 +103,73 @@ export default function Settings() {
 			showToast(`Failed to ${installed ? "delete" : "install"} ${entry.name}`, getAssetIDByName("Warning"));
 		} finally {
 			setBusy((current) => ({ ...current, [entry.url]: false }));
+		}
+	};
+
+	const refetchPlugin = async (
+		entry: ManagedPlugin,
+		installed: NonNullable<ReturnType<typeof findInstalledPlugin>>,
+	) => {
+		let stopped = false;
+		try {
+			if (installed.instance.enabled) {
+				stopPlugin(installed.key, false);
+				stopped = true;
+			}
+			await fetchPlugin(installed.key);
+			if (stopped) {
+				await startPlugin(installed.key);
+				stopped = false;
+			}
+		} catch (error) {
+			if (stopped) {
+				try {
+					await startPlugin(installed.key);
+				} catch (restartError) {
+					console.error(`[Tenshi's Plugins] Failed to restart ${entry.name} after refetch.`, restartError);
+				}
+			}
+			throw error;
+		}
+	};
+
+	const fetchAllPlugins = async () => {
+		if (fetchingAll || Object.values(busy).some(Boolean)) return;
+		setFetchingAll(true);
+		setFetchProgress(0);
+		const orderedPlugins = [...MANAGED_PLUGINS].sort(
+			(left, right) => Number(left.name === "Tenshi's Plugins") - Number(right.name === "Tenshi's Plugins"),
+		);
+		const failedPlugins: string[] = [];
+		let fetchedCount = 0;
+
+		try {
+			for (const [index, entry] of orderedPlugins.entries()) {
+				setFetchProgress(index + 1);
+				try {
+					const installed = findInstalledPlugin(entry);
+					if (installed) {
+						await refetchPlugin(entry, installed);
+					} else {
+						await installPlugin(entry.url, true);
+					}
+					fetchedCount += 1;
+				} catch (error) {
+					console.error(`[Tenshi's Plugins] Fetch All failed for ${entry.name}.`, error);
+					failedPlugins.push(entry.name);
+				}
+			}
+		} finally {
+			setFetchingAll(false);
+		}
+
+		if (failedPlugins.length > 0) {
+			showToast(
+				`Fetched ${fetchedCount}/${orderedPlugins.length}; failed: ${failedPlugins.join(", ")}`,
+				getAssetIDByName("Warning"),
+			);
+		} else {
+			showToast(`Fetched all ${fetchedCount} plugins`, getAssetIDByName("Check"));
 		}
 	};
 
@@ -204,28 +273,11 @@ export default function Settings() {
 					onPress: () => {
 						hideActionSheet?.();
 						void (async () => {
-							const wasEnabled = !!installed.instance.enabled;
-							let stopped = false;
 							try {
-								if (wasEnabled) {
-									stopPlugin(installed.key, false);
-									stopped = true;
-								}
-								await fetchPlugin(installed.key);
-								if (stopped) {
-									await startPlugin(installed.key);
-									stopped = false;
-								}
+								await refetchPlugin(entry, installed);
 								showToast(`${entry.name} refetched`, getAssetIDByName("Check"));
 							} catch (error) {
 								console.error(`[Tenshi's Plugins] Failed to refetch ${entry.name}.`, error);
-								if (stopped) {
-									try {
-										await startPlugin(installed.key);
-									} catch (restartError) {
-										console.error(`[Tenshi's Plugins] Failed to restart ${entry.name} after refetch.`, restartError);
-									}
-								}
 								showToast(`Failed to refetch ${entry.name}`, getAssetIDByName("Warning"));
 							}
 						})();
@@ -304,29 +356,52 @@ export default function Settings() {
 				<RN.Text style={{ color: "#f2f3f5", fontSize: 20, fontWeight: "700" }}>
 					Tenshi's Plugins
 				</RN.Text>
-				<RN.TouchableOpacity
-					accessibilityLabel="Reload Revenge and return to Tenshi's Plugins"
-					accessibilityRole="button"
-					onPress={() => {
-						try {
-							reloadAndReturnToManager();
-						} catch (error) {
-							console.error("[Tenshi's Plugins] Could not reload Revenge.", error);
-							showToast("Could not reload Revenge", getAssetIDByName("Warning"));
-						}
-					}}
-					style={{
-						width: 40,
-						height: 40,
-						alignItems: "center",
-						justifyContent: "center",
-					}}
-				>
-					<RN.Image
-						source={getAssetIDByName("RetryIcon")}
-						style={{ width: 22, height: 22, tintColor: "#f2f3f5" }}
-					/>
-				</RN.TouchableOpacity>
+				<RN.View style={{ flexDirection: "row", alignItems: "center" }}>
+					<RN.TouchableOpacity
+						accessibilityLabel="Fetch All Plugins"
+						accessibilityRole="button"
+						disabled={fetchingAll || Object.values(busy).some(Boolean)}
+						onPress={() => { void fetchAllPlugins(); }}
+						style={{
+							minHeight: 40,
+							paddingHorizontal: 12,
+							alignItems: "center",
+							justifyContent: "center",
+							borderRadius: 12,
+							backgroundColor: "#248046",
+							opacity: fetchingAll || Object.values(busy).some(Boolean) ? 0.6 : 1,
+						}}
+					>
+						<RN.Text style={{ color: "#ffffff", fontWeight: "600" }}>
+							{fetchingAll ? `Fetching ${fetchProgress}/${MANAGED_PLUGINS.length}` : "Fetch All"}
+						</RN.Text>
+					</RN.TouchableOpacity>
+					<RN.View style={{ width: 8 }} />
+					<RN.TouchableOpacity
+						accessibilityLabel="Restart Revenge and return to Tenshi's Plugins"
+						accessibilityRole="button"
+						disabled={fetchingAll}
+						onPress={() => {
+							try {
+								reloadAndReturnToManager();
+							} catch (error) {
+								console.error("[Tenshi's Plugins] Could not reload Revenge.", error);
+								showToast("Could not reload Revenge", getAssetIDByName("Warning"));
+							}
+						}}
+						style={{
+							minHeight: 40,
+							paddingHorizontal: 12,
+							alignItems: "center",
+							justifyContent: "center",
+							borderRadius: 12,
+							backgroundColor: "#ed4245",
+							opacity: fetchingAll ? 0.6 : 1,
+						}}
+					>
+						<RN.Text style={{ color: "#ffffff", fontWeight: "600" }}>Restart</RN.Text>
+					</RN.TouchableOpacity>
+				</RN.View>
 			</RN.View>
 			<RN.View
 				style={{
@@ -408,7 +483,7 @@ export default function Settings() {
 										assetNames={["WrenchIcon", "SettingsIcon", "ic_settings_24px"]}
 										fallback="🔧"
 										label={`Open ${entry.name} Settings`}
-										disabled={!installed}
+										disabled={!installed || fetchingAll}
 										onPress={() => openPluginSettings(entry)}
 									/>
 									<RN.View style={{ width: 8 }} />
@@ -416,12 +491,13 @@ export default function Settings() {
 										assetNames={["InfoIcon", "InformationIcon", "ic_info_24px"]}
 										fallback="ⓘ"
 										label={`Actions For ${entry.name}`}
+										disabled={fetchingAll}
 										onPress={() => showPluginActions(entry)}
 									/>
 								</RN.View>
 								<RN.TouchableOpacity
 									accessibilityRole="button"
-									disabled={isBusy}
+									disabled={isBusy || fetchingAll}
 									onPress={() => installed ? confirmDelete(entry) : void changePlugin(entry)}
 									style={{
 										minWidth: 88,
