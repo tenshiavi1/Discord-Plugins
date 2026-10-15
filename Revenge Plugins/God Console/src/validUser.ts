@@ -1,6 +1,6 @@
 import { React } from "@vendetta/metro/common";
 import { after } from "@vendetta/patcher";
-import { findByProps, findByStoreName } from "../../compat";
+import { findByProps, findByPropsAll, findByStoreName } from "../../compat";
 
 const mentionPattern = /<@!?([0-9]{17,20})>/;
 const maxPendingUsers = 100;
@@ -9,9 +9,9 @@ const retryAfter = new Map<string, number>();
 let requestQueue: Promise<void> = Promise.resolve();
 let lastRequestAt = 0;
 let enabled = false;
-let unpatchMention: (() => void) | undefined;
+const unpatchMentions: (() => void)[] = [];
+let patchedMentionModules = new WeakSet<object>();
 let retryTimer: ReturnType<typeof setInterval> | undefined;
-let retryCount = 0;
 
 function isCached(userId: string): boolean {
 	return Boolean(findByStoreName("UserStore")?.getUser?.(userId));
@@ -35,6 +35,12 @@ function extractMentionId(value: unknown, depth = 0, seen = new WeakSet<object>(
 		if (id) return id;
 	}
 	return undefined;
+}
+
+function getMentionUserId(props: any, fallback: unknown): string | undefined {
+	const directId = props?.data?.userId ?? props?.userId;
+	if (typeof directId === "string" && /^[0-9]{17,20}$/.test(directId)) return directId;
+	return extractMentionId(props) ?? extractMentionId(fallback);
 }
 
 function rememberFailure(userId: string, error?: any) {
@@ -139,62 +145,74 @@ function MentionResolution({
 	}, [userId]);
 
 	if (!enabled || !resolved || !isCached(userId) || typeof UserMention !== "function") return fallback;
+	const data = mentionProps.data && typeof mentionProps.data === "object"
+		? mentionProps.data
+		: mentionProps;
+	const renderProps = mentionProps.props && typeof mentionProps.props === "object"
+		? mentionProps.props
+		: mentionProps;
 	return React.createElement(UserMention, {
-		...mentionProps,
-		userId,
-		channelId: mentionProps.channelId,
-		inlinePreview: mentionProps.inlinePreview,
 		className: mentionProps.className ?? "mention",
+		userId,
+		channelId: data.channelId ?? mentionProps.channelId,
+		inlinePreview: mentionProps.inlinePreview ?? renderProps.noStyleAndInteraction ?? renderProps.formatInline,
+		key: renderProps.key ?? mentionProps.key,
 	});
 }
 
-function findMentionModule(): any {
-	const module = findByProps("RoleMention", "UserMention");
-	return typeof module?.RoleMention === "function" && typeof module?.UserMention === "function"
-		? module
-		: undefined;
+function installMentionPatches(): number {
+	let installed = 0;
+	for (const exports of findByPropsAll("RoleMention", "UserMention")) {
+		const module = typeof exports?.RoleMention === "function" && typeof exports?.UserMention === "function"
+			? exports
+			: exports?.default;
+		if (!module || (typeof module !== "object" && typeof module !== "function") || patchedMentionModules.has(module)) continue;
+		if (typeof module.RoleMention !== "function" || typeof module.UserMention !== "function") continue;
+		patchedMentionModules.add(module);
+		try {
+			unpatchMentions.push(after("RoleMention", module, ([props]: any[], fallback: any) => {
+				if (!enabled) return fallback;
+				const userId = getMentionUserId(props, fallback);
+				if (!userId) return fallback;
+				return React.createElement(MentionResolution, {
+					key: `god-console-mention-${userId}`,
+					userId,
+					mentionProps: props,
+					fallback,
+					UserMention: module.UserMention,
+				});
+			}));
+			installed++;
+		} catch (error) {
+			patchedMentionModules.delete(module);
+			console.warn("[God Console] Could not patch a mention renderer.", error);
+		}
+	}
+	return installed;
 }
 
-function installMentionPatch(): boolean {
-	const module = findMentionModule();
-	if (!module) return false;
-	unpatchMention = after("RoleMention", module, ([props]: any[], fallback: any) => {
-		if (!enabled || props?.userId) return fallback;
-		const userId = extractMentionId(props);
-		if (!userId) return fallback;
-		return React.createElement(MentionResolution, {
-			key: `god-console-mention-${userId}`,
-			userId,
-			mentionProps: props,
-			fallback,
-			UserMention: module.UserMention,
-		});
-	});
-	return true;
-}
-
-function stopMentionPatch() {
+function stopMentionDiscovery() {
 	if (retryTimer) clearInterval(retryTimer);
 	retryTimer = undefined;
-	if (unpatchMention) {
-		unpatchMention();
-		unpatchMention = undefined;
-	}
+}
+
+function removeMentionPatches() {
+	stopMentionDiscovery();
+	for (const unpatch of unpatchMentions.splice(0).reverse()) unpatch();
+	patchedMentionModules = new WeakSet<object>();
 }
 
 export function setValidUserEnabled(value: boolean) {
 	if (enabled === value) return;
 	enabled = value;
 	if (enabled) {
-		if (installMentionPatch()) return;
-		retryCount = 0;
+		installMentionPatches();
 		retryTimer = setInterval(() => {
-			retryCount++;
-			if (installMentionPatch() || retryCount >= 30) stopMentionPatch();
-		}, 1000);
+			if (enabled) installMentionPatches();
+		}, 5000);
 		return;
 	}
-	stopMentionPatch();
+	removeMentionPatches();
 	inFlightUsers.clear();
 	retryAfter.clear();
 }
