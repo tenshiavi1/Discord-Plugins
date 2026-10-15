@@ -364,6 +364,14 @@ export default function Settings() {
 			},
 			options: [
 				{
+					label: "Fetch All",
+					icon: getAssetIDByName("RetryIcon"),
+					onPress: () => {
+						hideActionSheet?.();
+						confirmFetchAll();
+					},
+				},
+				{
 					label: "Install All",
 					icon: getAssetIDByName("DownloadIcon"),
 					onPress: () => {
@@ -589,26 +597,6 @@ export default function Settings() {
 						}}
 					>
 						<RN.Text style={{ color: "#ffffff", fontWeight: "600" }}>Manage</RN.Text>
-					</RN.TouchableOpacity>
-					<RN.View style={{ width: 8 }} />
-					<RN.TouchableOpacity
-						accessibilityLabel="Fetch All Plugins"
-						accessibilityRole="button"
-						disabled={fetchingAll || Object.values(busy).some(Boolean)}
-						onPress={confirmFetchAll}
-						style={{
-							minHeight: 40,
-							paddingHorizontal: 12,
-							alignItems: "center",
-							justifyContent: "center",
-							borderRadius: 12,
-							backgroundColor: "#248046",
-							opacity: fetchingAll || Object.values(busy).some(Boolean) ? 0.6 : 1,
-						}}
-					>
-						<RN.Text style={{ color: "#ffffff", fontWeight: "600" }}>
-							{fetchingAll ? `Fetching ${fetchProgress}/${fetchTotal || "..."}` : "Fetch All"}
-						</RN.Text>
 					</RN.TouchableOpacity>
 					<RN.View style={{ width: 8 }} />
 					<RN.TouchableOpacity
