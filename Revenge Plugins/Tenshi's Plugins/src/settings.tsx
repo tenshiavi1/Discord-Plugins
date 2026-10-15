@@ -385,7 +385,7 @@ export default function Settings() {
 										fontWeight: "600",
 									}}
 								>
-									{entry.name}
+									{entry.emoji} {entry.name}
 								</RN.Text>
 								<RN.View style={{ flexDirection: "row", alignItems: "center" }}>
 									<IconButton
