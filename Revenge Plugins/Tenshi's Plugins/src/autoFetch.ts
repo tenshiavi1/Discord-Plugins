@@ -31,15 +31,18 @@ async function runAutoFetch() {
 				recordManagerActivity(`${pluginName} automatic refetch failed`, "failure", details);
 			},
 		});
+		const restartAdvice = result.restartRequired.length > 0
+			? `Restart Revenge to load updates for ${result.restartRequired.join(", ")}.`
+			: "";
 		if (result.failures.length > 0) {
 			recordManagerActivity(
-				`Automatic refetch finished with ${result.failures.length} failure${result.failures.length === 1 ? "" : "s"}`,
+				`Automatic refetch finished with ${result.failures.length} failure${result.failures.length === 1 ? "" : "s"}.${restartAdvice ? ` ${restartAdvice}` : ""}`,
 				"failure",
-				result.failures.join("\n"),
+				[result.failures.join("\n"), restartAdvice].filter(Boolean).join("\n"),
 			);
 		} else {
 			recordManagerActivity(
-				`Automatic refetch finished: ${result.updated} updated, ${result.unchanged} unchanged, ${result.available} available`,
+				`Automatic refetch finished: ${result.updated} updated, ${result.unchanged} unchanged, ${result.available} available.${restartAdvice ? ` ${restartAdvice}` : ""}`,
 				"success",
 			);
 		}

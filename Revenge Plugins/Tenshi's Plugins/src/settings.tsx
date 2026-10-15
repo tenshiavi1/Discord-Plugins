@@ -14,6 +14,7 @@ import { clearLastCrash, getCrashReasons, getLastCrash } from "./crashLog";
 import { reloadAndReturnToManager } from "./managerNavigation";
 import { findInstalledPlugin, refetchInstalledPlugins, refetchPlugin, type InstalledPlugin } from "./pluginUpdater";
 import { cancelScheduledAutoFetch } from "./autoFetch";
+import { getPendingManagerRestart } from "./restartState";
 
 const { TableRow, TableRowGroup } = findByProps("TableRow", "TableRowGroup");
 const showSimpleActionSheet = findByProps("showSimpleActionSheet")?.showSimpleActionSheet;
@@ -95,6 +96,7 @@ export default function Settings() {
 	const autoFetchEnabled = storage.autoFetchEnabled === true;
 	const autoFetchInProgress = storage.autoFetchInProgress === true;
 	const managerBusy = fetchingAll || autoFetchInProgress || Object.values(busy).some(Boolean);
+	const pendingManagerRestart = getPendingManagerRestart();
 	const lastCrash = getLastCrash();
 	const formatCrashDate = (timestamp: number) => {
 		const crashTime = new Date(timestamp);
@@ -220,24 +222,27 @@ export default function Settings() {
 				},
 			});
 			setFetchProgress(result.total);
+			const restartAdvice = result.restartRequired.length > 0
+				? ` Restart Revenge to load updates for ${result.restartRequired.join(", ")}.`
+				: "";
 
 			if (result.failures.length > 0) {
 				recordActivity(
-					`Fetch All finished with ${result.failures.length} failure${result.failures.length === 1 ? "" : "s"}`,
+					`Fetch All finished with ${result.failures.length} failure${result.failures.length === 1 ? "" : "s"}.${restartAdvice}`,
 					"failure",
-					result.failures.join("\n"),
+					[result.failures.join("\n"), restartAdvice.trim()].filter(Boolean).join("\n"),
 				);
 				showToast(
-					`Fetch finished with ${result.failures.length} error${result.failures.length === 1 ? "" : "s"}. See the activity log.`,
+					`Fetch finished with ${result.failures.length} error${result.failures.length === 1 ? "" : "s"}.${restartAdvice}`,
 					getAssetIDByName("Warning"),
 				);
 			} else {
 				recordActivity(
-					`Fetch All finished: ${result.updated} updated, ${result.unchanged} unchanged, ${result.available} available`,
+					`Fetch All finished: ${result.updated} updated, ${result.unchanged} unchanged, ${result.available} available.${restartAdvice}`,
 					"success",
 				);
 				showToast(
-					`Fetch complete: ${result.updated} updated, ${result.unchanged} current, ${result.available} available.`,
+					`Fetch complete: ${result.updated} updated, ${result.unchanged} current, ${result.available} available.${restartAdvice}`,
 					getAssetIDByName("Check"),
 				);
 			}
@@ -558,15 +563,17 @@ export default function Settings() {
 							setActivityStatus(`Fetching ${entry.name}…`);
 							recordActivity(`${entry.name} refetch started`, "info");
 							try {
-								const updated = await refetchPlugin(entry, installed);
+								const result = await refetchPlugin(entry, installed);
 								recordActivity(
-									updated ? `${entry.name} refetched` : `${entry.name} is already up to date`,
+									result.restartRequired
+										? `${entry.name} refetched; restart Revenge to load the update`
+										: result.updated ? `${entry.name} refetched` : `${entry.name} is already up to date`,
 									"success",
 								);
 								showToast(
-									updated
-										? `${entry.name} was refreshed successfully.`
-										: `${entry.name} is already up to date.`,
+									result.restartRequired
+										? `${entry.name} was updated. Restart Revenge to load it.`
+										: result.updated ? `${entry.name} was refreshed successfully.` : `${entry.name} is already up to date.`,
 									getAssetIDByName("Check"),
 								);
 							} catch (error) {
@@ -769,6 +776,11 @@ export default function Settings() {
 				<RN.Text style={{ color: "#f2f3f5", fontSize: 15, fontWeight: "600", marginBottom: 8 }}>
 					Manager Activity
 				</RN.Text>
+				{pendingManagerRestart && (
+					<RN.Text style={{ marginBottom: 8, color: "#f0b232", fontSize: 13, fontWeight: "600" }}>
+						{`Restart Revenge to load updates for ${pendingManagerRestart.pluginNames.join(", ")}.`}
+					</RN.Text>
+				)}
 				<RN.View
 					accessibilityRole={fetchingAll || autoFetchInProgress ? "progressbar" : undefined}
 					accessibilityLabel={autoFetchInProgress

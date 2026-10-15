@@ -1,6 +1,7 @@
 import { plugins, startPlugin, stopPlugin } from "@vendetta/plugins";
 import { discoverManagedPlugins, fetchWithRetry, type ManagedPlugin } from "./catalog";
 import { acquireBulkRefetch, acquirePluginRefetch, createRefetchLockState } from "./refetchLock";
+import { getPendingManagerRestart, markManagerRestartRequired } from "./restartState";
 
 const REFRESH_LOCK_KEY = "__tenshiPluginsRefetchLockV1";
 
@@ -26,6 +27,11 @@ export type RefetchHooks = {
 	onCatalog?: (plugins: ManagedPlugin[]) => void;
 	onProgress?: (progress: number, total: number, pluginName: string) => void;
 	onFailure?: (pluginName: string, error: unknown) => void;
+};
+
+export type PluginRefetchResult = {
+	updated: boolean;
+	restartRequired: boolean;
 };
 
 type RuntimePlugin = {
@@ -109,7 +115,7 @@ function errorMessage(error: unknown): string {
 	return error instanceof Error ? error.message : String(error);
 }
 
-async function performRefetchPlugin(entry: ManagedPlugin, installed: InstalledPlugin): Promise<boolean> {
+async function performRefetchPlugin(entry: ManagedPlugin, installed: InstalledPlugin): Promise<PluginRefetchResult> {
 	let stopped = false;
 	const existingPlugin = plugins[installed.key];
 	const wasEnabled = !!installed.instance.enabled;
@@ -133,7 +139,9 @@ async function performRefetchPlugin(entry: ManagedPlugin, installed: InstalledPl
 
 	const manifestChanged = JSON.stringify(existingPlugin?.manifest) !== JSON.stringify(bundle.manifest);
 	const bundleChanged = existingPlugin?.js !== bundle.js;
-	if (!manifestChanged && !bundleChanged) return false;
+	if (!manifestChanged && !bundleChanged) return { updated: false, restartRequired: false };
+	const restartRequired = entry.name === "Tenshi's Plugins" && wasEnabled && bundleChanged;
+	if (restartRequired) markManagerRestartRequired(entry.name);
 
 	try {
 		if (bundleChanged && wasEnabled) {
@@ -157,7 +165,7 @@ async function performRefetchPlugin(entry: ManagedPlugin, installed: InstalledPl
 			}
 			stopped = false;
 		}
-		return true;
+		return { updated: true, restartRequired };
 	} catch (error) {
 		if (stopped) {
 			try {
@@ -170,7 +178,7 @@ async function performRefetchPlugin(entry: ManagedPlugin, installed: InstalledPl
 	}
 }
 
-export async function refetchPlugin(entry: ManagedPlugin, installed: InstalledPlugin): Promise<boolean> {
+export async function refetchPlugin(entry: ManagedPlugin, installed: InstalledPlugin): Promise<PluginRefetchResult> {
 	const release = acquirePluginRefetch(getRefetchLock(), installed.key);
 	if (!release) throw new Error("Another plugin refetch is already in progress. Try again when it finishes.");
 	try {
@@ -194,6 +202,7 @@ async function performRefetchInstalledPlugins(hooks: RefetchHooks) {
 	const parallelTargets = targets.filter(({ entry }) => entry.name !== "Tenshi's Plugins");
 	const managerTarget = targets.find(({ entry }) => entry.name === "Tenshi's Plugins");
 	const failures: string[] = [];
+	const restartRequired = new Set<string>();
 	let updated = 0;
 	let unchanged = 0;
 	let completed = orderedPlugins.length - targets.length;
@@ -205,8 +214,10 @@ async function performRefetchInstalledPlugins(hooks: RefetchHooks) {
 			const target = parallelTargets[nextIndex++];
 			hooks.onProgress?.(completed, orderedPlugins.length, target.entry.name);
 			try {
-				if (await performRefetchPlugin(target.entry, target.installed)) updated++;
+				const result = await performRefetchPlugin(target.entry, target.installed);
+				if (result.updated) updated++;
 				else unchanged++;
+				if (result.restartRequired) restartRequired.add(target.entry.name);
 			} catch (error) {
 				failures.push(`${target.entry.name}: ${errorMessage(error)}`);
 				console.error(`[Tenshi's Plugins] Fetch All failed for ${target.entry.name}.`, error);
@@ -221,8 +232,10 @@ async function performRefetchInstalledPlugins(hooks: RefetchHooks) {
 	if (managerTarget) {
 		hooks.onProgress?.(completed, orderedPlugins.length, managerTarget.entry.name);
 		try {
-			if (await performRefetchPlugin(managerTarget.entry, managerTarget.installed)) updated++;
+			const result = await performRefetchPlugin(managerTarget.entry, managerTarget.installed);
+			if (result.updated) updated++;
 			else unchanged++;
+			if (result.restartRequired) restartRequired.add(managerTarget.entry.name);
 		} catch (error) {
 			failures.push(`${managerTarget.entry.name}: ${errorMessage(error)}`);
 			console.error(`[Tenshi's Plugins] Fetch All failed for ${managerTarget.entry.name}.`, error);
@@ -239,6 +252,7 @@ async function performRefetchInstalledPlugins(hooks: RefetchHooks) {
 		updated,
 		unchanged,
 		failures,
+		restartRequired: [...new Set([...restartRequired, ...(getPendingManagerRestart()?.pluginNames ?? [])])],
 	};
 }
 

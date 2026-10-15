@@ -1,5 +1,6 @@
 import { installCrashCapture, recoverLegacyPendingDisables } from "./crashLog";
 import { cancelScheduledAutoFetch, clearStaleAutoFetchState, scheduleAutoFetchOnStartup } from "./autoFetch";
+import { settleManagerRestartOnStartup } from "./restartState";
 import { installSettingsPin } from "./settingsPin";
 import Settings from "./settings";
 import { resumeManagerAfterReload } from "./managerNavigation";
@@ -12,6 +13,7 @@ let unpatchDeveloperMode: (() => void) | undefined;
 export default {
 	onLoad() {
 		clearStaleAutoFetchState();
+		settleManagerRestartOnStartup();
 		unpatchSettings = installSettingsPin();
 		unpatchCrashCapture = installCrashCapture();
 		unpatchDeveloperMode = installDeveloperModeGuard();
