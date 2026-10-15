@@ -100,7 +100,7 @@ export default function Settings() {
           <Stack spacing={4}>
             <RN.View style={{ flexDirection: "row", alignItems: "center" }}>
               <StableTextInput
-                placeholder="Enter a keyword or phrase"
+                placeholder="Enter a keyword or phrase."
                 value={newKeyword}
                 onChangeText={setNewKeyword}
                 resetKey={keywordInputReset}

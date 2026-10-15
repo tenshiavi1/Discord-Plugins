@@ -8,111 +8,20 @@ import { showConfirmationAlert } from "@vendetta/ui/alerts";
 import { getAssetIDByName } from "@vendetta/ui/assets";
 import StableTextInput from "../../StableTextInput";
 import { showToast } from "../../shared/toast";
-import { discoverManagedPlugins, fetchWithRetry, MANAGED_PLUGINS, type ManagedPlugin } from "./catalog";
+import { MANAGED_PLUGINS, type ManagedPlugin } from "./catalog";
+import { getManagerActivity, recordManagerActivity, type ManagerActivityRecord, type ManagerActivityStatus } from "./activityLog";
 import { clearLastCrash, getCrashReasons, getLastCrash } from "./crashLog";
 import { reloadAndReturnToManager } from "./managerNavigation";
+import { findInstalledPlugin, refetchInstalledPlugins, refetchPlugin, type InstalledPlugin } from "./pluginUpdater";
+import { cancelScheduledAutoFetch } from "./autoFetch";
 
 const { TableRow, TableRowGroup } = findByProps("TableRow", "TableRowGroup");
 const showSimpleActionSheet = findByProps("showSimpleActionSheet")?.showSimpleActionSheet;
 const hideActionSheet = findByProps("openLazy", "hideActionSheet")?.hideActionSheet;
 
-type PluginManifest = {
-	name: string;
-	main?: string;
-	hash: string;
-	[key: string]: unknown;
-};
-
-function errorMessage(error: unknown): string {
-	return error instanceof Error ? error.message : String(error);
-}
-
-type ManagerActivityStatus = "success" | "failure" | "info";
-
-type ManagerActivityRecord = {
-	timestamp: number;
-	status: ManagerActivityStatus;
-	summary: string;
-	details?: string;
-};
-
-const MANAGER_ACTIVITY_KEY = "managerActivity";
-const MANAGER_ACTIVITY_LIMIT = 50;
-const MANAGER_ACTIVITY_DETAIL_LIMIT = 8000;
-
-function isManagerActivityRecord(record: unknown): record is ManagerActivityRecord {
-	if (typeof record !== "object" || record === null) return false;
-	if (
-		!("timestamp" in record) ||
-		typeof record.timestamp !== "number" ||
-		!Number.isFinite(record.timestamp) ||
-		Math.abs(record.timestamp) > 8.64e15
-	) return false;
-	if (!("status" in record) || !["success", "failure", "info"].includes(String(record.status))) return false;
-	if (!("summary" in record) || typeof record.summary !== "string") return false;
-	return !("details" in record) || typeof record.details === "string";
-}
-
-function getManagerActivity(): ManagerActivityRecord[] {
-	const records: unknown = storage[MANAGER_ACTIVITY_KEY];
-	return Array.isArray(records)
-		? records.filter(isManagerActivityRecord).slice(0, MANAGER_ACTIVITY_LIMIT)
-		: [];
-}
-
 function errorDetails(error: unknown): string {
 	if (error instanceof Error) return error.stack || `${error.name}: ${error.message}`;
 	return String(error);
-}
-
-async function fetchPluginBundle(url: string, expectedName: string): Promise<{ manifest: PluginManifest; js: string }> {
-	const baseUrl = url.endsWith("/") ? url : `${url}/`;
-	const manifestResponse = await fetchWithRetry(`${baseUrl}manifest.json`);
-	const manifestValue: unknown = await manifestResponse.json();
-	if (
-		typeof manifestValue !== "object" ||
-		manifestValue === null ||
-		!("name" in manifestValue) ||
-		typeof manifestValue.name !== "string" ||
-		manifestValue.name.toLocaleLowerCase() !== expectedName.toLocaleLowerCase() ||
-		!("hash" in manifestValue) ||
-		typeof manifestValue.hash !== "string" ||
-		!/^[a-f\d]{64}$/i.test(manifestValue.hash) ||
-		("main" in manifestValue && manifestValue.main !== undefined && typeof manifestValue.main !== "string")
-	) {
-		throw new Error(`The manifest at ${baseUrl} is not a valid ${expectedName} manifest.`);
-	}
-
-	const manifest = manifestValue as PluginManifest;
-	const main = manifest.main || "index.js";
-	if (
-		main.startsWith("/") ||
-		main.includes("\\") ||
-		main.split("/").some((segment) => segment === ".." || segment === "")
-	) {
-		throw new Error(`The ${expectedName} manifest contains an unsafe bundle path.`);
-	}
-
-	const bundleResponse = await fetchWithRetry(`${baseUrl}${main}`);
-	const js = await bundleResponse.text();
-	if (!js.trim() || js.trimStart().startsWith("<")) {
-		throw new Error(`The bundle at ${baseUrl}${main} is empty or is not JavaScript.`);
-	}
-
-	if (globalThis.crypto?.subtle && typeof TextEncoder !== "undefined") {
-		try {
-			const digest = await globalThis.crypto.subtle.digest("SHA-256", new TextEncoder().encode(js));
-			const actualHash = Array.from(new Uint8Array(digest), (byte) => byte.toString(16).padStart(2, "0")).join("");
-			if (actualHash.toLowerCase() !== manifest.hash.toLowerCase()) {
-				throw new Error(`The downloaded ${expectedName} bundle did not match its manifest hash.`);
-			}
-		} catch (error) {
-			if (error instanceof Error && error.message.includes("did not match its manifest hash")) throw error;
-			console.warn(`[Tenshi's Plugins] SHA-256 verification is unavailable in this runtime for ${expectedName}.`, error);
-		}
-	}
-
-	return { manifest, js };
 }
 
 function findStackNavigation(navigation: any) {
@@ -124,29 +33,7 @@ function findStackNavigation(navigation: any) {
 	return undefined;
 }
 
-function findInstalledPlugin(entry: ManagedPlugin) {
-	for (const url of [entry.url, ...entry.legacyUrls]) {
-		const instance = plugins[url];
-		if (instance) return { key: url, instance };
-	}
-
-	const approvedRoots = [entry.url, ...entry.legacyUrls].map((url) => {
-		const parsed = new URL(url);
-		const path = parsed.pathname.replace(/\/+$/, "");
-		return `${parsed.origin}${path.slice(0, path.lastIndexOf("/") + 1)}`;
-	});
-	for (const [url, instance] of Object.entries(plugins)) {
-		if (
-			approvedRoots.some((root) => url.startsWith(root)) &&
-			instance.manifest?.name?.toLocaleLowerCase() === entry.name.toLocaleLowerCase()
-		) {
-			return { key: url, instance };
-		}
-	}
-	return undefined;
-}
-
-function getPluginSettings(installed: NonNullable<ReturnType<typeof findInstalledPlugin>>) {
+function getPluginSettings(installed: InstalledPlugin) {
 	return getSettings(installed.instance?.id ?? installed.key);
 }
 
@@ -199,9 +86,15 @@ export default function Settings() {
 	const [catalog, setCatalog] = React.useState(MANAGED_PLUGINS);
 	const [searchQuery, setSearchQuery] = React.useState("");
 	const [searchInputReset, setSearchInputReset] = React.useState(0);
+	React.useEffect(() => {
+		setActivityLog(getManagerActivity());
+	}, [storage.managerActivity]);
 	const navigation = NavigationNative.useNavigation();
 	const { width: screenWidth, fontScale } = RN.useWindowDimensions();
 	const normalizedQuery = searchQuery.trim().toLocaleLowerCase();
+	const autoFetchEnabled = storage.autoFetchEnabled === true;
+	const autoFetchInProgress = storage.autoFetchInProgress === true;
+	const managerBusy = fetchingAll || autoFetchInProgress || Object.values(busy).some(Boolean);
 	const lastCrash = getLastCrash();
 	const formatCrashDate = (timestamp: number) => {
 		const crashTime = new Date(timestamp);
@@ -234,20 +127,8 @@ export default function Settings() {
 		)
 		.sort((left, right) => left.name.localeCompare(right.name));
 
-	const recordActivity = (
-		summary: string,
-		status: ManagerActivityStatus,
-		details?: string,
-	) => {
-		const record: ManagerActivityRecord = {
-			timestamp: Date.now(),
-			status,
-			summary,
-			details: details?.slice(0, MANAGER_ACTIVITY_DETAIL_LIMIT),
-		};
-		const next = [record, ...getManagerActivity()].slice(0, MANAGER_ACTIVITY_LIMIT);
-		storage[MANAGER_ACTIVITY_KEY] = next;
-		setActivityLog(next);
+	const recordActivity = (summary: string, status: ManagerActivityStatus, details?: string) => {
+		setActivityLog(recordManagerActivity(summary, status, details));
 	};
 
 	const formatActivityLog = (maxLines: number) => activityLog
@@ -262,7 +143,7 @@ export default function Settings() {
 		.join("\n");
 
 	const changePlugin = async (entry: ManagedPlugin) => {
-		if (busy[entry.url]) return;
+		if (managerBusy || busy[entry.url]) return;
 		setBusy((current) => ({ ...current, [entry.url]: true }));
 		const installed = findInstalledPlugin(entry);
 		const action = installed ? "Remove" : "Install";
@@ -288,70 +169,6 @@ export default function Settings() {
 		} finally {
 			setActivityStatus("");
 			setBusy((current) => ({ ...current, [entry.url]: false }));
-		}
-	};
-
-	const refetchPlugin = async (
-		entry: ManagedPlugin,
-		installed: NonNullable<ReturnType<typeof findInstalledPlugin>>,
-	): Promise<boolean> => {
-		let stopped = false;
-		const existingPlugin = plugins[installed.key];
-		const wasEnabled = !!installed.instance.enabled;
-
-		const sources = [...new Set([entry.url, installed.key, ...entry.legacyUrls])];
-		const sourceErrors: string[] = [];
-		let bundle: Awaited<ReturnType<typeof fetchPluginBundle>> | undefined;
-		for (const source of sources) {
-			try {
-				bundle = await fetchPluginBundle(source, entry.name);
-				break;
-			} catch (error) {
-				const failure = `${source}: ${errorMessage(error)}`;
-				sourceErrors.push(failure);
-				console.warn(`[Tenshi's Plugins] Could not fetch ${entry.name} from ${source}.`, error);
-			}
-		}
-		if (!bundle) {
-			throw new Error(`Could not fetch ${entry.name} from any source. ${sourceErrors.join(" | ")}`);
-		}
-
-		const manifestChanged = JSON.stringify(existingPlugin?.manifest) !== JSON.stringify(bundle.manifest);
-		const bundleChanged = existingPlugin?.js !== bundle.js;
-		if (!manifestChanged && !bundleChanged) return false;
-
-		try {
-			if (bundleChanged && wasEnabled) {
-				stopPlugin(installed.key, false);
-				stopped = true;
-			}
-
-			plugins[installed.key] = {
-				...plugins[installed.key],
-				id: installed.key,
-				manifest: bundle.manifest,
-				js: bundle.js,
-				enabled: wasEnabled,
-				update: existingPlugin?.update ?? true,
-			};
-
-			if (stopped) {
-				await startPlugin(installed.key);
-				if (wasEnabled && !plugins[installed.key]?.enabled) {
-					throw new Error(`${entry.name} was fetched but Revenge could not restart it.`);
-				}
-				stopped = false;
-			}
-			return true;
-		} catch (error) {
-			if (stopped) {
-				try {
-					await startPlugin(installed.key);
-				} catch (restartError) {
-					console.error(`[Tenshi's Plugins] Failed to restart ${entry.name} after refetch.`, restartError);
-				}
-			}
-			throw error;
 		}
 	};
 
@@ -384,95 +201,43 @@ export default function Settings() {
 	};
 
 	const fetchAllPlugins = async () => {
-		if (fetchingAll || Object.values(busy).some(Boolean)) return;
+		if (managerBusy) return;
 		setFetchingAll(true);
 		setFetchProgress(0);
 		setFetchTotal(0);
 		setActivityStatus("Loading plugin catalog…");
 		recordActivity("Fetch All started", "info");
-		const failedPlugins: string[] = [];
 		try {
-			const discoveredPlugins = await discoverManagedPlugins();
-			setCatalog(discoveredPlugins);
-			setFetchTotal(discoveredPlugins.length);
-			const orderedPlugins = [...discoveredPlugins].sort(
-				(left, right) => Number(left.name === "Tenshi's Plugins") - Number(right.name === "Tenshi's Plugins"),
-			);
-			let updatedCount = 0;
-			let unchangedCount = 0;
-			let availableCount = 0;
-			const targets = orderedPlugins
-				.map((entry) => ({ entry, installed: findInstalledPlugin(entry) }))
-				.filter(
-					(target): target is {
-						entry: ManagedPlugin;
-						installed: NonNullable<ReturnType<typeof findInstalledPlugin>>;
-					} => target.installed !== undefined,
-				);
-			availableCount = orderedPlugins.length - targets.length;
-			setFetchTotal(orderedPlugins.length);
-			let nextTargetIndex = 0;
-			let completedCount = availableCount;
-			const parallelTargets = targets.filter(({ entry }) => entry.name !== "Tenshi's Plugins");
-			const managerTarget = targets.find(({ entry }) => entry.name === "Tenshi's Plugins");
-			setFetchProgress(availableCount);
+			const result = await refetchInstalledPlugins({
+				onCatalog: setCatalog,
+				onProgress: (progress, total, pluginName) => {
+					setFetchProgress(progress);
+					setFetchTotal(total);
+					setActivityStatus(pluginName ? `Fetching ${pluginName}…` : "Loading plugin catalog…");
+				},
+				onFailure: (pluginName, error) => {
+					recordActivity(`${pluginName} fetch failed`, "failure", errorDetails(error));
+				},
+			});
+			setFetchProgress(result.total);
 
-			const worker = async () => {
-				while (nextTargetIndex < parallelTargets.length) {
-					const target = parallelTargets[nextTargetIndex++];
-					setActivityStatus(`Fetching ${target.entry.name}…`);
-					try {
-						if (await refetchPlugin(target.entry, target.installed)) updatedCount++;
-						else unchangedCount++;
-					} catch (error) {
-						console.error(`[Tenshi's Plugins] Fetch All failed for ${target.entry.name}.`, error);
-						const failure = `${target.entry.name}: ${errorMessage(error)}`;
-						failedPlugins.push(failure);
-						recordActivity(`${target.entry.name} fetch failed`, "failure", errorDetails(error));
-					} finally {
-						completedCount++;
-						setFetchProgress(completedCount);
-					}
-				}
-			};
-
-			await Promise.all(
-				Array.from({ length: Math.min(3, parallelTargets.length) }, () => worker()),
-			);
-			if (managerTarget) {
-				setActivityStatus(`Fetching ${managerTarget.entry.name}…`);
-				try {
-					if (await refetchPlugin(managerTarget.entry, managerTarget.installed)) updatedCount++;
-					else unchangedCount++;
-				} catch (error) {
-					console.error(`[Tenshi's Plugins] Fetch All failed for ${managerTarget.entry.name}.`, error);
-					const failure = `${managerTarget.entry.name}: ${errorMessage(error)}`;
-					failedPlugins.push(failure);
-					recordActivity(`${managerTarget.entry.name} fetch failed`, "failure", errorDetails(error));
-				} finally {
-					completedCount++;
-					setFetchProgress(completedCount);
-				}
-			}
-			setFetchProgress(orderedPlugins.length);
-
-			if (failedPlugins.length > 0) {
+			if (result.failures.length > 0) {
 				recordActivity(
-					`Fetch All finished with ${failedPlugins.length} failure${failedPlugins.length === 1 ? "" : "s"}`,
+					`Fetch All finished with ${result.failures.length} failure${result.failures.length === 1 ? "" : "s"}`,
 					"failure",
-					failedPlugins.join("\n"),
+					result.failures.join("\n"),
 				);
 				showToast(
-					`Fetch finished with ${failedPlugins.length} error${failedPlugins.length === 1 ? "" : "s"}. See the activity log.`,
+					`Fetch finished with ${result.failures.length} error${result.failures.length === 1 ? "" : "s"}. See the activity log.`,
 					getAssetIDByName("Warning"),
 				);
 			} else {
 				recordActivity(
-					`Fetch All finished: ${updatedCount} updated, ${unchangedCount} unchanged, ${availableCount} available`,
+					`Fetch All finished: ${result.updated} updated, ${result.unchanged} unchanged, ${result.available} available`,
 					"success",
 				);
 				showToast(
-					`Fetch complete: ${updatedCount} updated, ${unchangedCount} current, ${availableCount} available.`,
+					`Fetch complete: ${result.updated} updated, ${result.unchanged} current, ${result.available} available.`,
 					getAssetIDByName("Check"),
 				);
 			}
@@ -496,10 +261,33 @@ export default function Settings() {
 		});
 	};
 
+	const confirmAutoFetch = () => {
+		const enable = storage.autoFetchEnabled !== true;
+		showConfirmationAlert({
+			title: enable ? "Enable automatic refetch?" : "Turn off automatic refetch?",
+			content: enable
+				? "On each Revenge startup or restart, Tenshi's Plugins will check for updates to installed plugins. It will not install uninstalled plugins. Updated plugins may briefly stop and restart. This takes effect on the next startup."
+				: "Tenshi's Plugins will stop refetching installed plugins at startup. You can still use Manage > Fetch All at any time.",
+			confirmText: enable ? "Auto On" : "Auto Off",
+			cancelText: "Cancel",
+			onConfirm: () => {
+				storage.autoFetchEnabled = enable;
+			if (!enable) cancelScheduledAutoFetch();
+				recordActivity(`Automatic plugin refetch ${enable ? "enabled" : "disabled"}`, "success");
+				showToast(
+					enable
+						? "Automatic plugin refetch is on for the next Revenge startup."
+						: "Automatic plugin refetch is off.",
+					getAssetIDByName("Check"),
+				);
+			},
+		});
+	};
+
 	type BulkAction = "install" | "remove" | "clear";
 
 	const runBulkAction = async (action: BulkAction) => {
-		if (fetchingAll || Object.values(busy).some(Boolean)) return;
+		if (managerBusy) return;
 		const targets = catalog.filter((entry) => {
 			const installed = findInstalledPlugin(entry);
 			return action === "install" ? !installed : !!installed;
@@ -616,7 +404,7 @@ export default function Settings() {
 		showSimpleActionSheet({
 			key: "ManagePlugins",
 			header: {
-				title: "Manage Plugins",
+				title: "Manage plugins",
 				subtitle: "Choose an action to perform.",
 				onClose: hideActionSheet,
 			},
@@ -660,9 +448,10 @@ export default function Settings() {
 	};
 
 	const confirmRestart = () => {
+		if (managerBusy) return;
 		showConfirmationAlert({
-			title: "Restart Discord?",
-			content: "Discord will restart.",
+			title: "Restart Revenge?",
+			content: "Revenge will restart.",
 			confirmText: "Okay",
 			cancelText: "Cancel",
 			onConfirm: () => {
@@ -711,6 +500,7 @@ export default function Settings() {
 	};
 
 	const confirmClearData = (entry: ManagedPlugin, installed: NonNullable<ReturnType<typeof findInstalledPlugin>>) => {
+		if (managerBusy) return;
 		showConfirmationAlert({
 			title: `Clear ${entry.name} data?`,
 			content: "This permanently removes this plugin's saved settings and data.",
@@ -880,7 +670,7 @@ export default function Settings() {
 					<RN.TouchableOpacity
 						accessibilityLabel="Manage plugins"
 						accessibilityRole="button"
-						disabled={fetchingAll || Object.values(busy).some(Boolean)}
+						disabled={managerBusy}
 						onPress={showManageActions}
 						style={{
 							minHeight: 40,
@@ -889,16 +679,37 @@ export default function Settings() {
 							justifyContent: "center",
 							borderRadius: 12,
 							backgroundColor: "#5865f2",
-							opacity: fetchingAll || Object.values(busy).some(Boolean) ? 0.6 : 1,
+								opacity: managerBusy ? 0.6 : 1,
 						}}
 					>
 						<RN.Text style={{ color: "#ffffff", fontWeight: "600" }}>Manage</RN.Text>
 					</RN.TouchableOpacity>
 					<RN.View style={{ width: 8 }} />
 					<RN.TouchableOpacity
+						accessibilityLabel={autoFetchEnabled ? "Turn automatic plugin refetch off" : "Turn automatic plugin refetch on"}
+						accessibilityRole="button"
+						disabled={fetchingAll || Object.values(busy).some(Boolean)}
+						onPress={confirmAutoFetch}
+						style={{
+							minHeight: 40,
+							minWidth: 68,
+							paddingHorizontal: 10,
+							alignItems: "center",
+							justifyContent: "center",
+							borderRadius: 12,
+							backgroundColor: autoFetchEnabled ? "#ed4245" : "#3ba55c",
+							opacity: fetchingAll || Object.values(busy).some(Boolean) ? 0.6 : 1,
+						}}
+					>
+						<RN.Text style={{ color: "#ffffff", fontWeight: "600" }}>
+							{autoFetchEnabled ? "Auto Off" : "Auto On"}
+						</RN.Text>
+					</RN.TouchableOpacity>
+					<RN.View style={{ width: 8 }} />
+					<RN.TouchableOpacity
 						accessibilityLabel="Restart Revenge and return to Tenshi's Plugins"
 						accessibilityRole="button"
-						disabled={fetchingAll}
+						disabled={managerBusy}
 						onPress={confirmRestart}
 						style={{
 							minHeight: 40,
@@ -907,7 +718,7 @@ export default function Settings() {
 							justifyContent: "center",
 							borderRadius: 12,
 							backgroundColor: "#ed4245",
-							opacity: fetchingAll ? 0.6 : 1,
+							opacity: managerBusy ? 0.6 : 1,
 						}}
 					>
 						<RN.Text style={{ color: "#ffffff", fontWeight: "600" }}>Restart</RN.Text>
@@ -959,11 +770,13 @@ export default function Settings() {
 					Manager Activity
 				</RN.Text>
 				<RN.View
-					accessibilityRole={fetchingAll ? "progressbar" : undefined}
-					accessibilityLabel={fetchingAll ? `Plugin operation progress: ${fetchProgress} of ${fetchTotal}` : undefined}
+					accessibilityRole={fetchingAll || autoFetchInProgress ? "progressbar" : undefined}
+					accessibilityLabel={autoFetchInProgress
+						? "Automatically updating installed plugins"
+						: fetchingAll ? `Plugin operation progress: ${fetchProgress} of ${fetchTotal}` : undefined}
 					style={{ flexDirection: "row", alignItems: "center", marginBottom: 8 }}
 				>
-					{(fetchingAll || Object.values(busy).some(Boolean)) && <RN.ActivityIndicator size="small" />}
+					{(fetchingAll || autoFetchInProgress || Object.values(busy).some(Boolean)) && <RN.ActivityIndicator size="small" />}
 					<RN.Text style={{ color: "#dbdee1", marginLeft: 8, flex: 1 }}>
 						{activityStatus || activityLog[0]?.summary || "No manager activity recorded."}
 						{fetchingAll && fetchTotal > 0 ? ` (${fetchProgress}/${fetchTotal})` : ""}
@@ -1122,7 +935,7 @@ export default function Settings() {
 										assetNames={["WrenchIcon", "SettingsIcon", "ic_settings_24px"]}
 										fallback="🔧"
 										label={`Open ${entry.name} settings`}
-										disabled={!PluginSettings || fetchingAll}
+										disabled={!PluginSettings || managerBusy}
 										onPress={() => openPluginSettings(entry)}
 									/>
 									<RN.View style={{ width: 8 }} />
@@ -1130,13 +943,13 @@ export default function Settings() {
 										assetNames={["InfoIcon", "InformationIcon", "ic_info_24px"]}
 										fallback="ⓘ"
 										label={`Actions for ${entry.name}`}
-										disabled={fetchingAll}
+										disabled={managerBusy}
 										onPress={() => showPluginActions(entry)}
 									/>
 								</RN.View>
 								<RN.TouchableOpacity
 									accessibilityRole="button"
-									disabled={isBusy || fetchingAll}
+									disabled={isBusy || managerBusy}
 									onPress={() => installed ? confirmDelete(entry) : void changePlugin(entry)}
 									style={{
 										minWidth: 88,

@@ -431,14 +431,14 @@ export default function Settings() {
 				))}
 				{storage.timestampMode === "custom" && (
 					<>
-						<DateTimeSetting label="Start time" storageKey="timestampCustomStart" />
+						<DateTimeSetting label="Start Time" storageKey="timestampCustomStart" />
 						<TableSwitchRow
 							label="Include End Time"
 							value={Boolean(storage.timestampEndEnabled)}
 							onValueChange={(value: boolean) => { storage.timestampEndEnabled = value; }}
 						/>
 						{storage.timestampEndEnabled && (
-							<DateTimeSetting label="End time" storageKey="timestampCustomEnd" />
+							<DateTimeSetting label="End Time" storageKey="timestampCustomEnd" />
 						)}
 					</>
 				)}
