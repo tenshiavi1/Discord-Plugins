@@ -5,6 +5,7 @@ import { findByProps } from "../../compat";
 import { setReadAllEnabled } from "./readAll";
 import { setJumpToTopEnabled } from "./jumpToTop";
 import { setValidUserEnabled } from "./validUser";
+import { setAddAttachmentsEnabled } from "./addAttachments";
 
 const { Stack, TableRowGroup, TableSwitchRow } = findByProps(
 	"Stack",
@@ -48,6 +49,17 @@ export default function Settings() {
 						onValueChange={(value: boolean) => {
 							storage.validUserEnabled = value;
 							setValidUserEnabled(value);
+						}}
+					/>
+				</TableRowGroup>
+				<TableRowGroup title="Add Attachments">
+					<TableSwitchRow
+						label="Enable Add Attachment Command"
+						subLabel="Register /addattachment to add up to three files to your own message in the current channel."
+						value={Boolean(storage.addAttachmentsEnabled)}
+						onValueChange={(value: boolean) => {
+							storage.addAttachmentsEnabled = value;
+							setAddAttachmentsEnabled(value);
 						}}
 					/>
 				</TableRowGroup>

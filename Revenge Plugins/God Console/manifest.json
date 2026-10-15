@@ -1,6 +1,6 @@
 {
     "name": "God Console",
-    "description": "Mark unread channels as read, jump to chat history, and repair unresolved mentions.",
+    "description": "Mark channels as read, jump to chat history, repair unresolved mentions, and add attachments to your messages.",
     "authors": [
         {
             "name": "tenshiavi"
