@@ -5,7 +5,7 @@ import { showConfirmationAlert } from "@vendetta/ui/alerts";
 import { getAssetIDByName } from "@vendetta/ui/assets";
 import { showToast } from "@vendetta/ui/toasts";
 import { findByProps } from "../../compat";
-import { disableNativeSwitcher, enableNativeSwitcher } from "./nativeSwitcher";
+import { disableNativeSwitcher, enableNativeSwitcher, openNativeAccountManager } from "./nativeSwitcher";
 
 const { TableRow, TableRowGroup, TableSwitchRow, Stack } = findByProps(
 	"TableRow",
@@ -55,7 +55,16 @@ export default function Settings() {
 					/>
 					<TableRow
 						label="Add or switch accounts"
-						subLabel="Use Discord's own account controls. Any required login or authenticator code is handled by Discord."
+						subLabel="Open Discord's account manager to add or switch accounts. Any required login or authenticator code is handled by Discord."
+						trailing={<TableRow.Arrow />}
+						disabled={!storage.enabled}
+						onPress={() => {
+							if (openNativeAccountManager()) {
+								showToast("Opened Discord's native account manager", getAssetIDByName("Check"));
+							} else {
+								showToast("Discord's account manager is unavailable in this client", getAssetIDByName("Warning"));
+							}
+						}}
 					/>
 				</TableRowGroup>
 				<TableRowGroup title="Security and Login Responses">

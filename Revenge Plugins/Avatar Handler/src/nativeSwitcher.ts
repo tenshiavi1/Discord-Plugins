@@ -1,5 +1,5 @@
 import { after } from "@vendetta/patcher";
-import { findByProps, findByStoreName } from "../../compat";
+import { findByName, findByProps, findByStoreName } from "../../compat";
 
 type MultiAccountStore = {
 	canUseMultiAccountNotifications?: boolean;
@@ -10,6 +10,22 @@ let patchedMultiAccountStore: MultiAccountStore | undefined;
 let originalNotificationDescriptor: PropertyDescriptor | undefined;
 let patchedNotificationCapability = false;
 let forcedNotificationGetter: (() => boolean) | undefined;
+
+export function openNativeAccountManager(): boolean {
+	const openManageAccountsModal = findByName("openManageAccountsModal");
+	if (typeof openManageAccountsModal !== "function") {
+		console.warn("[Avatar Handler] Discord's native account manager was not found.");
+		return false;
+	}
+
+	try {
+		openManageAccountsModal();
+		return true;
+	} catch (error) {
+		console.error("[Avatar Handler] Could not open Discord's native account manager.", error);
+		return false;
+	}
+}
 
 export function enableNativeSwitcher(): boolean {
 	if (unpatchCapability && patchedNotificationCapability) return true;
