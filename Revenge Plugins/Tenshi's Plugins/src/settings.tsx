@@ -926,7 +926,7 @@ export default function Settings() {
 			>
 				<StableTextInput
 					accessibilityLabel="Search plugins"
-					placeholder="Search Plugins by Name or Description"
+					placeholder="Search plugins by name or description"
 					value={searchQuery}
 					onChangeText={setSearchQuery}
 					resetKey={searchInputReset}

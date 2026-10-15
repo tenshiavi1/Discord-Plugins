@@ -179,15 +179,6 @@ export default function Settings() {
           />
         </TableRowGroup>
 
-        <TableRowGroup title="Plugin Settings">
-          <TableSwitchRow
-            label="Show in Settings"
-            subLabel="Add a shortcut to Omniscience in Discord settings."
-            value={storage.showInSettings}
-            onValueChange={(v: boolean) => { storage.showInSettings = v; forceUpdate(); }}
-          />
-        </TableRowGroup>
-
         <TableRowGroup title="Tracking Target">
           <TableSwitchRow
             label="Track Mentions of This Account"
@@ -240,7 +231,7 @@ export default function Settings() {
             <Stack spacing={4} style={{ padding: 10 }}>
               <StableTextInput
                 key="customIds"
-                placeholder="1099039269391171765, 845374453939568720"
+                placeholder="Enter comma-separated user IDs."
                 value={String(storage.customIds ?? "")}
                 onChangeText={(value: string) => { storage.customIds = value; }}
                 style={inputStyle}
@@ -285,7 +276,7 @@ export default function Settings() {
             <Stack spacing={4} style={{ padding: 10 }}>
               <StableTextInput
                 key="trackedChannelIds"
-                placeholder="1205207690352005243, 1296197038006075543"
+                placeholder="Enter comma-separated channel IDs."
                 value={String(storage.trackedChannelIds ?? "")}
                 onChangeText={(value: string) => { storage.trackedChannelIds = value; }}
                 style={inputStyle}
@@ -324,7 +315,7 @@ export default function Settings() {
             <Stack spacing={4} style={{ padding: 10 }}>
               <StableTextInput
                 key="ignoredServerIds"
-                placeholder="1205207689832038522, 1196075698301968455"
+                placeholder="Enter comma-separated server IDs."
                 value={String(storage.ignoredServerIds ?? "")}
                 onChangeText={(value: string) => { storage.ignoredServerIds = value; }}
                 style={{ color: "#f2f3f5", backgroundColor: "#1e1f22", borderRadius: 8, paddingHorizontal: 12, paddingVertical: 10 }}
@@ -338,7 +329,7 @@ export default function Settings() {
             <Stack spacing={4} style={{ padding: 10 }}>
               <StableTextInput
                 key="ignoredChannelIds"
-                placeholder="1306947192594108467, 1284131216156655646"
+                placeholder="Enter comma-separated channel IDs."
                 value={String(storage.ignoredChannelIds ?? "")}
                 onChangeText={(value: string) => { storage.ignoredChannelIds = value; }}
                 style={{ color: "#f2f3f5", backgroundColor: "#1e1f22", borderRadius: 8, paddingHorizontal: 12, paddingVertical: 10 }}
@@ -352,7 +343,7 @@ export default function Settings() {
             <Stack spacing={4} style={{ padding: 10 }}>
               <StableTextInput
                 key="ignoredUserIds"
-                placeholder="1099039269391171765, 845374453939568720"
+                placeholder="Enter comma-separated user IDs."
                 value={String(storage.ignoredUserIds ?? "")}
                 onChangeText={(value: string) => { storage.ignoredUserIds = value; }}
                 style={{ color: "#f2f3f5", backgroundColor: "#1e1f22", borderRadius: 8, paddingHorizontal: 12, paddingVertical: 10 }}
@@ -408,7 +399,7 @@ export default function Settings() {
             <Stack spacing={4} style={{ padding: 10 }}>
               <StableTextInput
                 key="targetChannelId"
-                placeholder="Enter a channel ID"
+                placeholder="Enter a channel ID."
                 value={String(storage.targetChannelId ?? "")}
                 onChangeText={(value: string) => { storage.targetChannelId = value; }}
                 style={{ color: "#f2f3f5", backgroundColor: "#1e1f22", borderRadius: 8, paddingHorizontal: 12, paddingVertical: 10 }}
@@ -425,7 +416,7 @@ export default function Settings() {
             <Stack spacing={4} style={{ padding: 10 }}>
               <StableTextInput
                 key="webhookUrl"
-                placeholder="Enter a webhook URL"
+                placeholder="Enter a webhook URL."
                 value={String(storage.webhookUrl ?? "")}
                 onChangeText={(value: string) => { storage.webhookUrl = value; }}
                 style={{ color: "#f2f3f5", backgroundColor: "#1e1f22", borderRadius: 8, paddingHorizontal: 12, paddingVertical: 10 }}
@@ -433,6 +424,15 @@ export default function Settings() {
             </Stack>
           </TableRowGroup>
         )}
+
+        <TableRowGroup title="Plugin Settings">
+          <TableSwitchRow
+            label="Show in Settings"
+            subLabel="Add a shortcut to Omniscience in Discord settings."
+            value={storage.showInSettings}
+            onValueChange={(v: boolean) => { storage.showInSettings = v; forceUpdate(); }}
+          />
+        </TableRowGroup>
 
       </Stack>
     </ScrollView>

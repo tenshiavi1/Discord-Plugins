@@ -1,6 +1,7 @@
 import { findByProps } from "../../compat";
 import { FluxDispatcher } from "@vendetta/metro/common";
 import { storage } from "@vendetta/plugin";
+import { parseLocalDateTime } from "./dateTime";
 
 export const ACTIVITY_TYPES = [
 	{ label: "Playing", value: 0 },
@@ -110,12 +111,12 @@ export function validateConfiguration(config: ActivityConfiguration): string[] {
 		errors.push("Enter both party sizes, and make sure the current size does not exceed the maximum.");
 	}
 	if (config.timestampMode === "custom" && !parseDate(config.timestampCustomStart)) {
-		errors.push("Enter a valid custom timestamp start using YYYY-MM-DD HH:MM.");
+		errors.push("Choose a valid custom start date and time.");
 	}
 	if (config.timestampMode === "custom" && config.timestampEndEnabled) {
 		const start = parseDate(config.timestampCustomStart);
 		const end = parseDate(config.timestampCustomEnd);
-		if (!end) errors.push("Enter a valid custom timestamp end using YYYY-MM-DD HH:MM.");
+		if (!end) errors.push("Choose a valid custom end date and time.");
 		else if (start && end <= start) errors.push("The custom end time must be later than the start time.");
 	}
 	return errors;
@@ -309,9 +310,7 @@ function isHttpUrl(value: string): boolean {
 }
 
 function parseDate(value: string): number | undefined {
-	if (!/^\d{4}-\d{2}-\d{2} \d{2}:\d{2}$/.test(value)) return undefined;
-	const timestamp = new Date(value.replace(" ", "T")).getTime();
-	return Number.isFinite(timestamp) ? timestamp : undefined;
+	return parseLocalDateTime(value)?.getTime();
 }
 
 function parseOptionalPositiveInteger(value: string): number | null {
