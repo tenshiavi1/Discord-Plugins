@@ -7,6 +7,14 @@ export type ManagerActivityRecord = {
 	status: ManagerActivityStatus;
 	summary: string;
 	details?: string;
+	metrics?: ManagerActivityMetrics;
+};
+
+export type ManagerActivityMetrics = {
+	installedPlugins: number;
+	repositoryPlugins: number;
+	updatedPlugins: number;
+	updateTotal: number;
 };
 
 export const MANAGER_ACTIVITY_KEY = "managerActivity";
@@ -23,7 +31,13 @@ function isManagerActivityRecord(record: unknown): record is ManagerActivityReco
 	) return false;
 	if (!("status" in record) || !["success", "failure", "info"].includes(String(record.status))) return false;
 	if (!("summary" in record) || typeof record.summary !== "string") return false;
-	return !("details" in record) || typeof record.details === "string";
+	if ("details" in record && typeof record.details !== "string") return false;
+	if (!("metrics" in record) || record.metrics === undefined) return true;
+	if (typeof record.metrics !== "object" || record.metrics === null) return false;
+	const metrics = record.metrics as Record<string, unknown>;
+	return ["installedPlugins", "repositoryPlugins", "updatedPlugins", "updateTotal"].every((key) =>
+		typeof metrics[key] === "number" && Number.isFinite(metrics[key]) && metrics[key] >= 0,
+	);
 }
 
 export function getManagerActivity(): ManagerActivityRecord[] {
@@ -37,12 +51,14 @@ export function recordManagerActivity(
 	summary: string,
 	status: ManagerActivityStatus,
 	details?: string,
+	metrics?: ManagerActivityMetrics,
 ): ManagerActivityRecord[] {
 	const record: ManagerActivityRecord = {
 		timestamp: Date.now(),
 		status,
 		summary,
 		details: details?.slice(0, MANAGER_ACTIVITY_DETAIL_LIMIT),
+		metrics,
 	};
 	const next = [record, ...getManagerActivity()].slice(0, MANAGER_ACTIVITY_LIMIT);
 	storage[MANAGER_ACTIVITY_KEY] = next;

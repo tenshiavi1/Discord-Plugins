@@ -9,12 +9,13 @@ import { getAssetIDByName } from "@vendetta/ui/assets";
 import StableTextInput from "../../StableTextInput";
 import { showToast } from "../../shared/toast";
 import { MANAGED_PLUGINS, type ManagedPlugin } from "./catalog";
-import { getManagerActivity, recordManagerActivity, type ManagerActivityRecord, type ManagerActivityStatus } from "./activityLog";
+import { getManagerActivity, recordManagerActivity, type ManagerActivityMetrics, type ManagerActivityRecord, type ManagerActivityStatus } from "./activityLog";
 import { clearLastCrash, getCrashReasons, getLastCrash } from "./crashLog";
 import { reloadAndReturnToManager } from "./managerNavigation";
 import { findInstalledPlugin, refetchInstalledPlugins, refetchPlugin, type InstalledPlugin } from "./pluginUpdater";
 import { cancelScheduledAutoFetch } from "./autoFetch";
 import { getPendingManagerRestart } from "./restartState";
+import { formatActivityConsoleHeader, formatLatestError, summarizeActivityConsole, type ActivityConsoleAction, type ActivityConsolePhase } from "./activityConsole";
 
 const { TableRow, TableRowGroup } = findByProps("TableRow", "TableRowGroup");
 const showSimpleActionSheet = findByProps("showSimpleActionSheet")?.showSimpleActionSheet;
@@ -97,6 +98,27 @@ export default function Settings() {
 	const autoFetchInProgress = storage.autoFetchInProgress === true;
 	const managerBusy = fetchingAll || autoFetchInProgress || Object.values(busy).some(Boolean);
 	const pendingManagerRestart = getPendingManagerRestart();
+	const installedPluginCount = catalog.filter((entry) => findInstalledPlugin(entry)).length;
+	const consoleSummary = summarizeActivityConsole(activityLog, installedPluginCount, catalog.length);
+	const consoleState = (
+		action: ActivityConsoleAction,
+		phase: ActivityConsolePhase,
+		current = 0,
+		total = 0,
+		errors = 0,
+		restartRequired = Boolean(pendingManagerRestart),
+	) => ({
+		action,
+		phase,
+		current,
+		total,
+		errors,
+		installedCount: installedPluginCount,
+		repositoryCount: catalog.length,
+		updatedCount: consoleSummary.updatedPlugins,
+		updatedTotal: consoleSummary.updateTotal,
+		restartRequired,
+	});
 	const lastCrash = getLastCrash();
 	const formatCrashDate = (timestamp: number) => {
 		const crashTime = new Date(timestamp);
@@ -129,8 +151,8 @@ export default function Settings() {
 		)
 		.sort((left, right) => left.name.localeCompare(right.name));
 
-	const recordActivity = (summary: string, status: ManagerActivityStatus, details?: string) => {
-		setActivityLog(recordManagerActivity(summary, status, details));
+	const recordActivity = (summary: string, status: ManagerActivityStatus, details?: string, metrics?: ManagerActivityMetrics) => {
+		setActivityLog(recordManagerActivity(summary, status, details, metrics));
 	};
 
 	const formatActivityLog = (maxLines: number) => activityLog
@@ -207,7 +229,7 @@ export default function Settings() {
 		setFetchingAll(true);
 		setFetchProgress(0);
 		setFetchTotal(0);
-		setActivityStatus("Loading plugin catalog…");
+		setActivityStatus(formatActivityConsoleHeader(consoleState("fetch", "running")));
 		recordActivity("Fetch All started", "info");
 		try {
 			const result = await refetchInstalledPlugins({
@@ -215,40 +237,47 @@ export default function Settings() {
 				onProgress: (progress, total, pluginName) => {
 					setFetchProgress(progress);
 					setFetchTotal(total);
-					setActivityStatus(pluginName ? `Fetching ${pluginName}…` : "Loading plugin catalog…");
+					setActivityStatus(formatActivityConsoleHeader(consoleState("fetch", "running", progress, total)));
 				},
 				onFailure: (pluginName, error) => {
 					recordActivity(`${pluginName} fetch failed`, "failure", errorDetails(error));
 				},
 			});
 			setFetchProgress(result.total);
-			const restartAdvice = result.restartRequired.length > 0
-				? ` Restart Revenge to load updates for ${result.restartRequired.join(", ")}.`
-				: "";
+			const restartRequired = result.restartRequired.length > 0;
+			const metrics: ManagerActivityMetrics = {
+				installedPlugins: result.total - result.available,
+				repositoryPlugins: result.total,
+				updatedPlugins: result.updated,
+				updateTotal: result.total - result.available,
+			};
 
 			if (result.failures.length > 0) {
 				recordActivity(
-					`Fetch All finished with ${result.failures.length} failure${result.failures.length === 1 ? "" : "s"}.${restartAdvice}`,
+					formatActivityConsoleHeader(consoleState("fetch", "failed", result.total, result.total, result.failures.length, restartRequired)),
 					"failure",
-					[result.failures.join("\n"), restartAdvice.trim()].filter(Boolean).join("\n"),
+					result.failures.join("\n"),
+					metrics,
 				);
 				showToast(
-					`Fetch finished with ${result.failures.length} error${result.failures.length === 1 ? "" : "s"}.${restartAdvice}`,
+					formatActivityConsoleHeader(consoleState("fetch", "failed", result.total, result.total, result.failures.length, restartRequired)),
 					getAssetIDByName("Warning"),
 				);
 			} else {
 				recordActivity(
-					`Fetch All finished: ${result.updated} updated, ${result.unchanged} unchanged, ${result.available} available.${restartAdvice}`,
+					formatActivityConsoleHeader(consoleState("fetch", "complete", result.total, result.total, 0, restartRequired)),
 					"success",
+					`Updated ${result.updated}; unchanged ${result.unchanged}; available ${result.available}.`,
+					metrics,
 				);
 				showToast(
-					`Fetch complete: ${result.updated} updated, ${result.unchanged} current, ${result.available} available.${restartAdvice}`,
+					`${formatActivityConsoleHeader(consoleState("fetch", "complete", result.total, result.total, 0, restartRequired))} Updated ${result.updated}; unchanged ${result.unchanged}; available ${result.available}.`,
 					getAssetIDByName("Check"),
 				);
 			}
 		} catch (error) {
 			console.error("[Tenshi's Plugins] Failed to fetch the plugin catalog.", error);
-			recordActivity("Fetch All failed", "failure", errorDetails(error));
+			recordActivity(formatActivityConsoleHeader(consoleState("fetch", "failed", 0, 0, 1)), "failure", errorDetails(error));
 			showToast("Could not refresh the plugin catalog. Check your connection and try again.", getAssetIDByName("Warning"));
 		} finally {
 			setActivityStatus("");
