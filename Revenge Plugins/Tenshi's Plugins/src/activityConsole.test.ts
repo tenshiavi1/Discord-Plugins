@@ -4,6 +4,7 @@ import {
 	formatLatestError,
 	formatLocalErrorTime,
 	summarizeActivityConsole,
+	withoutActivityFailures,
 	type ActivityConsoleState,
 } from "./activityConsole";
 
@@ -39,6 +40,21 @@ test("uses aggregate errors instead of counting per-plugin failures twice", () =
 	expect(summary.errorCount).toBe(2);
 });
 
+test("clears resolved failures but preserves success and activity history", () => {
+	const records = [
+		{ timestamp: 100, status: "failure" as const, summary: "Fetch failed" },
+		{ timestamp: 200, status: "success" as const, summary: "Fetch complete" },
+		{ timestamp: 300, status: "info" as const, summary: "Automatic updates started." },
+	];
+	const remaining = withoutActivityFailures(records);
+
+	expect(remaining.map((record) => record.summary)).toEqual([
+		"Fetch complete",
+		"Automatic updates started.",
+	]);
+	expect(summarizeActivityConsole(remaining, 2, 4).errorCount).toBe(0);
+});
+
 test("uses local 24-hour time and shows None when no error exists", () => {
 	expect(formatLocalErrorTime(undefined)).toBe("None");
 	expect(formatLocalErrorTime(new Date(2026, 9, 16, 7, 5).getTime())).toBe("07:05:00");
@@ -58,12 +74,12 @@ const baseState: ActivityConsoleState = {
 };
 
 test("formats progress and completion headers with restart advice", () => {
-	expect(formatActivityConsoleHeader(baseState)).toBe("Fetching plugin list. 3 / 7");
-	expect(formatActivityConsoleHeader({ ...baseState, action: "install" })).toBe("Installing all plugins. 3 / 7");
+	expect(formatActivityConsoleHeader(baseState)).toBe("Fetching plugins (3/7)…");
+	expect(formatActivityConsoleHeader({ ...baseState, action: "install" })).toBe("Installing plugins (3/7)…");
 	expect(formatActivityConsoleHeader({ ...baseState, phase: "complete", restartRequired: true }))
-		.toBe("Fetched plugin list. Restart required.");
+		.toBe("Plugin list fetched. Restart Revenge to apply updates.");
 	expect(formatActivityConsoleHeader({ ...baseState, phase: "failed", errors: 2 }))
-		.toBe("Could not fetch plugin list. 2 errors.");
+		.toBe("Could not fetch plugins. 2 errors.");
 });
 
 test("formats the latest error in local 24-hour time", () => {

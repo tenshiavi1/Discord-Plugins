@@ -9,11 +9,12 @@ import { getAssetIDByName } from "@vendetta/ui/assets";
 import StableTextInput from "../../StableTextInput";
 import { showToast } from "../../shared/toast";
 import { MANAGED_PLUGINS, type ManagedPlugin } from "./catalog";
-import { getManagerActivity, recordManagerActivity, type ManagerActivityMetrics, type ManagerActivityRecord, type ManagerActivityStatus } from "./activityLog";
-import { clearLastCrash, getCrashReasons, getLastCrash } from "./crashLog";
+import { clearManagerActivityFailures, getManagerActivity, recordManagerActivity, type ManagerActivityMetrics, type ManagerActivityRecord, type ManagerActivityStatus } from "./activityLog";
+import { clearLastCrash, getLastCrash } from "./crashLog";
 import { reloadAndReturnToManager } from "./managerNavigation";
 import { findInstalledPlugin, refetchInstalledPlugins, refetchPlugin, type InstalledPlugin } from "./pluginUpdater";
-import { cancelScheduledAutoFetch } from "./autoFetch";
+import { cancelScheduledAutoFetch, getAutoFetchProgress } from "./autoFetch";
+import { formatAutoFetchProgress } from "./autoFetchGate";
 import { getPendingManagerRestart } from "./restartState";
 import { formatActivityConsoleHeader, formatLatestError, summarizeActivityConsole, type ActivityConsoleAction, type ActivityConsolePhase } from "./activityConsole";
 
@@ -96,6 +97,8 @@ export default function Settings() {
 	const normalizedQuery = searchQuery.trim().toLocaleLowerCase();
 	const autoFetchEnabled = storage.autoFetchEnabled === true;
 	const autoFetchInProgress = storage.autoFetchInProgress === true;
+	const autoFetchProgress = autoFetchInProgress ? getAutoFetchProgress() : undefined;
+	const autoFetchStatus = autoFetchInProgress ? formatAutoFetchProgress(autoFetchProgress) : "";
 	const managerBusy = fetchingAll || autoFetchInProgress || Object.values(busy).some(Boolean);
 	const pendingManagerRestart = getPendingManagerRestart();
 	const installedPluginCount = catalog.filter((entry) => findInstalledPlugin(entry)).length;
@@ -131,28 +134,6 @@ export default function Settings() {
 		restartRequired,
 	});
 	const lastCrash = getLastCrash();
-	const formatCrashDate = (timestamp: number) => {
-		const crashTime = new Date(timestamp);
-		const date = crashTime.toLocaleDateString("en-US", {
-			month: "2-digit",
-			day: "2-digit",
-			year: "numeric",
-		});
-		const time = crashTime.toLocaleTimeString("en-US", {
-			hour: "2-digit",
-			minute: "2-digit",
-			second: "2-digit",
-			hourCycle: "h23",
-		});
-		return `${date} ${time}`;
-	};
-	const crashDate = lastCrash ? formatCrashDate(lastCrash.timestamp) : undefined;
-	const storedCrashReasons = getCrashReasons();
-	const crashReasons = storedCrashReasons.length > 0
-		? storedCrashReasons
-		: lastCrash && lastCrash.pluginName !== "Unknown plugin"
-			? [{ pluginName: lastCrash.pluginName, timestamp: lastCrash.timestamp }]
-			: [];
 	const visiblePlugins = catalog
 		.filter((entry) =>
 			!normalizedQuery ||
@@ -187,16 +168,16 @@ export default function Settings() {
 		try {
 			if (installed) {
 				await removePlugin(installed.key);
-				recordActivity(`${entry.name} removed`, "success");
+				recordActivity(`${entry.name} removed.`, "success");
 				showToast(`${entry.name} was removed.`, getAssetIDByName("Check"));
 			} else {
 				await installPlugin(entry.url, true);
-				recordActivity(`${entry.name} installed`, "success");
+				recordActivity(`${entry.name} installed.`, "success");
 				showToast(`${entry.name} was installed.`, getAssetIDByName("Check"));
 			}
 		} catch (error) {
 			console.error(`[Tenshi's Plugins] Failed to ${installed ? "delete" : "install"} ${entry.name}.`, error);
-			recordActivity(`${action} ${entry.name} failed`, "failure", errorDetails(error));
+			recordActivity(`Could not ${action.toLocaleLowerCase()} ${entry.name}.`, "failure", errorDetails(error));
 			showToast(
 				`Could not ${action.toLocaleLowerCase()} ${entry.name}. Check the activity log for details.`,
 				getAssetIDByName("Warning"),
@@ -237,11 +218,12 @@ export default function Settings() {
 
 	const fetchAllPlugins = async () => {
 		if (managerBusy) return;
+		setActivityLog(clearManagerActivityFailures());
 		setFetchingAll(true);
 		setFetchProgress(0);
 		setFetchTotal(0);
 		setActivityStatus(formatActivityConsoleHeader(consoleState("fetch", "running")));
-		recordActivity("Fetch All started", "info");
+		recordActivity("Fetch all started.", "info");
 		try {
 			const result = await refetchInstalledPlugins({
 				onCatalog: setCatalog,
@@ -251,7 +233,7 @@ export default function Settings() {
 					setActivityStatus(formatActivityConsoleHeader(consoleState("fetch", "running", progress, total)));
 				},
 				onFailure: (pluginName, error) => {
-					recordActivity(`${pluginName} fetch failed`, "failure", errorDetails(error));
+					recordActivity(`Could not refresh ${pluginName}.`, "failure", errorDetails(error));
 				},
 			});
 			setFetchProgress(result.total);
@@ -278,11 +260,11 @@ export default function Settings() {
 				recordActivity(
 					formatActivityConsoleHeader(consoleState("fetch", "complete", result.total, result.total, 0, restartRequired)),
 					"success",
-					`Updated ${result.updated}; unchanged ${result.unchanged}; available ${result.available}.`,
+					`${result.updated} updated; ${result.unchanged} unchanged; ${result.available} available.`,
 					metrics,
 				);
 				showToast(
-					`${formatActivityConsoleHeader(consoleState("fetch", "complete", result.total, result.total, 0, restartRequired))} Updated ${result.updated}; unchanged ${result.unchanged}; available ${result.available}.`,
+					`${formatActivityConsoleHeader(consoleState("fetch", "complete", result.total, result.total, 0, restartRequired))} ${result.updated} updated, ${result.unchanged} unchanged, ${result.available} available.`,
 					getAssetIDByName("Check"),
 				);
 			}
@@ -298,9 +280,9 @@ export default function Settings() {
 
 	const confirmFetchAll = () => {
 		showConfirmationAlert({
-			title: "Fetch All Plugins?",
-			content: "This refreshes the plugin list from the repository and refetches plugins already installed. New plugins will appear with an Install button and will not be installed automatically. Installed plugins may briefly stop while they are updated.",
-			confirmText: "Fetch All",
+			title: "Fetch all plugins?",
+			content: "This refreshes the plugin list and checks installed plugins for updates. New plugins will appear with an Install button but will not be installed automatically. Installed plugins may briefly stop while updating.",
+			confirmText: "Fetch all",
 			cancelText: "Cancel",
 			onConfirm: () => { void fetchAllPlugins(); },
 		});
@@ -309,20 +291,20 @@ export default function Settings() {
 	const confirmAutoFetch = () => {
 		const enable = storage.autoFetchEnabled !== true;
 		showConfirmationAlert({
-			title: enable ? "Enable automatic refetch?" : "Turn off automatic refetch?",
+			title: enable ? "Enable automatic updates?" : "Disable automatic updates?",
 			content: enable
-				? "On each Revenge startup or restart, Tenshi's Plugins will check for updates to installed plugins. It will not install uninstalled plugins. Updated plugins may briefly stop and restart. This takes effect on the next startup."
-				: "Tenshi's Plugins will stop refetching installed plugins at startup. You can still use Manage > Fetch All at any time.",
-			confirmText: enable ? "Auto On" : "Auto Off",
+				? "At startup, Tenshi's Plugins will check installed plugins for updates. It will not install plugins that are not already installed. Updated plugins may briefly stop and restart. This takes effect the next time Revenge starts."
+				: "Tenshi's Plugins will stop checking for updates at startup. You can still fetch all plugins from Manage.",
+			confirmText: enable ? "Enable" : "Disable",
 			cancelText: "Cancel",
 			onConfirm: () => {
 				storage.autoFetchEnabled = enable;
-			if (!enable) cancelScheduledAutoFetch();
-				recordActivity(`Automatic plugin refetch ${enable ? "enabled" : "disabled"}`, "success");
+				if (!enable) cancelScheduledAutoFetch();
+				recordActivity(`Automatic updates ${enable ? "enabled" : "disabled"}.`, "success");
 				showToast(
 					enable
-						? "Automatic plugin refetch is on for the next Revenge startup."
-						: "Automatic plugin refetch is off.",
+						? "Automatic updates will run the next time Revenge starts."
+						: "Automatic updates are off.",
 					getAssetIDByName("Check"),
 				);
 			},
@@ -333,12 +315,13 @@ export default function Settings() {
 
 	const runBulkAction = async (action: BulkAction) => {
 		if (managerBusy) return;
+		const actionLabel = { install: "Install all", remove: "Remove all", clear: "Clear all" }[action];
 		const targets = catalog.filter((entry) => {
 			const installed = findInstalledPlugin(entry);
 			return action === "install" ? !installed : !!installed;
 		});
 		if (targets.length === 0) {
-			recordActivity(`${action} All skipped`, "info", "No plugins matched this action.");
+			recordActivity(`${actionLabel} skipped.`, "info", "No plugins matched this action.");
 			showToast(
 				action === "install"
 					? "Every plugin in the catalog is already installed."
@@ -351,19 +334,20 @@ export default function Settings() {
 		setFetchingAll(true);
 		setFetchProgress(0);
 		setFetchTotal(targets.length);
-		const actionLabel = `${action.charAt(0).toUpperCase()}${action.slice(1)} All`;
-		setActivityStatus(`${actionLabel}…`);
-		recordActivity(`${actionLabel} started`, "info", `${targets.length} plugin${targets.length === 1 ? "" : "s"} queued.`);
+		const progressLabel = { install: "Installing plugins", remove: "Removing plugins", clear: "Clearing plugin data" }[action];
+		setActivityStatus(`${progressLabel} (0/${targets.length})…`);
+		recordActivity(`${actionLabel} started.`, "info", `${targets.length} plugin${targets.length === 1 ? "" : "s"} queued.`);
 		const orderedTargets = [...targets].sort(
 			(left, right) => Number(left.name === "Tenshi's Plugins") - Number(right.name === "Tenshi's Plugins"),
 		);
 		let completed = 0;
 		const failedPlugins: string[] = [];
+		const pluginAction = { install: "Installing", remove: "Removing", clear: "Clearing data for" }[action];
 
 		try {
 			for (const [index, entry] of orderedTargets.entries()) {
 				setFetchProgress(index + 1);
-				setActivityStatus(`${actionLabel}: ${entry.name}…`);
+				setActivityStatus(`${pluginAction} ${entry.name} (${index + 1}/${targets.length})…`);
 				const installed = findInstalledPlugin(entry);
 				try {
 					if (action === "install") {
@@ -380,7 +364,7 @@ export default function Settings() {
 				} catch (error) {
 					console.error(`[Tenshi's Plugins] Failed to ${action} ${entry.name} during bulk management.`, error);
 					failedPlugins.push(entry.name);
-					recordActivity(`${actionLabel}: ${entry.name} failed`, "failure", errorDetails(error));
+					recordActivity(`${actionLabel} failed for ${entry.name}.`, "failure", errorDetails(error));
 				}
 			}
 			if (action === "clear") {
@@ -389,7 +373,7 @@ export default function Settings() {
 				} catch (error) {
 					console.error("[Tenshi's Plugins] Failed to clear the last crash log.", error);
 					failedPlugins.push("Last crash log");
-					recordActivity("Clear All: crash log failed", "failure", errorDetails(error));
+					recordActivity("Clear all failed while clearing the crash log.", "failure", errorDetails(error));
 				}
 			}
 		} finally {
@@ -398,38 +382,38 @@ export default function Settings() {
 		}
 
 		const completionMessage = action === "install"
-			? `${completed} installed`
+			? `${completed} plugin${completed === 1 ? "" : "s"} installed`
 			: action === "remove"
-				? `${completed} removed`
-				: `${completed} cleared`;
+				? `${completed} plugin${completed === 1 ? "" : "s"} removed`
+				: `Data cleared for ${completed} plugin${completed === 1 ? "" : "s"}`;
 		if (failedPlugins.length > 0) {
-			recordActivity(`${actionLabel} partially completed: ${completionMessage}`, "failure", `Failed: ${failedPlugins.join(", ")}`);
+			recordActivity(`${actionLabel} partly completed. ${completionMessage}.`, "failure", `Failed: ${failedPlugins.join(", ")}`);
 			showToast(
-				`${actionLabel} partly completed: ${completionMessage}; ${failedPlugins.length} failed. See the activity log.`,
+				`${actionLabel} partly completed. ${completionMessage}; ${failedPlugins.length} failed. See the activity log.`,
 				getAssetIDByName("Warning"),
 			);
 		} else {
-			recordActivity(`${actionLabel} complete: ${completionMessage}`, "success");
-			showToast(`${actionLabel} complete: ${completionMessage}.`, getAssetIDByName("Check"));
+			recordActivity(`${actionLabel} complete. ${completionMessage}.`, "success");
+			showToast(`${actionLabel} complete. ${completionMessage}.`, getAssetIDByName("Check"));
 		}
 	};
 
 	const confirmBulkAction = (action: BulkAction) => {
 		const confirmation = {
 			install: {
-				title: "Install All Plugins?",
+				title: "Install all plugins?",
 				content: "This will install every plugin in the list that is not already installed. Existing installations will be left unchanged.",
-				confirmText: "Install All",
+				confirmText: "Install all",
 			},
 			remove: {
-				title: "Remove All Plugins?",
+				title: "Remove all plugins?",
 				content: "This will uninstall every installed plugin in the list, including Tenshi's Plugins. You may need to reopen settings after removing the manager.",
-				confirmText: "Remove All",
+				confirmText: "Remove all",
 			},
 			clear: {
-				title: "Clear All Plugin Data?",
+				title: "Clear all plugin data?",
 				content: "This permanently clears saved settings and data for every installed plugin in the list, including the last crash log. This cannot be undone, and enabled plugins may briefly stop and restart.",
-				confirmText: "Clear All",
+				confirmText: "Clear all",
 			},
 		}[action];
 		showConfirmationAlert({
@@ -450,12 +434,12 @@ export default function Settings() {
 			key: "ManagePlugins",
 			header: {
 				title: "Manage plugins",
-				subtitle: "Choose an action to perform.",
+				subtitle: "Choose an action.",
 				onClose: hideActionSheet,
 			},
 			options: [
 				{
-					label: "Fetch All",
+					label: "Fetch all",
 					icon: getAssetIDByName("RetryIcon"),
 					onPress: () => {
 						hideActionSheet?.();
@@ -463,7 +447,7 @@ export default function Settings() {
 					},
 				},
 				{
-					label: "Install All",
+					label: "Install all",
 					icon: getAssetIDByName("DownloadIcon"),
 					onPress: () => {
 						hideActionSheet?.();
@@ -471,7 +455,7 @@ export default function Settings() {
 					},
 				},
 				{
-					label: "Remove All",
+					label: "Remove all",
 					icon: getAssetIDByName("TrashIcon"),
 					isDestructive: true,
 					onPress: () => {
@@ -480,7 +464,7 @@ export default function Settings() {
 					},
 				},
 				{
-					label: "Clear All",
+					label: "Clear all",
 					icon: getAssetIDByName("CopyIcon"),
 					isDestructive: true,
 					onPress: () => {
@@ -497,15 +481,15 @@ export default function Settings() {
 		showConfirmationAlert({
 			title: "Restart Revenge?",
 			content: "Revenge will restart.",
-			confirmText: "Okay",
+			confirmText: "Restart",
 			cancelText: "Cancel",
 			onConfirm: () => {
 				try {
-					recordActivity("Discord restart requested", "info");
+					recordActivity("Discord restart requested.", "info");
 					reloadAndReturnToManager();
 				} catch (error) {
 					console.error("[Tenshi's Plugins] Could not reload Revenge.", error);
-					recordActivity("Discord restart failed", "failure", errorDetails(error));
+					recordActivity("Discord restart failed.", "failure", errorDetails(error));
 					showToast("Could not restart Revenge. Check the console for details.", getAssetIDByName("Warning"));
 				}
 			},
@@ -556,11 +540,11 @@ export default function Settings() {
 					setActivityStatus(`Clearing ${entry.name} data…`);
 					try {
 						await clearPluginData(entry, installed);
-						recordActivity(`${entry.name} data cleared`, "success");
+						recordActivity(`${entry.name} data cleared.`, "success");
 						showToast(`Cleared the saved data for ${entry.name}.`, getAssetIDByName("Check"));
 					} catch (error) {
 						console.error(`[Tenshi's Plugins] Failed to clear ${entry.name} data.`, error);
-						recordActivity(`Clear ${entry.name} data failed`, "failure", errorDetails(error));
+						recordActivity(`Could not clear ${entry.name}'s data.`, "failure", errorDetails(error));
 						showToast(`Could not clear ${entry.name} data. See the activity log.`, getAssetIDByName("Warning"));
 					} finally {
 						setActivityStatus("");
@@ -595,30 +579,30 @@ export default function Settings() {
 		if (installed) {
 			options.push(
 				{
-					label: "Refetch",
+					label: "Refresh",
 					icon: getAssetIDByName("RetryIcon"),
 					onPress: () => {
 						hideActionSheet?.();
 						void (async () => {
-							setActivityStatus(`Fetching ${entry.name}…`);
-							recordActivity(`${entry.name} refetch started`, "info");
+							setActivityStatus(`Refreshing ${entry.name}…`);
+							recordActivity(`${entry.name} refresh started.`, "info");
 							try {
 								const result = await refetchPlugin(entry, installed);
 								recordActivity(
 									result.restartRequired
-										? `${entry.name} refetched; restart Revenge to load the update`
-										: result.updated ? `${entry.name} refetched` : `${entry.name} is already up to date`,
+										? `${entry.name} refreshed; restart Revenge to apply the update.`
+										: result.updated ? `${entry.name} refreshed.` : `${entry.name} is already up to date.`,
 									"success",
 								);
 								showToast(
 									result.restartRequired
-										? `${entry.name} was updated. Restart Revenge to load it.`
+										? `${entry.name} was updated. Restart Revenge to apply it.`
 										: result.updated ? `${entry.name} was refreshed successfully.` : `${entry.name} is already up to date.`,
 									getAssetIDByName("Check"),
 								);
 							} catch (error) {
 								console.error(`[Tenshi's Plugins] Failed to refetch ${entry.name}.`, error);
-								recordActivity(`${entry.name} refetch failed`, "failure", errorDetails(error));
+								recordActivity(`${entry.name} refresh failed.`, "failure", errorDetails(error));
 								showToast(
 									`Could not refresh ${entry.name}. See the activity log.`,
 									getAssetIDByName("Warning"),
@@ -635,17 +619,17 @@ export default function Settings() {
 					onPress: () => {
 						try {
 							clipboard.setString(installed.key);
-							recordActivity(`${entry.name} install URL copied`, "success");
+							recordActivity(`${entry.name} install URL copied.`, "success");
 							showToast(`Copied the install URL for ${entry.name}.`, getAssetIDByName("Check"));
 						} catch (error) {
 							console.error(`[Tenshi's Plugins] Could not copy the install URL for ${entry.name}.`, error);
-							recordActivity(`Copy ${entry.name} URL failed`, "failure", errorDetails(error));
+							recordActivity(`Could not copy ${entry.name}'s URL.`, "failure", errorDetails(error));
 							showToast(`Could not copy ${entry.name}'s URL.`, getAssetIDByName("Warning"));
 						}
 					},
 				},
 				{
-					label: installed.instance.update === false ? "Enable Updates" : "Disable Updates",
+					label: installed.instance.update === false ? "Enable updates" : "Disable updates",
 					icon: getAssetIDByName("DownloadIcon"),
 					onPress: () => {
 						installed.instance.update = installed.instance.update === false;
@@ -660,7 +644,7 @@ export default function Settings() {
 					},
 				},
 				{
-					label: "Clear Data",
+					label: "Clear data",
 					icon: getAssetIDByName("CopyIcon"),
 					isDestructive: true,
 					onPress: () => {
@@ -733,7 +717,7 @@ export default function Settings() {
 					</RN.TouchableOpacity>
 					<RN.View style={{ width: 8 }} />
 					<RN.TouchableOpacity
-						accessibilityLabel={autoFetchEnabled ? "Turn automatic plugin refetch off" : "Turn automatic plugin refetch on"}
+						accessibilityLabel={autoFetchEnabled ? "Turn automatic updates off" : "Turn automatic updates on"}
 						accessibilityRole="button"
 						disabled={fetchingAll || Object.values(busy).some(Boolean)}
 						onPress={confirmAutoFetch}
@@ -749,7 +733,7 @@ export default function Settings() {
 						}}
 					>
 						<RN.Text style={{ color: "#ffffff", fontWeight: "600" }}>
-							{autoFetchEnabled ? "Auto Off" : "Auto On"}
+							{autoFetchEnabled ? "Auto off" : "Auto on"}
 						</RN.Text>
 					</RN.TouchableOpacity>
 					<RN.View style={{ width: 8 }} />
@@ -855,20 +839,21 @@ export default function Settings() {
 				</RN.View>
 				{pendingManagerRestart && (
 					<RN.Text style={{ marginBottom: 8, color: "#f0b232", fontSize: 13, fontWeight: "600" }}>
-						{`Restart Revenge to load updates for ${pendingManagerRestart.pluginNames.join(", ")}.`}
+						{`Restart Revenge to apply updates to ${pendingManagerRestart.pluginNames.join(", ")}.`}
 					</RN.Text>
 				)}
 				<RN.View
 					accessibilityRole={fetchingAll || autoFetchInProgress ? "progressbar" : undefined}
 					accessibilityLabel={autoFetchInProgress
-						? "Automatically updating installed plugins"
+						? autoFetchProgress?.phase === "updating"
+							? `Automatic update progress: ${autoFetchProgress.completed} of ${autoFetchProgress.total}${autoFetchProgress.pluginName ? `, ${autoFetchProgress.pluginName}` : ""}`
+							: autoFetchStatus
 						: fetchingAll ? `Plugin operation progress: ${fetchProgress} of ${fetchTotal}` : undefined}
 					style={{ flexDirection: "row", alignItems: "center", marginBottom: 8 }}
 				>
 					{(fetchingAll || autoFetchInProgress || Object.values(busy).some(Boolean)) && <RN.ActivityIndicator size="small" />}
 					<RN.Text style={{ color: "#dbdee1", marginLeft: 8, flex: 1 }}>
-						{activityStatus || activityLog[0]?.summary || "No manager activity recorded."}
-						{fetchingAll && fetchTotal > 0 ? ` (${fetchProgress}/${fetchTotal})` : ""}
+						{activityStatus || autoFetchStatus || activityLog[0]?.summary || "No manager activity recorded."}
 					</RN.Text>
 				</RN.View>
 				{activityLog.length > 0 && (
@@ -902,76 +887,35 @@ export default function Settings() {
 						opacity: activityLog.length === 0 ? 0.55 : 1,
 					}}
 				>
-						<RN.Text style={{ color: "#f2f3f5", fontWeight: "600" }}>Copy activity log</RN.Text>
+					<RN.Text style={{ color: "#f2f3f5", fontWeight: "600" }}>Copy activity log</RN.Text>
 				</RN.TouchableOpacity>
-			</RN.View>
-			<RN.View
-				style={{
-					marginBottom: 16,
-					padding: 12,
-					borderRadius: 8,
-					borderWidth: 1,
-					borderColor: "#343946",
-					backgroundColor: "#2b2d31",
-				}}
-			>
-				<RN.Text
-					style={{
-						color: "#d8dee9",
-						fontFamily: "monospace",
-						fontSize: 14,
-					}}
-				>
-					{lastCrash
-						? `Last saved error log: ${lastCrash.pluginName} ${crashDate}`
-						: "Last saved error log: None recorded"}
-				</RN.Text>
-				{lastCrash?.message
-					? <RN.Text numberOfLines={2} ellipsizeMode="tail" style={{ marginTop: 4, color: "#d8dee9", fontFamily: "monospace", fontSize: 13 }}>
-						{`${lastCrash.errorName ?? "Error"}: ${lastCrash.message.slice(0, 180)}`}
-					</RN.Text>
-					: null}
-				<RN.Text
-					style={{
-						marginTop: 4,
-						marginBottom: 10,
-						color: "#d8dee9",
-						fontFamily: "monospace",
-						fontSize: 14,
-					}}
-				>
-					{crashReasons.length > 0
-						? `Recent fatal errors: ${crashReasons
-							.map((reason) => `${reason.pluginName} (${formatCrashDate(reason.timestamp)})`)
-							.join(", ")}`
-						: "Recent fatal errors: None recorded"}
-				</RN.Text>
 				<RN.TouchableOpacity
-					accessibilityLabel="Copy saved error log"
+					accessibilityLabel="Copy latest error log"
 					accessibilityRole="button"
 					disabled={!lastCrash}
 					onPress={() => {
 						if (!lastCrash) return;
 						try {
 							clipboard.setString(lastCrash.logs);
-							showToast("Copied the crash log to your clipboard.", getAssetIDByName("Check"));
+							showToast("Copied the latest error log.", getAssetIDByName("Check"));
 						} catch (error) {
-							console.error("[Tenshi's Plugins] Could not copy the last crash logs.", error);
-							showToast("Could not copy the crash log to your clipboard.", getAssetIDByName("Warning"));
+							console.error("[Tenshi's Plugins] Could not copy the latest error log.", error);
+							showToast("Could not copy the latest error log.", getAssetIDByName("Warning"));
 						}
 					}}
 					style={{
 						width: "100%",
 						minHeight: 40,
+						marginTop: 8,
 						alignItems: "center",
 						justifyContent: "center",
-						borderRadius: 6,
-						backgroundColor: lastCrash ? "#292b38" : "#1c1e2b",
+						borderRadius: 8,
+						backgroundColor: "#292b38",
 						opacity: lastCrash ? 1 : 0.55,
 					}}
 				>
-					<RN.Text style={{ color: "#f2f3f5", fontFamily: "monospace", fontWeight: "600" }}>
-						Copy saved error log
+					<RN.Text style={{ color: "#f2f3f5", fontWeight: "600" }}>
+						Copy latest error log
 					</RN.Text>
 				</RN.TouchableOpacity>
 			</RN.View>

@@ -25,33 +25,37 @@ export type ActivityConsoleState = {
 	restartRequired: boolean;
 };
 
+export function withoutActivityFailures(records: ManagerActivityRecord[]) {
+	return records.filter((record) => record.status !== "failure");
+}
+
 export function formatActivityConsoleHeader(state: ActivityConsoleState) {
-	const restartAdvice = state.restartRequired ? " Restart required." : "";
+	const restartAdvice = state.restartRequired ? " Restart Revenge to apply updates." : "";
 	if (state.phase === "running") {
-		const progress = `${state.current} / ${state.total}`;
+		const progress = `${state.current}/${state.total}`;
 		switch (state.action) {
-			case "fetch": return `Fetching plugin list. ${progress}`;
-			case "install": return `Installing all plugins. ${progress}`;
-			case "remove": return `Removing all plugins. ${progress}`;
-			case "clear": return `Clearing plugin data. ${progress}`;
-			case "auto-fetch": return `Auto-updating plugin list. ${progress}`;
+			case "fetch": return `Fetching plugins (${progress})…`;
+			case "install": return `Installing plugins (${progress})…`;
+			case "remove": return `Removing plugins (${progress})…`;
+			case "clear": return `Clearing plugin data (${progress})…`;
+			case "auto-fetch": return `Updating plugins (${progress})…`;
 		}
 	}
 
 	if (state.phase === "failed") {
 		const action = state.action === "fetch" || state.action === "auto-fetch"
-			? "fetch plugin list"
+			? "fetch plugins"
 			: state.action === "install" ? "install plugins"
 				: state.action === "remove" ? "remove plugins" : "clear plugin data";
 		return `Could not ${action}. ${state.errors} error${state.errors === 1 ? "" : "s"}.${restartAdvice}`;
 	}
 
 	const completion = {
-		fetch: "Fetched plugin list.",
-		install: "Installed all plugins.",
-		remove: "Removed all plugins.",
-		clear: "Cleared all plugin data.",
-		"auto-fetch": "Auto-updated plugin list.",
+		fetch: "Plugin list fetched.",
+		install: "Plugins installed.",
+		remove: "Plugins removed.",
+		clear: "Plugin data cleared.",
+		"auto-fetch": "Automatic updates complete.",
 	}[state.action];
 	return `${completion}${restartAdvice}`;
 }

@@ -1,4 +1,5 @@
 import { storage } from "@vendetta/plugin";
+import { withoutActivityFailures } from "./activityConsole";
 
 export type ManagerActivityStatus = "success" | "failure" | "info";
 
@@ -45,6 +46,13 @@ export function getManagerActivity(): ManagerActivityRecord[] {
 	return Array.isArray(records)
 		? records.filter(isManagerActivityRecord).slice(0, MANAGER_ACTIVITY_LIMIT)
 		: [];
+}
+
+export function clearManagerActivityFailures(): ManagerActivityRecord[] {
+	const records = getManagerActivity();
+	const next = withoutActivityFailures(records);
+	if (next.length !== records.length) storage[MANAGER_ACTIVITY_KEY] = next;
+	return next;
 }
 
 export function recordManagerActivity(
