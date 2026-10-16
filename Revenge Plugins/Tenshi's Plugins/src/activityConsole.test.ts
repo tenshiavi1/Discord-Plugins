@@ -29,6 +29,16 @@ test("summarizes failures and the latest error separately from update metrics", 
 	});
 });
 
+test("uses aggregate errors instead of counting per-plugin failures twice", () => {
+	const summary = summarizeActivityConsole([
+		{ timestamp: 100, status: "failure", summary: "Alpha fetch failed" },
+		{ timestamp: 200, status: "failure", summary: "Beta fetch failed" },
+		{ timestamp: 300, status: "failure", summary: "Could not fetch plugin list. 2 errors." },
+	], 2, 4);
+
+	expect(summary.errorCount).toBe(2);
+});
+
 test("uses local 24-hour time and shows None when no error exists", () => {
 	expect(formatLocalErrorTime(undefined)).toBe("None");
 	expect(formatLocalErrorTime(new Date(2026, 9, 16, 7, 5).getTime())).toBe("07:05:00");

@@ -100,6 +100,17 @@ export default function Settings() {
 	const pendingManagerRestart = getPendingManagerRestart();
 	const installedPluginCount = catalog.filter((entry) => findInstalledPlugin(entry)).length;
 	const consoleSummary = summarizeActivityConsole(activityLog, installedPluginCount, catalog.length);
+	const activityMetricRows = [
+		[
+			{ label: "Installed", value: String(consoleSummary.installedPlugins) },
+			{ label: "Repository", value: String(consoleSummary.repositoryPlugins) },
+		],
+		[
+			{ label: "Updated", value: `${consoleSummary.updatedPlugins} / ${consoleSummary.updateTotal}` },
+			{ label: "Errors", value: String(consoleSummary.errorCount) },
+		],
+		[{ label: "Latest error", value: formatLatestError(consoleSummary.latestErrorTimestamp) }],
+	];
 	const consoleState = (
 		action: ActivityConsoleAction,
 		phase: ActivityConsolePhase,
@@ -805,6 +816,43 @@ export default function Settings() {
 				<RN.Text style={{ color: "#f2f3f5", fontSize: 15, fontWeight: "600", marginBottom: 8 }}>
 					Manager Activity
 				</RN.Text>
+				<RN.View style={{ marginBottom: 8, borderTopWidth: 1, borderBottomWidth: 1, borderColor: "#3f4147" }}>
+					{activityMetricRows.map((row, rowIndex) => (
+						<RN.View
+							key={row[0].label}
+							style={{
+								flexDirection: "row",
+								borderBottomWidth: rowIndex < activityMetricRows.length - 1 ? 1 : 0,
+								borderColor: "#3f4147",
+							}}
+						>
+							{row.map((metric, metricIndex) => (
+								<RN.View
+									key={metric.label}
+									style={{
+										flex: 1,
+										minWidth: 0,
+										paddingVertical: 9,
+										paddingHorizontal: 10,
+										borderRightWidth: row.length === 2 && metricIndex === 0 ? 1 : 0,
+										borderColor: "#3f4147",
+									}}
+								>
+									<RN.Text style={{ color: "#b5bac1", fontSize: 11, marginBottom: 3 }}>
+										{metric.label}
+									</RN.Text>
+									<RN.Text
+										numberOfLines={1}
+										ellipsizeMode="tail"
+										style={{ color: "#f2f3f5", fontSize: 14, fontWeight: "600" }}
+									>
+										{metric.value}
+									</RN.Text>
+								</RN.View>
+							))}
+						</RN.View>
+					))}
+				</RN.View>
 				{pendingManagerRestart && (
 					<RN.Text style={{ marginBottom: 8, color: "#f0b232", fontSize: 13, fontWeight: "600" }}>
 						{`Restart Revenge to load updates for ${pendingManagerRestart.pluginNames.join(", ")}.`}

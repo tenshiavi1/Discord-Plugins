@@ -63,9 +63,9 @@ export function summarizeActivityConsole(
 ): ActivityConsoleSummary {
 	const failedRecords = records.filter((record) => record.status === "failure");
 	const aggregateFailure = failedRecords.find((record) =>
-		/(?:finished with|\b)(\d+) failures?\b/i.test(record.summary),
+		/(?:finished with|\b)(\d+) (?:failures?|errors?)\b/i.test(record.summary),
 	);
-	const aggregateCount = aggregateFailure?.summary.match(/(?:finished with|\b)(\d+) failures?\b/i)?.[1];
+	const aggregateCount = aggregateFailure?.summary.match(/(?:finished with|\b)(\d+) (?:failures?|errors?)\b/i)?.[1];
 	const latestErrorTimestamp = failedRecords.reduce<number | undefined>(
 		(latest, record) => latest === undefined || record.timestamp > latest ? record.timestamp : latest,
 		undefined,
