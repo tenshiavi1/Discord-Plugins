@@ -10,7 +10,7 @@ export function parseLocalDateTime(value: string): Date | undefined {
 	const day = Number(dayText);
 	const hour = Number(hourText);
 	const minute = Number(minuteText);
-	if (month < 1 || month > 12 || day < 1 || day > 31 || hour > 23 || minute > 59) return undefined;
+	if (year < 1 || month < 1 || month > 12 || day < 1 || day > 31 || hour > 23 || minute > 59) return undefined;
 
 	const date = new Date(0);
 	date.setFullYear(year, month - 1, day);
@@ -32,10 +32,17 @@ export function formatLocalDateTime(date: Date): string {
 	return `${String(date.getFullYear()).padStart(4, "0")}-${pad(date.getMonth() + 1)}-${pad(date.getDate())} ${pad(date.getHours())}:${pad(date.getMinutes())}`;
 }
 
+function createCalendarDate(year: number, month: number, day: number): Date {
+	const date = new Date(0);
+	date.setFullYear(year, month, day);
+	date.setHours(0, 0, 0, 0);
+	return date;
+}
+
 export function getCalendarDates(year: number, month: number): Date[] {
-	const firstWeekday = new Date(year, month, 1).getDay();
+	const firstWeekday = createCalendarDate(year, month, 1).getDay();
 	return Array.from(
 		{ length: 42 },
-		(_, index) => new Date(year, month, 1 - firstWeekday + index),
+		(_, index) => createCalendarDate(year, month, 1 - firstWeekday + index),
 	);
 }

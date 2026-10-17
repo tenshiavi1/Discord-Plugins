@@ -172,6 +172,7 @@ export function setAddAttachmentsEnabled(value: boolean) {
 					displayName: `Attachment ${index + 1}`,
 					description: `Optional file ${index + 1} to add`,
 					type: ATTACHMENT_OPTION,
+					required: false,
 				})),
 			],
 			execute: executeAddAttachments,

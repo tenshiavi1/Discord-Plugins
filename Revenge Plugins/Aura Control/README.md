@@ -1,6 +1,6 @@
 # Aura Control
 
-Aura Control configures a custom Discord Rich Presence in Revenge. Set the activity name and type, display, details and state, party size, images, and buttons. Choose from five timestamp modes; custom start and end times use a local calendar and 24-hour clock. Connect, disconnect, and update actions publish or clear the activity.
+Aura Control configures a custom Discord Rich Presence in Revenge. Set the activity name and type, display, details and state, party size, images, and buttons. Choose from five timestamp modes; custom start and end times use a local calendar and 24-hour clock. Tap the calendar year to search for a year, then choose a month and day. Connect, disconnect, and update actions publish or clear the activity.
 
 A blank application ID uses Discord-CustomRP's public default application ID (`896771305108553788`), matching the desktop app's blank-ID behavior. This is a shared application ID, not your Discord account ID. Enter your own application ID to use assets uploaded to your application.
 

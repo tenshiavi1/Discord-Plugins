@@ -62,7 +62,10 @@ function roundedCurrentTime() {
 }
 
 function startOfMonth(date: Date) {
-	return new Date(date.getFullYear(), date.getMonth(), 1);
+	const firstOfMonth = new Date(date);
+	firstOfMonth.setDate(1);
+	firstOfMonth.setHours(0, 0, 0, 0);
+	return firstOfMonth;
 }
 
 function TimeStepper({ label, value, max, onChange }: {
@@ -136,6 +139,9 @@ function DateTimeSetting({ label, storageKey }: { label: string; storageKey: str
 	const [displayMonth, setDisplayMonth] = React.useState(() =>
 		startOfMonth(parseLocalDateTime(storedValue) ?? roundedCurrentTime()),
 	);
+	const [yearSearchVisible, setYearSearchVisible] = React.useState(false);
+	const [monthSelectionVisible, setMonthSelectionVisible] = React.useState(false);
+	const [yearDraft, setYearDraft] = React.useState("");
 	const savedDate = parseLocalDateTime(storedValue);
 	const timeLabel = (date: Date) =>
 		`${String(date.getHours()).padStart(2, "0")}:${String(date.getMinutes()).padStart(2, "0")}`;
@@ -143,24 +149,32 @@ function DateTimeSetting({ label, storageKey }: { label: string; storageKey: str
 		? `${savedDate.toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" })} at ${timeLabel(savedDate)} local time`
 		: "Choose a local date and time.";
 	const calendarDates = getCalendarDates(displayMonth.getFullYear(), displayMonth.getMonth());
+	const calendarHeading = new Intl.DateTimeFormat(undefined, {
+		calendar: "gregory",
+		numberingSystem: "latn",
+		month: "long",
+		year: "numeric",
+	}).formatToParts(displayMonth);
 
 	const openPicker = () => {
 		const initialDate = parseLocalDateTime(storedValue) ?? roundedCurrentTime();
 		setSelectedDate(initialDate);
 		setDisplayMonth(startOfMonth(initialDate));
+		setYearSearchVisible(false);
+		setMonthSelectionVisible(false);
 		setVisible(true);
 	};
 	const changeMonth = (amount: number) => {
-		setDisplayMonth((current) => new Date(current.getFullYear(), current.getMonth() + amount, 1));
+		setDisplayMonth((current: Date) => {
+			const nextMonth = new Date(current);
+			nextMonth.setDate(1);
+			nextMonth.setMonth(nextMonth.getMonth() + amount);
+			return nextMonth.getFullYear() < 1 || nextMonth.getFullYear() > 9999 ? current : nextMonth;
+		});
 	};
 	const selectDate = (date: Date) => {
-		const nextDate = new Date(
-			date.getFullYear(),
-			date.getMonth(),
-			date.getDate(),
-			selectedDate.getHours(),
-			selectedDate.getMinutes(),
-		);
+		const nextDate = new Date(date);
+		nextDate.setHours(selectedDate.getHours(), selectedDate.getMinutes(), 0, 0);
 		setSelectedDate(nextDate);
 		setDisplayMonth(startOfMonth(nextDate));
 	};
@@ -190,6 +204,33 @@ function DateTimeSetting({ label, storageKey }: { label: string; storageKey: str
 		storage[storageKey] = formatLocalDateTime(selectedDate);
 		setVisible(false);
 	};
+	const openYearSearch = () => {
+		setYearDraft(String(displayMonth.getFullYear()));
+		setYearSearchVisible(true);
+	};
+	const goToYear = () => {
+		if (!/^\d{1,4}$/.test(yearDraft) || Number(yearDraft) < 1 || Number(yearDraft) > 9999) {
+			showToast("Enter a year from 0001 to 9999.");
+			return;
+		}
+		const year = Number(yearDraft);
+		setDisplayMonth((current: Date) => {
+			const nextMonth = new Date(current);
+			nextMonth.setFullYear(year, current.getMonth(), 1);
+			return nextMonth;
+		});
+		setYearSearchVisible(false);
+		setMonthSelectionVisible(true);
+	};
+	const selectMonth = (month: number) => {
+		setDisplayMonth((current: Date) => {
+			const nextMonth = new Date(current);
+			nextMonth.setDate(1);
+			nextMonth.setMonth(month);
+			return nextMonth;
+		});
+		setMonthSelectionVisible(false);
+	};
 
 	return (
 		<RN.View>
@@ -215,63 +256,142 @@ function DateTimeSetting({ label, storageKey }: { label: string; storageKey: str
 						<RN.ScrollView contentContainerStyle={{ padding: 16, paddingBottom: 24 }}>
 							<RN.Text style={{ color: "#f2f3f5", fontSize: 18, fontWeight: "700" }}>{label}</RN.Text>
 							<RN.Text style={{ marginTop: 4, color: "#b5bac1", fontSize: 13 }}>Choose a date and 24-hour local time.</RN.Text>
-							<RN.View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginTop: 18, marginBottom: 10 }}>
+							<RN.View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginTop: 18, marginBottom: 12, paddingBottom: 10, borderBottomWidth: 1, borderBottomColor: "#3f4147" }}>
 								<RN.TouchableOpacity
 									accessibilityRole="button"
 									accessibilityLabel="Previous month"
 									onPress={() => changeMonth(-1)}
+									disabled={monthSelectionVisible || (displayMonth.getFullYear() === 1 && displayMonth.getMonth() === 0)}
 									style={{ width: 40, height: 40, borderRadius: 8, backgroundColor: "#34363c", alignItems: "center", justifyContent: "center" }}
 								>
 									<RN.Text style={{ color: "#f2f3f5", fontSize: 18 }}>&lt;</RN.Text>
 								</RN.TouchableOpacity>
-								<RN.Text style={{ color: "#f2f3f5", fontSize: 16, fontWeight: "600" }}>
-									{displayMonth.toLocaleDateString(undefined, { month: "long", year: "numeric" })}
-								</RN.Text>
+								{yearSearchVisible ? (
+									<RN.View style={{ flex: 1, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 6 }}>
+										<RN.TextInput
+											accessibilityLabel="Search calendar year"
+											keyboardType="number-pad"
+											maxLength={4}
+											selectTextOnFocus
+											autoFocus
+											returnKeyType="go"
+											value={yearDraft}
+											onChangeText={(value: string) => {
+												if (/^\d{0,4}$/.test(value)) setYearDraft(value);
+											}}
+											onSubmitEditing={goToYear}
+											style={{ width: 68, paddingVertical: 6, color: "#f2f3f5", backgroundColor: "#1e1f22", borderRadius: 6, fontSize: 16, textAlign: "center" }}
+										/>
+										<RN.TouchableOpacity
+											accessibilityRole="button"
+											accessibilityLabel="Go to year"
+											onPress={goToYear}
+											style={{ minHeight: 36, paddingHorizontal: 8, borderRadius: 6, backgroundColor: "#5865f2", justifyContent: "center" }}
+										>
+											<RN.Text style={{ color: "#ffffff", fontWeight: "600" }}>Go</RN.Text>
+										</RN.TouchableOpacity>
+										<RN.TouchableOpacity
+											accessibilityRole="button"
+											accessibilityLabel="Cancel year search"
+											onPress={() => setYearSearchVisible(false)}
+											style={{ minHeight: 36, paddingHorizontal: 6, justifyContent: "center" }}
+										>
+											<RN.Text style={{ color: "#b5bac1" }}>Cancel</RN.Text>
+										</RN.TouchableOpacity>
+									</RN.View>
+								) : (
+									<RN.View style={{ flex: 1, flexDirection: "row", alignItems: "center", justifyContent: "center" }}>
+										{calendarHeading.map((part, index) => part.type === "year" ? (
+											<RN.TouchableOpacity
+												key={`heading-${index}`}
+												accessibilityRole="button"
+												accessibilityLabel={`Search for year ${part.value}`}
+												accessibilityHint="Opens a field to jump to a year."
+												onPress={openYearSearch}
+											>
+												<RN.Text style={{ paddingHorizontal: 8, paddingVertical: 5, borderRadius: 6, borderWidth: 1, borderColor: "#5865f2", backgroundColor: "#34363c", color: "#c6caff", fontSize: 16, fontWeight: "700" }}>{part.value}</RN.Text>
+											</RN.TouchableOpacity>
+										) : (
+											<RN.Text key={`heading-${index}`} style={{ color: "#f2f3f5", fontSize: 16, fontWeight: "600" }}>{part.value}</RN.Text>
+										))}
+									</RN.View>
+								)}
 								<RN.TouchableOpacity
 									accessibilityRole="button"
 									accessibilityLabel="Next month"
 									onPress={() => changeMonth(1)}
+									disabled={monthSelectionVisible || (displayMonth.getFullYear() === 9999 && displayMonth.getMonth() === 11)}
 									style={{ width: 40, height: 40, borderRadius: 8, backgroundColor: "#34363c", alignItems: "center", justifyContent: "center" }}
 								>
 									<RN.Text style={{ color: "#f2f3f5", fontSize: 18 }}>&gt;</RN.Text>
 								</RN.TouchableOpacity>
 							</RN.View>
+							{monthSelectionVisible && (
+								<RN.Text style={{ marginBottom: 8, color: "#949ba4", fontSize: 12, textAlign: "center" }}>Choose a month</RN.Text>
+							)}
 							<RN.View style={{ flexDirection: "row", flexWrap: "wrap" }}>
-								{WEEKDAY_LABELS.map((weekday, index) => (
-									<RN.Text key={`weekday-${index}`} style={{ width: "14.2857%", paddingVertical: 8, color: "#949ba4", fontSize: 12, textAlign: "center" }}>
-										{weekday}
-									</RN.Text>
-								))}
-								{calendarDates.map((date) => {
-									const isSelected = date.getFullYear() === selectedDate.getFullYear()
-										&& date.getMonth() === selectedDate.getMonth()
-										&& date.getDate() === selectedDate.getDate();
-									const isCurrentMonth = date.getMonth() === displayMonth.getMonth();
-									const isToday = date.toDateString() === new Date().toDateString();
-									return (
-										<RN.TouchableOpacity
-											key={date.getTime()}
-											accessibilityRole="button"
-											accessibilityLabel={date.toLocaleDateString(undefined, { weekday: "long", month: "long", day: "numeric", year: "numeric" })}
-											accessibilityState={{ selected: isSelected }}
-											onPress={() => selectDate(date)}
-											style={{ width: "14.2857%", aspectRatio: 1, alignItems: "center", justifyContent: "center", borderRadius: 8, backgroundColor: isSelected ? "#5865f2" : "transparent", borderWidth: isToday && !isSelected ? 1 : 0, borderColor: "#5865f2" }}
-										>
-											<RN.Text style={{ color: isSelected ? "#ffffff" : isCurrentMonth ? "#f2f3f5" : "#72767d", fontSize: 14 }}>
-												{date.getDate()}
+								{monthSelectionVisible ? (
+									Array.from({ length: 12 }, (_, month) => {
+										const monthDate = new Date(displayMonth);
+										monthDate.setMonth(month);
+										const monthLabel = new Intl.DateTimeFormat(undefined, { month: "long" }).format(monthDate);
+										const isSelected = month === selectedDate.getMonth()
+											&& displayMonth.getFullYear() === selectedDate.getFullYear();
+										return (
+											<RN.TouchableOpacity
+												key={`month-${month}`}
+												accessibilityRole="button"
+												accessibilityLabel={`${monthLabel} ${displayMonth.getFullYear()}`}
+												accessibilityState={{ selected: isSelected }}
+												onPress={() => selectMonth(month)}
+												style={{ width: "33.3333%", height: 48, marginVertical: 3, paddingHorizontal: 4, alignItems: "center", justifyContent: "center", borderRadius: 8, borderWidth: 1, borderColor: isSelected ? "#7983ff" : "#454850", backgroundColor: isSelected ? "#5865f2" : "#34363c" }}
+											>
+												<RN.Text numberOfLines={1} style={{ color: isSelected ? "#ffffff" : "#f2f3f5", fontSize: 14, textAlign: "center" }}>{monthLabel}</RN.Text>
+											</RN.TouchableOpacity>
+										);
+									})
+								) : (
+									<>
+										{WEEKDAY_LABELS.map((weekday, index) => (
+											<RN.Text key={`weekday-${index}`} style={{ width: "14.2857%", paddingVertical: 8, color: "#949ba4", fontSize: 12, textAlign: "center" }}>
+												{weekday}
 											</RN.Text>
-										</RN.TouchableOpacity>
-									);
-								})}
+										))}
+										<RN.View style={{ width: "100%", height: 1, backgroundColor: "#3f4147" }} />
+										{calendarDates.map((date) => {
+											const isSelected = date.getFullYear() === selectedDate.getFullYear()
+												&& date.getMonth() === selectedDate.getMonth()
+												&& date.getDate() === selectedDate.getDate();
+											const isCurrentMonth = date.getMonth() === displayMonth.getMonth();
+											const isToday = date.toDateString() === new Date().toDateString();
+											const isSupportedYear = date.getFullYear() >= 1 && date.getFullYear() <= 9999;
+											return (
+												<RN.TouchableOpacity
+													key={date.getTime()}
+													accessibilityRole="button"
+													accessibilityLabel={date.toLocaleDateString(undefined, { weekday: "long", month: "long", day: "numeric", year: "numeric" })}
+													accessibilityState={{ selected: isSelected }}
+													disabled={!isSupportedYear}
+													onPress={() => selectDate(date)}
+													style={{ width: "14.2857%", aspectRatio: 1, alignItems: "center", justifyContent: "center", borderRadius: 8, backgroundColor: isSelected ? "#5865f2" : "transparent", borderWidth: isToday && !isSelected ? 1 : 0, borderColor: "#5865f2", opacity: isSupportedYear ? 1 : 0.35 }}
+												>
+													<RN.Text style={{ color: isSelected ? "#ffffff" : isCurrentMonth ? "#f2f3f5" : "#72767d", fontSize: 14 }}>
+														{date.getDate()}
+													</RN.Text>
+												</RN.TouchableOpacity>
+											);
+										})}
+									</>
+								)}
 							</RN.View>
-							<RN.View style={{ marginTop: 18, padding: 12, borderRadius: 10, backgroundColor: "#1e1f22" }}>
+							<RN.View style={{ marginTop: 18, padding: 12, borderRadius: 8, borderWidth: 1, borderColor: "#3f4147", backgroundColor: "#1e1f22" }}>
 								<RN.View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between" }}>
 									<RN.Text style={{ color: "#949ba4", fontSize: 12 }}>Selected date</RN.Text>
 									<RN.Text style={{ marginTop: 4, color: "#f2f3f5", fontSize: 14, fontWeight: "600" }}>
 										{selectedDate.toLocaleDateString(undefined, { weekday: "short", month: "short", day: "numeric", year: "numeric" })}
 									</RN.Text>
 								</RN.View>
-								<RN.View style={{ flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 12, marginTop: 12 }}>
+								<RN.View style={{ flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 12, marginTop: 12, paddingTop: 12, borderTopWidth: 1, borderTopColor: "#3f4147" }}>
 									<TimeStepper label="Hour" value={selectedDate.getHours()} max={23} onChange={(value) => setTimeValue("hours", value)} />
 									<RN.Text style={{ color: "#f2f3f5", fontSize: 20, fontWeight: "600" }}>:</RN.Text>
 									<TimeStepper label="Minute" value={selectedDate.getMinutes()} max={59} onChange={(value) => setTimeValue("minutes", value)} />
@@ -378,7 +498,7 @@ export default function Settings() {
 		<RN.ScrollView style={{ flex: 1 }} contentContainerStyle={{ padding: 10, paddingBottom: 24 }}>
 			<Stack spacing={8}>
 			<TableRowGroup title="Application">
-				<TextSetting label="Application ID (optional)" storageKey="applicationId" placeholder="Leave blank to use the default app." limit={21} />
+				<TextSetting label="Application ID (Optional)" storageKey="applicationId" placeholder="Leave blank to use the default app." limit={21} />
 				<RN.Text style={{ color: "#b5bac1", paddingHorizontal: 16, paddingTop: 8 }}>
 					Leave blank to connect with the public default application. Enter your own ID to use assets uploaded to your application.
 				</RN.Text>
@@ -388,7 +508,7 @@ export default function Settings() {
 				{ACTIVITY_TYPES.map((type) => (
 					<TableRow
 						key={`activity-type-${type.value}`}
-						label={`${Number(storage.activityType) === type.value ? "(Selected) " : ""}${type.label}`}
+						label={`${type.label}${Number(storage.activityType) === type.value ? " (Selected)" : ""}`}
 						trailing={<TableRow.Arrow />}
 						onPress={() => { storage.activityType = type.value; }}
 					/>
@@ -398,7 +518,7 @@ export default function Settings() {
 				{DISPLAY_TYPES.map((type) => (
 					<TableRow
 						key={`display-type-${type.value}`}
-						label={`${Number(storage.displayType) === type.value ? "(Selected) " : ""}${type.label}`}
+						label={`${type.label}${Number(storage.displayType) === type.value ? " (Selected)" : ""}`}
 						trailing={<TableRow.Arrow />}
 						onPress={() => { storage.displayType = type.value; }}
 					/>
@@ -414,8 +534,8 @@ export default function Settings() {
 				)}
 			</TableRowGroup>
 			<TableRowGroup title="Party">
-				<TextSetting 				label="Current Party Size" storageKey="partySize" placeholder="Leave blank or enter a whole number." limit={9} />
-				<TextSetting 				label="Maximum Party Size" storageKey="partyMaxSize" placeholder="Leave blank or enter a whole number." limit={9} />
+				<TextSetting label="Current Party Size" storageKey="partySize" placeholder="Leave blank or enter a whole number." limit={9} />
+				<TextSetting label="Maximum Party Size" storageKey="partyMaxSize" placeholder="Leave blank or enter a whole number." limit={9} />
 			</TableRowGroup>
 			<TableRowGroup title="Timestamp">
 				<RN.Text style={{ color: "#b5bac1", padding: 12 }}>
@@ -424,7 +544,7 @@ export default function Settings() {
 				{TIMESTAMP_MODES.map((mode) => (
 					<TableRow
 						key={`timestamp-${mode.value}`}
-						label={`${storage.timestampMode === mode.value ? "(Selected) " : ""}${mode.label}`}
+						label={`${mode.label}${storage.timestampMode === mode.value ? " (Selected)" : ""}`}
 						trailing={<TableRow.Arrow />}
 						onPress={() => { storage.timestampMode = mode.value; }}
 					/>
@@ -457,9 +577,9 @@ export default function Settings() {
 				<TextSetting label="URL" storageKey="smallImageUrl" placeholder="https://example.com/path" limit={512} />
 			</TableRowGroup>
 			<TableRowGroup title="Buttons">
-				<TextSetting label="Button 1 Text" storageKey="buttonOneLabel" placeholder="Enter a label (32 characters max)." limit={32} />
+				<TextSetting label="Button 1 Label" storageKey="buttonOneLabel" placeholder="Enter a label (32 characters max)." limit={32} />
 				<TextSetting label="Button 1 URL" storageKey="buttonOneUrl" placeholder="https://example.com/path" limit={512} />
-				<TextSetting label="Button 2 Text" storageKey="buttonTwoLabel" placeholder="Enter a label (32 characters max)." limit={32} />
+				<TextSetting label="Button 2 Label" storageKey="buttonTwoLabel" placeholder="Enter a label (32 characters max)." limit={32} />
 				<TextSetting label="Button 2 URL" storageKey="buttonTwoUrl" placeholder="https://example.com/path" limit={512} />
 			</TableRowGroup>
 			<TableRowGroup title="Presence">
