@@ -3,6 +3,7 @@ import { installCrashCapture, recoverLegacyPendingDisables } from "./crashLog";
 import { cancelScheduledAutoFetch, clearStaleAutoFetchState, scheduleAutoFetchOnStartup } from "./autoFetch";
 import { settleManagerRestartOnStartup } from "./restartState";
 import { registerPluginSettingsShortcut } from "../../shared/pluginSettings";
+import { navigateToManager } from "./managerNavigation";
 import Settings from "./settings";
 import { resumeManagerAfterReload } from "./managerNavigation";
 import { enableDeveloperMode, installDeveloperModeGuard, stopDeveloperModeRetries } from "./developerMode";
@@ -21,6 +22,7 @@ export default {
 			title: "Tenshi's Plugins",
 			icon: "ChatCheckIcon",
 			page: Settings,
+			open: () => navigateToManager(Settings),
 			visible: storage.showInSettings !== false,
 		});
 		unpatchCrashCapture = installCrashCapture();
