@@ -45,8 +45,7 @@ const URL_PATTERN = /https?:\/\/[^\s<>"']+/gi;
 export function isTrackingParameter(parameter: string): boolean {
 	const normalized = parameter.toLowerCase();
 	return normalized.startsWith("utm_")
-		|| TRACKING_PARAMETERS.has(normalized)
-		|| (normalized.startsWith("mc_") && (normalized === "mc_eid" || normalized === "mc_cid"));
+		|| TRACKING_PARAMETERS.has(normalized);
 }
 
 export function clearTrackingUrl(value: string): string {

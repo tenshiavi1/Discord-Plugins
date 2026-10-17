@@ -51,7 +51,7 @@ export default function Settings() {
 			<TableRowGroup title="Privacy">
 				<TableSwitchRow
 					label="Anonymize File Names"
-					subLabel="Rename attachments before Discord uploads them."
+					subLabel="Rename files uploaded to Discord chats, including images, audio, video, documents, and other file types."
 					value={Boolean(storage.anonymiseByDefault)}
 					onValueChange={(value: boolean) => { storage.anonymiseByDefault = value; }}
 				/>
@@ -81,7 +81,7 @@ export default function Settings() {
 				{METHODS.map((method) => (
 					<TableRow
 						key={method.value}
-						label={`${storage.method === method.value ? "(Selected) " : ""}${method.label}`}
+						label={`${method.label}${storage.method === method.value ? " (Selected)" : ""}`}
 						trailing={<TableRow.Arrow />}
 						onPress={() => { storage.method = method.value; }}
 					/>
@@ -104,7 +104,7 @@ export default function Settings() {
 			</TableRowGroup>
 			<TableRowGroup title="About">
 				<RN.Text style={{ color: "#b5bac1", padding: 12 }}>
-					File extensions are preserved. This changes names only; it does not remove metadata from file contents.
+					File extensions are preserved. File contents and metadata are unchanged. Uploads are canceled if a file name cannot be anonymized.
 				</RN.Text>
 			</TableRowGroup>
 			</Stack>

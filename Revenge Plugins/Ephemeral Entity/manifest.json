@@ -1,6 +1,6 @@
 {
   "name": "Ephemeral Entity",
-  "description": "Anonymize uploaded file names, remove tracking parameters from sent URLs, hide typing status, and leave group DMs silently.",
+  "description": "Anonymize all file types uploaded to Discord chats, remove tracking parameters from sent URLs, hide typing status, and leave group DMs silently.",
   "authors": [
     {
       "name": "tenshiavi"

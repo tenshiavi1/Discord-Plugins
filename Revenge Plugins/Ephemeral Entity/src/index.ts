@@ -1,4 +1,4 @@
-import { findByProps } from "../../compat";
+import { findByProps, findByPropsAll } from "../../compat";
 import { instead } from "@vendetta/patcher";
 import { storage } from "@vendetta/plugin";
 import { registerCommand } from "@vendetta/commands";
@@ -24,7 +24,7 @@ const defaults = {
 	anonymiseByDefault: true,
 	method: "random" as AnonymizationMethod,
 	randomizedLength: 7,
-	consistentName: "image",
+	consistentName: "file",
 	clearTrackingUrls: true,
 	enableSilentLeave: true,
 	hideTypingStatus: true,
@@ -117,17 +117,24 @@ export default {
 			console.error("[Ephemeral Entity] Could not register the silent-typing command.", error);
 		}
 
-		const uploadModule = findByProps("uploadFiles");
-		if (typeof uploadModule?.uploadFiles === "function") {
+		const uploadModules = findByPropsAll("uploadFiles")
+			.map((exports) => exports?.default ?? exports);
+		const distinctUploadModules = new Set(uploadModules);
+		let patchedUploadModules = 0;
+		for (const uploadModule of distinctUploadModules) {
+			if (typeof uploadModule?.uploadFiles !== "function") continue;
 			unpatches.push(
 				instead("uploadFiles", uploadModule, (args, original) => {
-					if (storage.anonymiseByDefault) {
-						anonymizeUploadFiles(args[0], normalizeSettings());
+					if (storage.anonymiseByDefault && !anonymizeUploadFiles(args[0], normalizeSettings())) {
+						showToast("Could not anonymize every file name. Upload canceled.");
+						return;
 					}
 					return original(...args);
 				}),
 			);
-		} else {
+			patchedUploadModules++;
+		}
+		if (patchedUploadModules === 0) {
 			console.warn("[Ephemeral Entity] Discord's file upload module was not found; filenames will not be anonymized.");
 		}
 

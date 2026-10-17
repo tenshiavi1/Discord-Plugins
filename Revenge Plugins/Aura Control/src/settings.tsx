@@ -565,16 +565,19 @@ export default function Settings() {
 			</TableRowGroup>
 			<TableRowGroup title="Large Image">
 				<RN.Text style={{ color: "#b5bac1", padding: 12 }}>
-					Choose an asset key uploaded to this application's Rich Presence settings.
+					Use an asset key or direct image URL. The click-through URL opens when someone clicks the image in Rich Presence.
 				</RN.Text>
-				<TextSetting label="Key" storageKey="largeImageKey" placeholder="Asset key from your application." limit={256} />
-				<TextSetting label="Text" storageKey="largeImageText" placeholder="Optional hover text." />
-				<TextSetting label="URL" storageKey="largeImageUrl" placeholder="https://example.com/path" limit={512} />
+				<TextSetting label="Asset Key or Image URL" storageKey="largeImageKey" placeholder="Asset key or direct image URL." limit={512} />
+				<TextSetting label="Hover Text" storageKey="largeImageText" placeholder="Optional text shown on hover." />
+				<TextSetting label="Click-Through URL" storageKey="largeImageUrl" placeholder="Optional URL opened when clicked." limit={512} />
 			</TableRowGroup>
 			<TableRowGroup title="Small Image">
-				<TextSetting label="Key" storageKey="smallImageKey" placeholder="Asset key from your application." limit={256} />
-				<TextSetting label="Text" storageKey="smallImageText" placeholder="Optional hover text." />
-				<TextSetting label="URL" storageKey="smallImageUrl" placeholder="https://example.com/path" limit={512} />
+				<RN.Text style={{ color: "#b5bac1", padding: 12 }}>
+					Use an asset key or direct image URL. The click-through URL opens when someone clicks the image in Rich Presence.
+				</RN.Text>
+				<TextSetting label="Asset Key or Image URL" storageKey="smallImageKey" placeholder="Asset key or direct image URL." limit={512} />
+				<TextSetting label="Hover Text" storageKey="smallImageText" placeholder="Optional text shown on hover." />
+				<TextSetting label="Click-Through URL" storageKey="smallImageUrl" placeholder="Optional URL opened when clicked." limit={512} />
 			</TableRowGroup>
 			<TableRowGroup title="Buttons">
 				<TextSetting label="Button 1 Label" storageKey="buttonOneLabel" placeholder="Enter a label (32 characters max)." limit={32} />

@@ -88,8 +88,8 @@ export function validateConfiguration(config: ActivityConfiguration): string[] {
 		errors.push("Choose a supported timestamp mode.");
 	}
 	if (config.streamUrl && !isHttpUrl(config.streamUrl)) errors.push("Stream URL must start with http:// or https://.");
-	if (config.largeImageKey.length > 256 || config.smallImageKey.length > 256) {
-		errors.push("Image asset keys must be 256 characters or fewer.");
+	if (config.largeImageKey.length > 512 || config.smallImageKey.length > 512) {
+		errors.push("Image asset keys and URLs must be 512 characters or fewer.");
 	}
 	if (config.largeImageUrl && !isHttpUrl(config.largeImageUrl)) errors.push("Large image URL must start with http:// or https://.");
 	if (config.smallImageUrl && !isHttpUrl(config.smallImageUrl)) errors.push("Small image URL must start with http:// or https://.");
@@ -210,7 +210,7 @@ async function resolveAssetKey(key: string, applicationId: string): Promise<stri
 	const assetIds = await applicationAssets.fetchAssetIds(applicationId, [key]);
 	const assetId = Array.isArray(assetIds) ? assetIds[0] : undefined;
 	if (typeof assetId !== "string" || assetId.length === 0) {
-		throw new Error(`No Rich Presence image asset named "${key}" was found for this application.`);
+		throw new Error(`Could not resolve this Rich Presence image asset key or URL: "${key}".`);
 	}
 	return assetId;
 }
