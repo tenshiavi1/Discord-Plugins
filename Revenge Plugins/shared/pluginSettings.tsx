@@ -1,9 +1,10 @@
 import { findByProps } from "../compat";
-import { React, ReactNative as RN } from "@vendetta/metro/common";
+import { NavigationNative, React, ReactNative as RN } from "@vendetta/metro/common";
 import { after } from "@vendetta/patcher";
 import { storage } from "@vendetta/plugin";
 import { useProxy } from "@vendetta/storage";
 import { getAssetIDByName } from "@vendetta/ui/assets";
+import { Forms } from "@vendetta/ui/components";
 import { findInReactTree } from "@vendetta/utils";
 
 type SettingsShortcut = {
@@ -25,92 +26,91 @@ const REGISTRY_KEY = "__revengePluginSettingsShortcutRegistry";
 const SHORTCUT_KEY_PREFIX = "revenge-plugin-settings-";
 const globalState = globalThis as typeof globalThis & { [REGISTRY_KEY]?: ShortcutRegistry };
 const registry = globalState[REGISTRY_KEY] ??= { entries: new Map(), patches: [], installed: false };
+const { FormSection, FormRow } = Forms;
 const { TableRowGroup, TableSwitchRow } = findByProps("TableRowGroup", "TableSwitchRow");
-const TableRowIcon = findByProps("TableRowIcon")?.TableRowIcon;
-const settingConstants = findByProps("SETTING_RENDERER_CONFIG");
-const createListModule = findByProps("createList");
 const settingsOverviewScreen = findByProps("SettingsOverviewScreen");
-const rootNavigationRef = findByProps("getRootNavigationRef");
+const settingsOverviewModule = findByProps("renderTitle", "sections");
 
 function visibleShortcuts(): SettingsShortcut[] {
 	return [...registry.entries.values()].filter((entry) => entry.visible);
 }
 
-function openSettingsPage(entry: SettingsShortcut) {
-	if (entry.open) {
-		if (!entry.open()) console.warn(`[${entry.title}] Main settings navigation is unavailable.`);
-		return;
-	}
-	const navigation = rootNavigationRef?.getRootNavigationRef?.();
-	if (typeof navigation?.navigate !== "function") {
-		console.warn(`[${entry.title}] Main settings navigation is unavailable.`);
-		return;
-	}
-	navigation.navigate("VendettaCustomPage", {
-		title: entry.title,
-		render: () => React.createElement(entry.page),
+function MainSettingsRow({ entry }: { entry: SettingsShortcut }) {
+	const navigation = NavigationNative.useNavigation();
+	const icon = getAssetIDByName(entry.icon);
+	return React.createElement(FormRow, {
+		label: entry.title,
+		leading: icon ? React.createElement(FormRow.Icon, { source: icon }) : undefined,
+		trailing: React.createElement(FormRow.Arrow),
+		onPress: () => {
+			if (entry.open) {
+				if (!entry.open()) console.warn(`[${entry.title}] Main settings navigation is unavailable.`);
+				return;
+			}
+			if (typeof navigation?.navigate !== "function") {
+				console.warn(`[${entry.title}] Main settings navigation is unavailable.`);
+				return;
+			}
+			navigation.navigate("VendettaCustomPage", {
+				title: entry.title,
+				render: () => React.createElement(entry.page),
+			});
+		},
 	});
 }
 
-function patchSettingsCategory(patches: (() => void)[]) {
-	if (settingConstants) {
-		const previousDescriptor = Object.getOwnPropertyDescriptor(settingConstants, "SETTING_RENDERER_CONFIG");
-		let rendererConfig = settingConstants.SETTING_RENDERER_CONFIG;
-		const getter = () => {
-			const rows: Record<string, unknown> = {};
-			for (const entry of visibleShortcuts()) {
-				const icon = getAssetIDByName(entry.icon);
-				rows[entry.id] = {
-					type: "pressable",
-					useTitle: () => entry.title,
-					title: entry.title,
-					icon,
-					IconComponent: icon && TableRowIcon
-						? () => React.createElement(TableRowIcon, { source: icon })
-						: undefined,
-					onPress: () => openSettingsPage(entry),
-					withArrow: true,
-				};
-			}
-			return { ...rendererConfig, ...rows };
-		};
-		Object.defineProperty(settingConstants, "SETTING_RENDERER_CONFIG", {
-			configurable: true,
-			enumerable: true,
-			get: getter,
-			set: (value) => { rendererConfig = value; },
-		});
-		patches.push(() => {
-			if (Object.getOwnPropertyDescriptor(settingConstants, "SETTING_RENDERER_CONFIG")?.get !== getter) return;
-			if (previousDescriptor) Object.defineProperty(settingConstants, "SETTING_RENDERER_CONFIG", previousDescriptor);
-			else {
-				delete settingConstants.SETTING_RENDERER_CONFIG;
-				settingConstants.SETTING_RENDERER_CONFIG = rendererConfig;
-			}
-		});
+function patchMainSettingsPanel(patches: (() => void)[]) {
+	if (!FormSection || !FormRow) return;
+	const overviewModule = settingsOverviewModule;
+	if (overviewModule) {
+		const patchedOverviewTypes = new WeakSet<object>();
+		patches.push(after("default", overviewModule, (_args: unknown[], result: any) => {
+			const overview = findInReactTree(result?.props?.children, (node: any) => node?.type?.name === "UserSettingsOverview");
+			const overviewType = overview?.type;
+			if (!overviewType?.prototype || patchedOverviewTypes.has(overviewType)) return;
+			patchedOverviewTypes.add(overviewType);
+			const unpatchRender = after("render", overviewType.prototype, (_renderArgs: unknown[], rendered: any) => {
+				const sections = findInReactTree(
+					rendered?.props?.children,
+					(node: any) => node?.children?.[1]?.type === FormSection,
+				)?.children;
+				if (!Array.isArray(sections)) return;
+
+				const visible = visibleShortcuts();
+				const visibleKeys = new Set(visible.map((entry) => `${SHORTCUT_KEY_PREFIX}${entry.id}`));
+				for (let index = sections.length - 1; index >= 0; index--) {
+					const key = sections[index]?.key;
+					if (typeof key === "string" && key.startsWith(SHORTCUT_KEY_PREFIX) && !visibleKeys.has(key)) sections.splice(index, 1);
+				}
+				const existingKeys = new Set(sections.map((section: any) => section?.key));
+				for (const entry of visible) {
+					const key = `${SHORTCUT_KEY_PREFIX}${entry.id}`;
+					if (!existingKeys.has(key)) sections.push(React.createElement(MainSettingsRow, { key, entry }));
+				}
+			});
+			patches.push(() => {
+				unpatchRender();
+				patchedOverviewTypes.delete(overviewType);
+			});
+		}, true));
+		return;
 	}
 
-	const insertShortcutKeys = (sections: any[]) => {
-		const revengeSection = sections.find((section) => section?.label === "Revenge" && section?.title === "Revenge");
-		if (!Array.isArray(revengeSection?.settings)) return;
-		const pluginIds = new Set(registry.entries.keys());
-		const visibleKeys = visibleShortcuts().map((entry) => entry.id);
-		revengeSection.settings = [
-			...revengeSection.settings.filter((key: unknown) => typeof key !== "string" || !pluginIds.has(key)),
-			...visibleKeys,
-		];
-	};
-
-	if (createListModule) {
-		patches.push(after("createList", createListModule, (args: any[]) => {
-			const config = args[0];
-			if (!config) return;
-			if (Array.isArray(config.sections)) insertShortcutKeys(config.sections);
-		}));
-	} else if (settingsOverviewScreen) {
+	if (settingsOverviewScreen) {
 		patches.push(after("default", settingsOverviewScreen, (_args: unknown[], result: any) => {
 			const sections = findInReactTree(result, (node: any) => Array.isArray(node?.props?.sections))?.props?.sections;
-			if (Array.isArray(sections)) insertShortcutKeys(sections);
+			if (!Array.isArray(sections)) return;
+			const visible = visibleShortcuts();
+			const visibleKeys = new Set(visible.map((entry) => `${SHORTCUT_KEY_PREFIX}${entry.id}`));
+			for (let index = sections.length - 1; index >= 0; index--) {
+				const key = sections[index]?.key;
+				if (typeof key === "string" && key.startsWith(SHORTCUT_KEY_PREFIX) && !visibleKeys.has(key)) sections.splice(index, 1);
+			}
+			const existingKeys = new Set(sections.map((section: any) => section?.key));
+			for (const entry of visible) {
+				const key = `${SHORTCUT_KEY_PREFIX}${entry.id}`;
+				if (!existingKeys.has(key)) sections.push(React.createElement(MainSettingsRow, { key, entry }));
+			}
 		}));
 	}
 }
@@ -119,7 +119,7 @@ function ensurePatches() {
 	if (registry.installed) return;
 	const startingPatchCount = registry.patches.length;
 	try {
-		patchSettingsCategory(registry.patches);
+		patchMainSettingsPanel(registry.patches);
 		registry.installed = registry.patches.length > startingPatchCount;
 		if (!registry.installed) {
 			console.warn("[Revenge Plugins] Could not find a supported main settings integration point.");

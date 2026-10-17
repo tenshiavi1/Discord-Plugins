@@ -511,7 +511,7 @@ export default function Settings() {
 		const installed = findInstalledPlugin(entry);
 		if (!installed) return;
 
-		const PluginSettings = getPluginSettings(installed);
+		const PluginSettings = entry.name === "Tenshi's Plugins" ? Settings : getPluginSettings(installed);
 		if (!PluginSettings) {
 			showToast(`${entry.name} does not provide a settings page.`, getAssetIDByName("Warning"));
 			return;
@@ -923,7 +923,9 @@ export default function Settings() {
 			<TableRowGroup title="Revenge Plugins">
 				{visiblePlugins.map((entry) => {
 					const installed = findInstalledPlugin(entry);
-					const PluginSettings = installed ? getPluginSettings(installed) : undefined;
+					const PluginSettings = installed
+						? entry.name === "Tenshi's Plugins" ? Settings : getPluginSettings(installed)
+						: undefined;
 					const isBusy = !!busy[entry.url];
 					const contentWidth = Math.max(0, screenWidth - 60);
 					const titleFontSize = Math.max(
