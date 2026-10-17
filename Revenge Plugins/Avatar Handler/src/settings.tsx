@@ -31,8 +31,8 @@ export default function Settings() {
 
 	const confirmEnable = () => {
 		showConfirmationAlert({
-			title: "Enable Discord's native account switcher?",
-			content: "This only unlocks Discord's own saved-account switcher. Login screens, authenticator/2FA prompts, and rejected-login messages remain inside Discord. Avatar Handler never reads or stores passwords, authentication codes, or session tokens.",
+			title: "Enable Discord's Native Account Switcher?",
+			content: "This only unlocks Discord's saved-account switcher. Login screens, 2FA challenges, and rejected-login messages remain in Discord. Avatar Handler does not read, collect, export, or store passwords, 2FA codes, or session tokens.",
 			confirmText: "Enable",
 			cancelText: "Cancel",
 			onConfirm: () => {
@@ -107,10 +107,10 @@ export default function Settings() {
 						}}
 					/>
 					<TableRow
-						label={pendingAction === "login" ? "Opening login..." : "Add an account"}
+						label={pendingAction === "login" ? "Opening Login..." : "Add an Account"}
 						subLabel={pendingAction === "login"
 							? "Opening Discord's native login screen..."
-							: "Open Discord's native login screen. Discord handles passwords, MFA, and any other verification."}
+							: "Open Discord's native login screen. Discord handles passwords, 2FA challenges, and other verification."}
 						trailing={pendingAction === "login"
 							? <RN.ActivityIndicator size="small" />
 							: <TableRow.Arrow />}
@@ -118,7 +118,7 @@ export default function Settings() {
 						onPress={() => { void runAccountAction("login"); }}
 					/>
 					<TableRow
-						label={pendingAction === "manager" ? "Opening account manager..." : "Switch or manage accounts"}
+						label={pendingAction === "manager" ? "Opening Account Manager..." : "Switch or Manage Accounts"}
 						subLabel={pendingAction === "manager"
 							? "Opening Discord's native account manager..."
 							: "Open Discord's native account manager to switch to a saved account or manage your account list."}
@@ -131,17 +131,17 @@ export default function Settings() {
 				</TableRowGroup>
 				<TableRowGroup title="Sign-In and Security">
 					<TableRow
-						label="Discord handles authentication"
-						subLabel="Passwords, authenticator codes, saved sessions, and login denials stay in Discord's native flow. If login is denied, follow Discord's message and retry there."
+						label="Discord Handles Authentication"
+						subLabel="Password entry, 2FA challenges, saved sessions, and rejected-login messages stay in Discord's native flow. If Discord denies a login, follow its message and retry there."
 					/>
 					<TableRow
-						label="No credentials are stored"
-						subLabel="Avatar Handler does not collect, export, or save account passwords, 2FA codes, or session tokens."
+						label="No Credentials Are Stored"
+						subLabel="Avatar Handler does not read, collect, export, or store passwords, 2FA codes, or session tokens."
 					/>
 				</TableRowGroup>
 				<TableRowGroup title="Plugin Settings">
 					<TableRow
-						label="Settings stay on this device"
+						label="Settings Stay on This Device"
 						subLabel="Plugin preferences are stored locally by each installed plugin, not copied between Discord accounts. Switching accounts does not clear them. Uninstalling a plugin or using Clear Data/Clear All can remove its settings."
 					/>
 				</TableRowGroup>

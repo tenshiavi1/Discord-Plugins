@@ -4,13 +4,13 @@ Avatar Handler unlocks Discord's native mobile multi-account switcher for accoun
 
 ## Authentication and Account Security
 
-The plugin only enables Discord's own account-switcher capability. Account selection, saved sessions, login screens, authenticator-app codes, other 2FA challenges, and rejected-login explanations remain under Discord's control. If Discord denies a login, follow the message shown by Discord and retry through its native flow.
+The plugin only enables Discord's own account-switcher capability. Account selection, saved sessions, login screens, 2FA challenges, and rejected-login messages remain under Discord's control. If Discord denies a login, follow its message and retry through its native flow.
 
-Avatar Handler does not read, collect, export, or store passwords, authentication codes, or session tokens. It does not bypass authentication, 2FA, or Discord's account restrictions. Accounts that are not already authorized may still require the normal Discord login process.
+Avatar Handler does not read, collect, export, or store passwords, 2FA codes, or session tokens. It does not bypass authentication or Discord's account restrictions. Accounts that are not already authorized may still require the normal Discord login process.
 
 ## Settings
 
-The **Unlock Native Account Switcher** setting enables or disables the native capability. Enabling it requires confirmation. **Add an account** opens Discord's native login screen directly; **Switch or manage accounts** opens Discord's native account manager for selecting saved accounts. The settings actions show a loading indicator while opening and block duplicate taps; Discord displays progress for authentication and account switching in its native screens. If the installed client does not expose the expected capability or native screen, the plugin reports that the feature is unavailable rather than attempting a custom login flow.
+The **Unlock Native Account Switcher** setting enables or disables the native capability. Enabling it requires confirmation. **Add an Account** opens Discord's native login screen directly; **Switch or Manage Accounts** opens Discord's native account manager for selecting saved accounts. The settings actions show a loading indicator while opening and block duplicate taps; Discord displays progress for authentication and account switching in its native screens. If the installed client does not expose the expected capability or native screen, the plugin reports that the feature is unavailable rather than attempting a custom login flow.
 
 ## Plugin Settings
 
