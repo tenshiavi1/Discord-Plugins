@@ -162,7 +162,6 @@ export function setAddAttachmentsEnabled(value: boolean) {
 			options: [
 				{
 					name: "message_id",
-					displayName: "Message ID",
 					description: "ID of your message in this channel",
 					type: STRING_OPTION,
 					required: true,
