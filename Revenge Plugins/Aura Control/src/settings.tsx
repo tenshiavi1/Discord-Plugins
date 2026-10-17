@@ -3,6 +3,7 @@ import { storage } from "@vendetta/plugin";
 import { useProxy } from "@vendetta/storage";
 import { findByProps } from "../../compat";
 import { showToast } from "../../shared/toast";
+import { PluginSettingsSection } from "../../shared/pluginSettings";
 import StableTextInput from "../../StableTextInput";
 import {
 	ACTIVITY_TYPES,
@@ -612,6 +613,7 @@ export default function Settings() {
 					disabled={!storage.enabled}
 				/>
 			</TableRowGroup>
+			<PluginSettingsSection id="aura-control" />
 			</Stack>
 		</RN.ScrollView>
 	);

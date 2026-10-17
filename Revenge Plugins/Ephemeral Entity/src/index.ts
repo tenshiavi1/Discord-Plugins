@@ -8,6 +8,7 @@ import { clearTrackingUrlsInMessage } from "./urls";
 import { clearTypingStatusPatch, setTypingStatusHidden } from "./privacy";
 import Settings from "./settings";
 import { installPluginCrashGuard } from "../../shared/crashGuard";
+import { registerPluginSettingsShortcut } from "../../shared/pluginSettings";
 
 const registerCrashGuard = () => installPluginCrashGuard("Ephemeral Entity", storage, {
 	features: [
@@ -28,10 +29,12 @@ const defaults = {
 	clearTrackingUrls: true,
 	enableSilentLeave: true,
 	hideTypingStatus: true,
+	showInSettings: false,
 };
 
 const unpatches: (() => void)[] = [];
 const unregisterCommands: (() => void)[] = [];
+let unregisterSettingsShortcut: (() => void) | undefined;
 const channelStore = findByProps("getChannel");
 const apiUtils = findByProps("getAPIBaseURL", "del");
 
@@ -64,6 +67,13 @@ export default {
 		for (const [key, value] of Object.entries(defaults)) {
 			if (storage[key] === undefined) storage[key] = value;
 		}
+		unregisterSettingsShortcut = registerPluginSettingsShortcut({
+			id: "ephemeral-entity",
+			title: "Ephemeral Entity",
+			icon: "ic_upload",
+			page: Settings,
+			visible: storage.showInSettings === true,
+		});
 
 		setTypingStatusHidden(Boolean(storage.hideTypingStatus));
 
@@ -169,6 +179,8 @@ export default {
 		for (const unpatch of unpatches.splice(0)) unpatch();
 		clearTypingStatusPatch();
 		for (const unregister of unregisterCommands.splice(0)) unregister();
+		unregisterSettingsShortcut?.();
+		unregisterSettingsShortcut = undefined;
 	},
 	settings: Settings,
 };

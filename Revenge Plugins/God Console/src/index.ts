@@ -5,6 +5,7 @@ import { setJumpToTopEnabled } from "./jumpToTop";
 import { setValidUserEnabled } from "./validUser";
 import { setAddAttachmentsEnabled } from "./addAttachments";
 import { installPluginCrashGuard } from "../../shared/crashGuard";
+import { registerPluginSettingsShortcut } from "../../shared/pluginSettings";
 
 const registerCrashGuard = () => installPluginCrashGuard("God Console", storage, {
 	features: [
@@ -16,6 +17,7 @@ const registerCrashGuard = () => installPluginCrashGuard("God Console", storage,
 	fallbackKeys: ["readAllEnabled", "jumpToTopEnabled", "validUserEnabled", "addAttachmentsEnabled"],
 });
 let removeCrashGuard: (() => void) | undefined = registerCrashGuard();
+let unregisterSettingsShortcut: (() => void) | undefined;
 
 function applySettings() {
 	setReadAllEnabled(Boolean(storage.readAllEnabled));
@@ -31,6 +33,14 @@ export default {
 		storage.jumpToTopEnabled ??= true;
 		storage.validUserEnabled ??= true;
 		storage.addAttachmentsEnabled ??= true;
+		storage.showInSettings ??= false;
+		unregisterSettingsShortcut = registerPluginSettingsShortcut({
+			id: "god-console",
+			title: "God Console",
+			icon: "ic_check",
+			page: Settings,
+			visible: storage.showInSettings === true,
+		});
 		applySettings();
 	},
 	onUnload() {
@@ -40,6 +50,8 @@ export default {
 		setJumpToTopEnabled(false);
 		setValidUserEnabled(false);
 		setAddAttachmentsEnabled(false);
+		unregisterSettingsShortcut?.();
+		unregisterSettingsShortcut = undefined;
 	},
 	settings: Settings,
 };

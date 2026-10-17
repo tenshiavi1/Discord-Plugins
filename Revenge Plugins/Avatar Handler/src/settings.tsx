@@ -4,6 +4,7 @@ import { useProxy } from "@vendetta/storage";
 import { showConfirmationAlert } from "@vendetta/ui/alerts";
 import { getAssetIDByName } from "@vendetta/ui/assets";
 import { showToast } from "../../shared/toast";
+import { PluginSettingsToggle } from "../../shared/pluginSettings";
 import { findByProps } from "../../compat";
 import {
 	disableNativeSwitcher,
@@ -144,6 +145,7 @@ export default function Settings() {
 						label="Settings Stay on This Device"
 						subLabel="Plugin preferences are stored locally by each installed plugin, not copied between Discord accounts. Switching accounts does not clear them. Uninstalling a plugin or using Clear Data/Clear All can remove its settings."
 					/>
+					<PluginSettingsToggle id="avatar-handler" />
 				</TableRowGroup>
 			</Stack>
 		</RN.ScrollView>

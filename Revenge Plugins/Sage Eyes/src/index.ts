@@ -13,6 +13,7 @@ import { initializeMessageHistory, removeMessageHistoryPatch } from "./messageHi
 import { registerHiddenChannelFeatureToggle } from "./hiddenChannelToggle";
 import { registerMessageHistoryFeatureToggle } from "./messageHistoryToggle";
 import { setServerInfoFeatureEnabled } from "./serverInfo";
+import { registerPluginSettingsShortcut } from "../../shared/pluginSettings";
 
 const registerCrashGuard = () => installPluginCrashGuard("Sage Eyes", storage, {
 	features: [
@@ -23,6 +24,7 @@ const registerCrashGuard = () => installPluginCrashGuard("Sage Eyes", storage, {
 	fallbackKeys: ["enableHiddenChannels", "enableMessageHistory", "enableServerInfo"],
 });
 let removeCrashGuard: (() => void) | undefined = registerCrashGuard();
+let unregisterSettingsShortcut: (() => void) | undefined;
 
 const Permissions = findByStoreName("PermissionStore") ?? findByProps("getChannelPermissions", "can");
 const channelTypes = findByProps("ChannelTypes")?.ChannelTypes;
@@ -313,6 +315,14 @@ registerMessageHistoryFeatureToggle(setMessageHistoryFeatureEnabled);
 export default {
 	onLoad: () => {
 		removeCrashGuard ??= registerCrashGuard();
+		storage.showInSettings ??= false;
+		unregisterSettingsShortcut = registerPluginSettingsShortcut({
+			id: "sage-eyes",
+			title: "Sage Eyes",
+			icon: "ic_lock",
+			page: Settings,
+			visible: storage.showInSettings === true,
+		});
 		storage.enableHiddenChannels ??= true;
 		storage.enableMessageHistory ??= true;
 		storage.enableServerInfo ??= true;
@@ -338,6 +348,8 @@ export default {
 	onUnload: () => {
 		removeCrashGuard?.();
 		removeCrashGuard = undefined;
+		unregisterSettingsShortcut?.();
+		unregisterSettingsShortcut = undefined;
 		setServerInfoFeatureEnabled(false);
 		setHiddenChannelFeatureEnabled(false);
 		setMessageHistoryFeatureEnabled(false);

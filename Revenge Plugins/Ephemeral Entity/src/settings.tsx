@@ -5,6 +5,7 @@ import { findByProps } from "../../compat";
 import { METHODS } from "./filenames";
 import { setTypingStatusHidden } from "./privacy";
 import StableTextInput from "../../StableTextInput";
+import { PluginSettingsSection } from "../../shared/pluginSettings";
 
 const { TableRow, TableRowGroup, TableSwitchRow, Stack } = findByProps(
 	"TableRow",
@@ -107,6 +108,7 @@ export default function Settings() {
 					File extensions are preserved. File contents and metadata are unchanged. Uploads are canceled if a file name cannot be anonymized.
 				</RN.Text>
 			</TableRowGroup>
+			<PluginSettingsSection id="ephemeral-entity" />
 			</Stack>
 		</RN.ScrollView>
 	);

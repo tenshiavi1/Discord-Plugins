@@ -2,6 +2,7 @@ import { storage } from "@vendetta/plugin";
 import { installPluginCrashGuard } from "../../shared/crashGuard";
 import { installActivitySessionRestore, restoreActivitySession } from "./activity";
 import Settings from "./settings";
+import { registerPluginSettingsShortcut } from "../../shared/pluginSettings";
 
 const registerCrashGuard = () => installPluginCrashGuard("Aura Control", storage, {
 	features: [{ storageKey: "enabled" }],
@@ -39,9 +40,11 @@ const defaults = {
 	buttonTwoUrl: "",
 	partySize: "",
 	partyMaxSize: "",
+	showInSettings: false,
 };
 
 let removeSessionRestore: (() => void) | undefined;
+let unregisterSettingsShortcut: (() => void) | undefined;
 
 export default {
 	onLoad() {
@@ -51,12 +54,21 @@ export default {
 		}
 		restoreActivitySession();
 		removeSessionRestore = installActivitySessionRestore();
+		unregisterSettingsShortcut = registerPluginSettingsShortcut({
+			id: "aura-control",
+			title: "Aura Control",
+			icon: "GameControllerIcon",
+			page: Settings,
+			visible: storage.showInSettings === true,
+		});
 	},
 	onUnload() {
 		removeCrashGuard?.();
 		removeCrashGuard = undefined;
 		removeSessionRestore?.();
 		removeSessionRestore = undefined;
+		unregisterSettingsShortcut?.();
+		unregisterSettingsShortcut = undefined;
 	},
 	settings: Settings,
 };

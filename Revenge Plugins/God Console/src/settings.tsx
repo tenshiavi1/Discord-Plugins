@@ -6,6 +6,7 @@ import { setReadAllEnabled } from "./readAll";
 import { setJumpToTopEnabled } from "./jumpToTop";
 import { setValidUserEnabled } from "./validUser";
 import { setAddAttachmentsEnabled } from "./addAttachments";
+import { PluginSettingsSection } from "../../shared/pluginSettings";
 
 const { Stack, TableRowGroup, TableSwitchRow } = findByProps(
 	"Stack",
@@ -21,8 +22,8 @@ export default function Settings() {
 			<Stack spacing={8}>
 				<TableRowGroup title="Read All">
 					<TableSwitchRow
-						label="Enable Read All Button"
-						subLabel="Add a guild-bar button to mark unread server channels and DMs as read."
+						label="Enable /readall Command"
+						subLabel="Register /readall to mark unread server channels and direct messages as read."
 						value={Boolean(storage.readAllEnabled)}
 						onValueChange={(value: boolean) => {
 							storage.readAllEnabled = value;
@@ -63,6 +64,7 @@ export default function Settings() {
 						}}
 					/>
 				</TableRowGroup>
+				<PluginSettingsSection id="god-console" />
 			</Stack>
 		</RN.ScrollView>
 	);

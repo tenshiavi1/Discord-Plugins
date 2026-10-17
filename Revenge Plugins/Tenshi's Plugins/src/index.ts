@@ -1,12 +1,13 @@
+import { storage } from "@vendetta/plugin";
 import { installCrashCapture, recoverLegacyPendingDisables } from "./crashLog";
 import { cancelScheduledAutoFetch, clearStaleAutoFetchState, scheduleAutoFetchOnStartup } from "./autoFetch";
 import { settleManagerRestartOnStartup } from "./restartState";
-import { installSettingsPin } from "./settingsPin";
+import { registerPluginSettingsShortcut } from "../../shared/pluginSettings";
 import Settings from "./settings";
 import { resumeManagerAfterReload } from "./managerNavigation";
 import { enableDeveloperMode, installDeveloperModeGuard, stopDeveloperModeRetries } from "./developerMode";
 
-let unpatchSettings: (() => void) | undefined;
+let unregisterSettingsShortcut: (() => void) | undefined;
 let unpatchCrashCapture: (() => void) | undefined;
 let unpatchDeveloperMode: (() => void) | undefined;
 
@@ -14,7 +15,14 @@ export default {
 	onLoad() {
 		clearStaleAutoFetchState();
 		settleManagerRestartOnStartup();
-		unpatchSettings = installSettingsPin();
+		storage.showInSettings ??= true;
+		unregisterSettingsShortcut = registerPluginSettingsShortcut({
+			id: "tenshi-plugins",
+			title: "Tenshi's Plugins",
+			icon: "ChatCheckIcon",
+			page: Settings,
+			visible: storage.showInSettings !== false,
+		});
 		unpatchCrashCapture = installCrashCapture();
 		unpatchDeveloperMode = installDeveloperModeGuard();
 		enableDeveloperMode();
@@ -25,8 +33,8 @@ export default {
 	},
 	onUnload() {
 		cancelScheduledAutoFetch();
-		unpatchSettings?.();
-		unpatchSettings = undefined;
+		unregisterSettingsShortcut?.();
+		unregisterSettingsShortcut = undefined;
 		unpatchCrashCapture?.();
 		unpatchCrashCapture = undefined;
 		unpatchDeveloperMode?.();

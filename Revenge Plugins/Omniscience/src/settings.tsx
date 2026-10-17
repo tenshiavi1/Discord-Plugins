@@ -5,6 +5,7 @@ import { showToast } from "../../shared/toast";
 import { useProxy } from "@vendetta/storage";
 import { getAssetIDByName } from "@vendetta/ui/assets";
 import StableTextInput from "../../StableTextInput";
+import { PluginSettingsToggle } from "../../shared/pluginSettings";
 
 const { ScrollView } = findByProps("ScrollView");
 const { TableRowGroup, TableRow, TableSwitchRow, Stack } = findByProps(
@@ -426,12 +427,7 @@ export default function Settings() {
         )}
 
         <TableRowGroup title="Plugin Settings">
-          <TableSwitchRow
-            label="Show in Settings"
-            subLabel="Add a shortcut to Omniscience in Discord settings."
-            value={storage.showInSettings}
-            onValueChange={(v: boolean) => { storage.showInSettings = v; forceUpdate(); }}
-          />
+          <PluginSettingsToggle id="omniscience" />
         </TableRowGroup>
 
       </Stack>

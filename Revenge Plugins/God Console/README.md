@@ -4,7 +4,7 @@ God Console is a Revenge mobile plugin with four optional utilities.
 
 ## Features
 
-- **Read All** adds a guild-bar button that marks unread server channels and DMs as read.
+- **Read All** registers `/readall` to mark unread server channels and direct messages as read.
 - **Jump to Top** adds a control beside Discord's Jump to Present button to return to the top of the current chat.
 - **Valid User** automatically fetches uncached users mentioned in new or loaded messages so their mentions display normally.
 - **Add Attachments** registers `/addattachment` with a message ID and up to three optional file slots. It appends files to your own regular messages and replies in the current channel; run the command again to add more.

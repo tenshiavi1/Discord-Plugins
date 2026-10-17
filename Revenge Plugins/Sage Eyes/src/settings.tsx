@@ -4,6 +4,7 @@ import { storage } from "@vendetta/plugin";
 import { findByProps } from "../../compat";
 import { getAssetIDByName } from "@vendetta/ui/assets";
 import { showToast } from "../../shared/toast";
+import { PluginSettingsSection } from "../../shared/pluginSettings";
 import { clearMessageHistory, updateMessageHistorySettings } from "./messageHistory";
 import { setHiddenChannelFeatureEnabled } from "./hiddenChannelToggle";
 import { setServerInfoFeatureEnabled } from "./serverInfo";
@@ -220,6 +221,7 @@ export function Settings() {
 					))
 					: <TableRow label="No users are currently ignored." disabled={!messageHistoryEnabled || !storage.enableIgnoreUsers} />}
 			</TableRowGroup>
+			<PluginSettingsSection id="sage-eyes" />
 			</Stack>
 		</RN.ScrollView>
 	);

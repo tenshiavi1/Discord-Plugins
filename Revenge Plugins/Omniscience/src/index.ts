@@ -2,24 +2,18 @@ import { findByProps } from "../../compat";
 import { showToast } from "../../shared/toast";
 import { storage } from "@vendetta/plugin";
 import { installPluginCrashGuard } from "../../shared/crashGuard";
-import { React, NavigationNative } from "@vendetta/metro/common";
 import { getAssetIDByName } from "@vendetta/ui/assets";
-import { after } from "@vendetta/patcher";
-import { Forms } from "@vendetta/ui/components";
-import { findInReactTree } from "@vendetta/utils";
 import Settings from "./settings";
+import { registerPluginSettingsShortcut } from "../../shared/pluginSettings";
 
 const registerCrashGuard = () => installPluginCrashGuard("Omniscience", storage, {
   features: [
     { storageKey: "enabled", patterns: [/onMessage|MESSAGE_CREATE|track.?message|notification/i] },
-    { storageKey: "showInSettings", patterns: [/updateSidebar|patchSettingsPin|patchPanelUI|patchTabsUI|SettingsOverviewScreen/i] },
+    { storageKey: "showInSettings", patterns: [/registerPluginSettingsShortcut|pluginSettings/i] },
   ],
   fallbackKeys: ["enabled", "showInSettings"],
 });
 let removeCrashGuard: (() => void) | undefined = registerCrashGuard();
-
-const { FormSection, FormRow } = Forms;
-const TableRowIcon = findByProps("TableRowIcon")?.TableRowIcon;
 
 const FluxDispatcher = findByProps("dispatch", "subscribe");
 const ChannelStore = findByProps("getChannel");
@@ -27,11 +21,6 @@ const GuildStore = findByProps("getGuild");
 const UserStore = findByProps("getUser", "getCurrentUser");
 const RelationshipStore = findByProps("getFriendIDs");
 const RestAPI = findByProps("get", "post", "del", "patch");
-
-const tabsNavigationRef = findByProps("getRootNavigationRef");
-const settingConstants = findByProps("SETTING_RENDERER_CONFIG");
-const createListModule = findByProps("createList");
-const SettingsOverviewScreen = findByProps("SettingsOverviewScreen");
 
 const defaults = {
   enabled: true,
@@ -60,7 +49,7 @@ const defaults = {
   ignoredChannelIds: "",
   ignoreUsersEnabled: false,
   ignoredUserIds: "",
-  showInSettings: true
+  showInSettings: false
 };
 
 for (const [key, value] of Object.entries(defaults)) {
@@ -73,213 +62,18 @@ if (!Array.isArray(storage.keywords) || !storage.keywords.every((keyword: unknow
 storage.keywords = [...new Set(storage.keywords.map((keyword: string) => keyword.trim()).filter(Boolean))];
 
 let unsubMessage: (() => void) | null = null;
-
-function Section({ tabs }) {
-    const navigation = NavigationNative.useNavigation();
-
-    return React.createElement(FormRow, {
-        label: tabs.title(),
-        leading: React.createElement(FormRow.Icon, { source: tabs.icon }),
-        trailing: React.createElement(React.Fragment, {}, [
-            tabs.trailing ? tabs.trailing() : null,
-            React.createElement(FormRow.Arrow, { key: "arrow" }),
-        ]),
-        onPress: () => {
-            const Component = tabs.page;
-            navigation.navigate("VendettaCustomPage", {
-                title: tabs.title(),
-                render: () => React.createElement(Component),
-            });
-        },
-    });
-}
-
-function patchPanelUI(tabs, patches) {
-    try {
-        patches.push(
-            after(
-                "default",
-                findByProps("renderTitle", "sections"),
-                (_, ret) => {
-                    const UserSettingsOverview = findInReactTree(
-                        ret.props.children,
-                        (n) => n.type?.name === "UserSettingsOverview",
-                    );
-
-                    if (UserSettingsOverview) {
-                        patches.push(
-                            after(
-                                "render",
-                                UserSettingsOverview.type.prototype,
-                                (_args, res) => {
-                                    const sections = findInReactTree(
-                                        res.props.children,
-                                        (n) => n?.children?.[1]?.type === FormSection,
-                                    )?.children;
-
-                                    if (sections) {
-                                        const index = sections.findIndex((c) =>
-                                            ["BILLING_SETTINGS", "PREMIUM_SETTINGS"].includes(
-                                                c?.props?.label,
-                                            ),
-                                        );
-
-                                        sections.splice(
-                                            -~index || 4,
-                                            0,
-                                            React.createElement(Section, { key: tabs.key, tabs }),
-                                        );
-                                    }
-                                },
-                            ),
-                        );
-                    }
-                },
-                true,
-            ),
-        );
-      } catch (error) {
-        console.error("[Omniscience] Could not add its settings shortcut.", error);
-      }
-}
-
-function patchTabsUI(tabs, patches) {
-    if (!settingConstants || !tabsNavigationRef) return;
-
-    const row = {
-        [tabs.key]: {
-            type: "pressable",
-            useTitle: tabs.title,
-            title: tabs.title,
-            icon: tabs.icon,
-            IconComponent:
-        tabs.icon &&
-        (() => React.createElement(TableRowIcon, { source: tabs.icon })),
-            usePredicate: tabs.predicate,
-            useTrailing: tabs.trailing,
-            onPress: () => {
-                const navigation = tabsNavigationRef.getRootNavigationRef();
-                const Component = tabs.page;
-
-                navigation.navigate("VendettaCustomPage", {
-                    title: tabs.title(),
-                    render: () => React.createElement(Component),
-                });
-            },
-            withArrow: true,
-        },
-    };
-
-    let rendererConfigValue = settingConstants.SETTING_RENDERER_CONFIG;
-
-    Object.defineProperty(settingConstants, "SETTING_RENDERER_CONFIG", {
-        enumerable: true,
-        configurable: true,
-        get: () => ({
-            ...rendererConfigValue,
-            ...row,
-        }),
-        set: (v) => (rendererConfigValue = v),
-    });
-
-    const firstRender = Symbol("pinToSettings");
-
-    try {
-        if (!createListModule) return;
-        patches.push(
-            after("createList", createListModule, function (args, ret) {
-                if (!args[0][firstRender]) {
-                    args[0][firstRender] = true;
-
-                    const [config] = args;
-                    const sections = config.sections;
-
-                    const section = sections?.find((x: any) =>
-                        ["Bunny", "Revenge", "Kettu", "Vencore", "ShiggyCord"].some(
-                            (mod) => x.label === mod && x.title === mod,
-                        ),
-                    );
-
-                    if (section?.settings) {
-                        section.settings = [...section.settings, tabs.key];
-                    }
-                }
-            }),
-        );
-    } catch {
-        if (!SettingsOverviewScreen) return;
-        patches.push(
-            after("default", SettingsOverviewScreen, (args, ret) => {
-                if (!args[0][firstRender]) {
-                    args[0][firstRender] = true;
-
-                    const { sections } = findInReactTree(
-                        ret,
-                        (i) => i.props?.sections,
-                    ).props;
-                    const section = sections?.find((x: any) =>
-                        ["Bunny", "Revenge", "Kettu", "Vencore", "ShiggyCord"].some(
-                            (mod) => x.label === mod && x.title === mod,
-                        ),
-                    );
-
-                    if (section?.settings) {
-                        section.settings = [...section.settings, tabs.key];
-                    }
-                }
-            }),
-        );
-    }
-}
-
-function patchSettingsPin(tabs) {
-    const patches = [];
-
-    let disabled = false;
-
-    const realPredicate = tabs.predicate || (() => true);
-    tabs.predicate = () => (disabled ? false : realPredicate());
-
-    patchPanelUI(tabs, patches);
-    patchTabsUI(tabs, patches);
-    patches.push(() => (disabled = true));
-
-    return () => {
-        for (const x of patches) {
-            x();
-        }
-    };
-}
-
-let unpatchSidebar: (() => void) | null = null;
-
-function updateSidebar() {
-    if (storage.showInSettings) {
-        if (!unpatchSidebar) {
-            try {
-                unpatchSidebar = patchSettingsPin({
-                    key: "omniscience",
-                    icon: getAssetIDByName("ChatCheckIcon"),
-                    title: () => "Omniscience",
-                    predicate: () => storage.showInSettings === true,
-                    page: Settings,
-                });
-            } catch (error) {
-              console.error("[Omniscience] Could not add its settings shortcut.", error);
-            }
-        }
-    } else {
-        if (unpatchSidebar) {
-            unpatchSidebar();
-            unpatchSidebar = null;
-        }
-    }
-}
+let unregisterSettingsShortcut: (() => void) | undefined;
 
 export default {
   onLoad() {
     removeCrashGuard ??= registerCrashGuard();
-    updateSidebar();
+  unregisterSettingsShortcut = registerPluginSettingsShortcut({
+    id: "omniscience",
+    title: "Omniscience",
+    icon: "ChatCheckIcon",
+    page: Settings,
+    visible: storage.showInSettings === true,
+  });
     if (!storage.enabled) return;
 
     const onMessage = (p: any) => {
@@ -515,10 +309,8 @@ export default {
     removeCrashGuard?.();
     removeCrashGuard = undefined;
     unsubMessage?.();
-    if (unpatchSidebar) {
-      unpatchSidebar();
-      unpatchSidebar = null;
-    }
+    unregisterSettingsShortcut?.();
+    unregisterSettingsShortcut = undefined;
   },
 
   settings: Settings,
