@@ -74,7 +74,6 @@ export default {
     page: Settings,
     visible: storage.showInSettings === true,
   });
-    if (!storage.enabled) return;
 
     const onMessage = (p: any) => {
       if (!storage.enabled) return;
