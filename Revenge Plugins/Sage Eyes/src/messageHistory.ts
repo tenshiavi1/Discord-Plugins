@@ -118,8 +118,7 @@ function getMessageTimestamp(message: MessageRecord) {
 	return null;
 }
 
-function retainDeletedMessage(args: unknown[], channelId: string, messageId: string) {
-	const indicator = settings.deletedIndicatorText.trim() || "This message was deleted";
+function retainMessageNotice(args: unknown[], channelId: string, messageId: string, indicator: string) {
 	args[0] = {
 		type: "MESSAGE_EDIT_FAILED_AUTOMOD",
 		messageData: {
@@ -147,7 +146,7 @@ function handleDispatch(args: unknown[]): unknown[] | void {
 		const existingRecord = deletedMessages.get(key);
 		if (existingRecord) {
 			if (shouldIgnore(existingRecord.original.author) || (Number(existingRecord.original.flags) & 64) !== 0) return;
-			return retainDeletedMessage(args, channelId, messageId);
+			return retainMessageNotice(args, channelId, messageId, settings.deletedIndicatorText.trim() || "This message was deleted");
 		}
 
 		const original = getStoredMessage(channelId, messageId) ?? deletedMessages.get(key)?.original;
@@ -156,7 +155,18 @@ function handleDispatch(args: unknown[]): unknown[] | void {
 		if (!original.content && !original.attachments?.length && !original.embeds?.length) return;
 
 		rememberMessage(deletedMessages, key, { channelId, original });
-		return retainDeletedMessage(args, channelId, messageId);
+		try {
+			FluxDispatcher.dispatch({
+				...event,
+				type: "MESSAGE_DELETE",
+				channelId,
+				id: messageId,
+				otherPluginBypass: true,
+			});
+		} catch (error) {
+			console.error("[Sage Eyes] Could not forward the original message deletion to other listeners.", error);
+		}
+		return retainMessageNotice(args, channelId, messageId, settings.deletedIndicatorText.trim() || "This message was deleted");
 	}
 
 	if (event.type !== "MESSAGE_UPDATE" || !settings.keepEditHistory) return;
@@ -192,20 +202,20 @@ function handleDispatch(args: unknown[]): unknown[] | void {
 	}
 	rememberMessage(editHistory, key, record);
 
-	const originalContent = record.previous[0]?.content ?? record.currentContent;
-	const originalTimestamp = settings.timestampForEdits
-		? ` (${getRelativeTimestamp(record.previous[0]?.editedAt)})`
-		: "";
-	const currentTimestamp = settings.timestampForEdits
-		? ` (${getRelativeTimestamp(record.currentEditedAt)})`
-		: "";
-	const displayContent = `${originalContent}${originalTimestamp}\n↓\n${record.currentContent}${currentTimestamp}`;
-	event.message = {
-		...original,
-		...message,
-		content: displayContent,
-		was_edited: true,
-	};
+	try {
+		FluxDispatcher.dispatch({
+			...event,
+			type: "MESSAGE_UPDATE",
+			channelId,
+			message: { ...original, ...message, content: record.currentContent },
+			otherPluginBypass: true,
+		});
+	} catch (error) {
+		console.error("[Sage Eyes] Could not forward the original message edit to other listeners.", error);
+	}
+
+	const timestamp = settings.timestampForEdits ? ` (${getRelativeTimestamp(record.currentEditedAt)})` : "";
+	return retainMessageNotice(args, channelId, messageId, `This message was edited${timestamp}`);
 }
 
 function getActionArray(tree: unknown): any[] | undefined {

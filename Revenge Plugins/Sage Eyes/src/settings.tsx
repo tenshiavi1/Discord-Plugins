@@ -6,6 +6,7 @@ import { getAssetIDByName } from "@vendetta/ui/assets";
 import { showToast } from "../../shared/toast";
 import { PluginSettingsSection } from "../../shared/pluginSettings";
 import { clearMessageHistory, updateMessageHistorySettings } from "./messageHistory";
+import { setMessageHistoryFeatureEnabled } from "./messageHistoryToggle";
 import { setHiddenChannelFeatureEnabled } from "./hiddenChannelToggle";
 import { setServerInfoFeatureEnabled } from "./serverInfo";
 import StableTextInput from "../../StableTextInput";
@@ -116,7 +117,7 @@ export function Settings() {
 				/>
 				<TableSwitchRow
 					label="Log Edited Messages"
-					subLabel="Show the original and latest text separated by a downward arrow. Long-press to remove the history."
+					subLabel="Replace edited messages with a red notice. Long-press to restore the current text."
 					disabled={!messageHistoryEnabled}
 					value={Boolean(storage.keepEditHistory)}
 					onValueChange={(value: boolean) => {
@@ -159,7 +160,7 @@ export function Settings() {
 			<TableRowGroup title="Display">
 				<TableSwitchRow
 					label="Add Timestamps for Edits"
-					subLabel="Show a relative timestamp beside each captured version."
+					subLabel="Show a relative time in the red edited notice."
 					disabled={!messageHistoryEnabled}
 					value={Boolean(storage.timestampForEdits)}
 					onValueChange={(value: boolean) => {
