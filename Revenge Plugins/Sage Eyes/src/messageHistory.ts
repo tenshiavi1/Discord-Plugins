@@ -227,6 +227,7 @@ function handleDispatch(args: unknown[]): unknown[] | void {
 	} catch (error) {
 		console.error("[Sage Eyes] Could not show the original text edit notice.", error);
 	}
+	return args;
 }
 
 function getActionArray(tree: unknown): any[] | undefined {
