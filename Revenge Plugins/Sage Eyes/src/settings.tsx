@@ -117,7 +117,7 @@ export function Settings() {
 				/>
 				<TableSwitchRow
 					label="Log Edited Messages"
-					subLabel="Replace edited messages with a red notice. Long-press to restore the current text."
+					subLabel="Show the original text as a temporary red notice; edited messages display normally."
 					disabled={!messageHistoryEnabled}
 					value={Boolean(storage.keepEditHistory)}
 					onValueChange={(value: boolean) => {

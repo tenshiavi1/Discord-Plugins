@@ -8,7 +8,7 @@ Sage Eyes inspects client-visible details for hidden or obscured channels and re
 - Adds an optional lock indicator to hidden channel names.
 - Can ask for confirmation before opening a hidden channel and show the channel details available to the client.
 - Includes a master Hidden Channels toggle to enable or disable hidden-channel handling, including its navigation prompts and lock indicator.
-- Keeps deleted messages in place with Discord's native deleted-warning display and replaces edited messages with a red edited notice.
+- Keeps deleted messages in place with Discord's native deleted-warning display and shows the original text as a temporary red notice when a message is edited.
 - Adds long-press actions to remove a retained deleted-message log or restore an edited message to its current text.
 - Adds Ignore/Unignore in Sage Eyes to user profile menus, with controls to manage ignored users in settings.
 - Adds a Server Info action to the long-press menu for server icons, with member, channel, role, boost, owner, creation date, vanity URL, description, and server ID details.
@@ -24,14 +24,14 @@ Sage Eyes changes client-side display and navigation behavior only. It does not 
 - **Enable Server Info** controls the Server Info action in the server-list long-press menu.
 - **Enable General Logger** turns message-history handling and its related settings on or off. Its subordinate settings are disabled while it is off.
 - **Log Deleted Messages** independently toggles deleted-message retention.
-- **Log Edited Messages** independently toggles the red edited notice while retaining recent versions locally.
+- **Log Edited Messages** independently toggles the temporary red notice for the previous text while edited content passes through normally.
 - **Ignore Bot Messages** and **Ignore Your Messages** skip those messages during history capture.
 - **Add Timestamps for Edits** adds the relative edit time to the red notice.
 - **Deleted Indicator Text** lets you change the text shown for retained deleted messages.
 - **Enable Ignored Users** independently enables profile-menu Ignore/Unignore actions and exclusion of listed users from message history. Its controls are disabled while General Logger is off.
 - **Clear Message History** forgets retained edit versions and deleted-message records. Content already applied to the current channel may remain visible until it is reloaded.
 
-Deleted messages retain their original content and show the native deleted-warning row. Edited messages show a red notice instead of replacing the message with an original/arrow/latest-text block; the current message content remains available to Discord and other listeners. Prior versions are retained internally, and Omniscience can receive the original edit event for its separate log. Long-press a deleted message and choose **Remove Deleted Message** to remove it with one action. Long-press an edited message and choose **Remove Edit History** to restore the current text. These actions are distinct from Discord's ephemeral-message dismissal; Sage Eyes does not mark its history rows as ephemeral.
+Deleted messages retain their original content and show the native deleted-warning row. On edits, the latest content passes through normally while the prior original text appears in a separate temporary red notice; this avoids replacing or rewriting the edited message event, so other listeners such as Omniscience can process the actual edit. Prior versions are retained internally. Long-press a deleted message and choose **Remove Deleted Message** to remove it with one action. Long-press an edited message and choose **Remove Edit History** to clear its retained history. These actions are distinct from Discord's ephemeral-message dismissal; Sage Eyes does not mark its history rows as ephemeral.
 
 ## Source
 

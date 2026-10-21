@@ -133,6 +133,20 @@ function retainMessageNotice(args: unknown[], channelId: string, messageId: stri
 	return args;
 }
 
+function createMessageNotice(channelId: string, messageId: string, indicator: string) {
+	return {
+		type: "MESSAGE_EDIT_FAILED_AUTOMOD",
+		messageData: {
+			type: 1,
+			message: { channelId, messageId },
+		},
+		errorResponseBody: {
+			code: 200000,
+			message: indicator,
+		},
+	};
+}
+
 function handleDispatch(args: unknown[]): unknown[] | void {
 	const event = args[0] as Record<string, any> | undefined;
 	if (!event || typeof event.type !== "string" || event.otherPluginBypass) return;
@@ -202,20 +216,17 @@ function handleDispatch(args: unknown[]): unknown[] | void {
 	}
 	rememberMessage(editHistory, key, record);
 
-	try {
-		FluxDispatcher.dispatch({
-			...event,
-			type: "MESSAGE_UPDATE",
-			channelId,
-			message: { ...original, ...message, content: record.currentContent },
-			otherPluginBypass: true,
-		});
-	} catch (error) {
-		console.error("[Sage Eyes] Could not forward the original message edit to other listeners.", error);
-	}
-
 	const timestamp = settings.timestampForEdits ? ` (${getRelativeTimestamp(record.currentEditedAt)})` : "";
-	return retainMessageNotice(args, channelId, messageId, `This message was edited${timestamp}`);
+	const originalContent = record.previous[0]?.content ?? original.content;
+	try {
+		FluxDispatcher.dispatch(createMessageNotice(
+			channelId,
+			messageId,
+			`${originalContent || "Original message"}${timestamp}`,
+		));
+	} catch (error) {
+		console.error("[Sage Eyes] Could not show the original text edit notice.", error);
+	}
 }
 
 function getActionArray(tree: unknown): any[] | undefined {
