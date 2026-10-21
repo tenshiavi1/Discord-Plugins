@@ -28,8 +28,11 @@ for (const [key, value] of Object.entries({
 	dmLoggerChannelId: "",
 	dmLoggerWebhookUrl: "",
 	messageLoggerEnabled: false,
+	messageLoggerSendToChannel: false,
+	messageLoggerSendToWebhook: false,
 	messageLoggerSourceChannelId: "",
 	messageLoggerDestinationChannelId: "",
+	messageLoggerWebhookUrl: "",
 	messageLoggerCache: [],
 })) {
 	if (storage[key] === undefined) storage[key] = value;
@@ -154,14 +157,14 @@ async function postToChannel(channelInput: string, embed: ReturnType<typeof make
 	}
 }
 
-function getWebhookUrl(): string | undefined {
-	return parseDiscordWebhookUrl(String(storage.dmLoggerWebhookUrl ?? ""));
+function getWebhookUrl(value: unknown): string | undefined {
+	return parseDiscordWebhookUrl(String(value ?? ""));
 }
 
-async function postToWebhook(embed: ReturnType<typeof makeEmbed>): Promise<boolean> {
-	const webhookUrl = getWebhookUrl();
+async function postToWebhook(value: unknown, embed: ReturnType<typeof makeEmbed>): Promise<boolean> {
+	const webhookUrl = getWebhookUrl(value);
 	if (!webhookUrl || typeof fetch !== "function") {
-		console.warn("[Omniscience] A valid Discord webhook URL is required for DM logging.");
+		console.warn("[Omniscience] A valid Discord webhook URL is required for chat logging.");
 		return false;
 	}
 	try {
@@ -173,7 +176,7 @@ async function postToWebhook(embed: ReturnType<typeof makeEmbed>): Promise<boole
 		if (!response.ok) throw new Error(`Webhook returned HTTP ${response.status}.`);
 		return true;
 	} catch (error) {
-		console.error("[Omniscience] Could not send a DM log to the configured webhook.", error);
+		console.error("[Omniscience] Could not send a chat log to the configured webhook.", error);
 		return false;
 	}
 }
@@ -196,7 +199,20 @@ function logDirectMessage(message: any, channelId: string, channel: any, event: 
 	], date);
 
 	if (storage.dmLoggerSendToChannel) void postToChannel(String(storage.dmLoggerChannelId ?? ""), embed);
-	if (storage.dmLoggerSendToWebhook) void postToWebhook(embed);
+	if (storage.dmLoggerSendToWebhook) void postToWebhook(storage.dmLoggerWebhookUrl, embed);
+}
+
+async function postMessageLog(embed: ReturnType<typeof makeEmbed>): Promise<boolean> {
+	const sends: Promise<boolean>[] = [];
+	if (storage.messageLoggerSendToChannel) {
+		sends.push(postToChannel(String(storage.messageLoggerDestinationChannelId ?? ""), embed));
+	}
+	if (storage.messageLoggerSendToWebhook) {
+		sends.push(postToWebhook(storage.messageLoggerWebhookUrl, embed));
+	}
+	if (sends.length === 0) return false;
+	const results = await Promise.all(sends);
+	return results.every(Boolean);
 }
 
 function makeCachedMessage(message: any, channelId: string, previous?: CachedMessage): CachedMessage {
@@ -249,7 +265,7 @@ function onMessageUpdate(event: any) {
 			{ name: "Edited", value: linkedEmbedField(nextContent || "(no text)", link) },
 			{ name: "Time", value: time },
 		], date);
-		void postToChannel(String(storage.messageLoggerDestinationChannelId ?? ""), embed)
+		void postMessageLog(embed)
 			.then((sent) => { if (sent) rememberMessage(makeCachedMessage(message, channelId, cached)); });
 		return;
 	}
@@ -272,7 +288,7 @@ function onMessageDelete(event: any) {
 		{ name: "Message", value: linkedEmbedField([cached.content, ...cached.attachments, ...cached.embeds].filter(Boolean).join("\n") || "(no text)", link) },
 		{ name: "Time", value: time },
 	], date);
-	void postToChannel(String(storage.messageLoggerDestinationChannelId ?? ""), embed)
+	void postMessageLog(embed)
 		.then((sent) => { if (sent) removeCachedMessage(channelId, messageId); });
 }
 

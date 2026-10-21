@@ -1,4 +1,4 @@
-import { React, ReactNative as RN } from "@vendetta/metro/common";
+import { NavigationNative, React, ReactNative as RN } from "@vendetta/metro/common";
 import { storage } from "@vendetta/plugin";
 import { findByProps } from "../../compat";
 import { showToast } from "../../shared/toast";
@@ -17,7 +17,6 @@ const { TableRowGroup, TableRow, TableSwitchRow, Stack } = findByProps(
 );
 const { Text } = findByProps("Text", "View");
 const { Clipboard } = RN;
-const rootNavigationRef = findByProps("getRootNavigationRef");
 const inputStyle = {
   color: "#f2f3f5",
   backgroundColor: "#1e1f22",
@@ -433,13 +432,22 @@ export function WordTrackerSettings() {
   );
 }
 
-function openSettingsPage(title: string, page: () => unknown) {
-  const navigation = rootNavigationRef?.getRootNavigationRef?.();
-  if (typeof navigation?.navigate !== "function") {
+function findStackNavigation(navigation: any) {
+  let current = navigation;
+  while (current) {
+    if (typeof current.push === "function") return current;
+    current = current.getParent?.();
+  }
+  return undefined;
+}
+
+function openSettingsPage(navigation: any, title: string, page: () => unknown) {
+  const stackNavigation = findStackNavigation(navigation);
+  if (typeof stackNavigation?.push !== "function") {
     showToast(`Could not open ${title} settings.`, getAssetIDByName("Warning"));
     return;
   }
-  navigation.navigate("VendettaCustomPage", {
+  stackNavigation.push("VendettaCustomPage", {
     title,
     render: () => React.createElement(page),
   });
@@ -466,7 +474,6 @@ export function ChatLoggerSettings() {
             value={Boolean(storage.dmLoggerSendToChannel)}
             onValueChange={(value: boolean) => {
               storage.dmLoggerSendToChannel = value;
-              if (value) storage.dmLoggerSendToWebhook = false;
               forceUpdate();
             }}
           />
@@ -488,7 +495,6 @@ export function ChatLoggerSettings() {
             value={Boolean(storage.dmLoggerSendToWebhook)}
             onValueChange={(value: boolean) => {
               storage.dmLoggerSendToWebhook = value;
-              if (value) storage.dmLoggerSendToChannel = false;
               forceUpdate();
             }}
           />
@@ -516,6 +522,16 @@ export function ChatLoggerSettings() {
               forceUpdate();
             }}
           />
+          <TableSwitchRow
+            label="Send logs to a Channel"
+            subLabel="Forward edited and deleted messages to a separate channel you control."
+            disabled={!storage.messageLoggerEnabled}
+            value={Boolean(storage.messageLoggerSendToChannel)}
+            onValueChange={(value: boolean) => {
+              storage.messageLoggerSendToChannel = value;
+              forceUpdate();
+            }}
+          />
           <Stack spacing={4} style={{ padding: 10 }}>
             <StableTextInput
               key="messageLoggerSourceChannelId"
@@ -525,15 +541,39 @@ export function ChatLoggerSettings() {
               onChangeText={(value: string) => { storage.messageLoggerSourceChannelId = value; }}
               style={{ ...inputStyle, opacity: storage.messageLoggerEnabled ? 1 : 0.5 }}
             />
-            <StableTextInput
-              key="messageLoggerDestinationChannelId"
-              placeholder="Log destination: channel ID or link."
-              value={String(storage.messageLoggerDestinationChannelId ?? "")}
-              editable={Boolean(storage.messageLoggerEnabled)}
-              onChangeText={(value: string) => { storage.messageLoggerDestinationChannelId = value; }}
-              style={{ ...inputStyle, opacity: storage.messageLoggerEnabled ? 1 : 0.5 }}
-            />
+            {storage.messageLoggerSendToChannel && (
+              <StableTextInput
+                key="messageLoggerDestinationChannelId"
+                placeholder="Message log destination channel ID or link."
+                value={String(storage.messageLoggerDestinationChannelId ?? "")}
+                editable={Boolean(storage.messageLoggerEnabled)}
+                onChangeText={(value: string) => { storage.messageLoggerDestinationChannelId = value; }}
+                style={{ ...inputStyle, opacity: storage.messageLoggerEnabled ? 1 : 0.5 }}
+              />
+            )}
           </Stack>
+          <TableSwitchRow
+            label="Send logs to a Webhook"
+            subLabel="Forward edited and deleted messages to a separate Discord webhook."
+            disabled={!storage.messageLoggerEnabled}
+            value={Boolean(storage.messageLoggerSendToWebhook)}
+            onValueChange={(value: boolean) => {
+              storage.messageLoggerSendToWebhook = value;
+              forceUpdate();
+            }}
+          />
+          {storage.messageLoggerSendToWebhook && (
+            <Stack spacing={4} style={{ padding: 10 }}>
+              <StableTextInput
+                key="messageLoggerWebhookUrl"
+                placeholder="Message log Discord webhook URL."
+                value={String(storage.messageLoggerWebhookUrl ?? "")}
+                editable={Boolean(storage.messageLoggerEnabled)}
+                onChangeText={(value: string) => { storage.messageLoggerWebhookUrl = value; }}
+                style={{ ...inputStyle, opacity: storage.messageLoggerEnabled ? 1 : 0.5 }}
+              />
+            </Stack>
+          )}
           <TableRow
             label="Clear Cached Messages"
             subLabel="Forget up to 500 locally cached messages for edit and delete detection."
@@ -554,6 +594,7 @@ export function ChatLoggerSettings() {
 
 export default function Settings() {
   useProxy(storage);
+  const navigation = NavigationNative.useNavigation();
   return (
     <ScrollView style={{ flex: 1 }} contentContainerStyle={{ padding: 10 }}>
       <Stack spacing={8}>
@@ -562,13 +603,13 @@ export default function Settings() {
             label="Word Tracker"
             subLabel="Manage keywords, matching rules, tracking targets, and alert delivery."
             trailing={<TableRow.Arrow />}
-            onPress={() => openSettingsPage("Word Tracker", WordTrackerSettings)}
+            onPress={() => openSettingsPage(navigation, "Word Tracker", WordTrackerSettings)}
           />
           <TableRow
             label="Chat Logger"
             subLabel="Configure incoming DM logs and edit or delete logs for one selected channel."
             trailing={<TableRow.Arrow />}
-            onPress={() => openSettingsPage("Chat Logger", ChatLoggerSettings)}
+            onPress={() => openSettingsPage(navigation, "Chat Logger", ChatLoggerSettings)}
           />
         </TableRowGroup>
         <TableRowGroup title="Plugin Settings">

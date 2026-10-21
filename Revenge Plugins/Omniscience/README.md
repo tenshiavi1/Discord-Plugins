@@ -12,8 +12,8 @@ Omniscience tracks configured words in selected server channels, group DMs, and 
 - Configure whole-word, exact-match, case-sensitive, and in-sentence matching.
 - Optionally forward matches to a channel or webhook.
 - Open separate Word Tracker and Chat Logger settings pages.
-- Optionally forward incoming direct and group DMs to a channel or Discord webhook.
-- Optionally record edits and deletions in one selected channel, forwarding logs to a destination channel.
+- Optionally forward incoming direct and group DMs to a dedicated channel, Discord webhook, or both.
+- Optionally record edits and deletions in one selected channel, forwarding logs to a separate destination channel, webhook, or both.
 
 Mention tracking uses incoming message events delivered to the active Discord client and the current account's user ID. It does not monitor saved but inactive accounts or run background polling.
 
