@@ -16,6 +16,7 @@ type CachedMessage = {
 	authorName: string;
 	content: string;
 	attachments: string[];
+	embeds: string[];
 	timestamp: string;
 	guildId?: string;
 };
@@ -98,12 +99,22 @@ function getAttachments(message: any): string[] {
 	});
 }
 
+function getEmbedText(message: any): string[] {
+	if (!Array.isArray(message?.embeds)) return [];
+	return message.embeds.flatMap((embed: any) => [
+		embed?.title,
+		embed?.description,
+		...(Array.isArray(embed?.fields) ? embed.fields.flatMap((field: any) => [field?.name, field?.value]) : []),
+	].filter((value): value is string => typeof value === "string" && value.length > 0));
+}
+
 function getMessageContent(message: any, previous?: CachedMessage): string {
 	const content = typeof message?.content === "string" ? message.content : previous?.content ?? "";
 	const attachments = Array.isArray(message?.attachments)
 		? getAttachments(message)
 		: previous?.attachments ?? [];
-	return [content, ...attachments].filter(Boolean).join("\n");
+	const embeds = Array.isArray(message?.embeds) ? getEmbedText(message) : previous?.embeds ?? [];
+	return [content, ...attachments, ...embeds].filter(Boolean).join("\n");
 }
 
 function getAuthorName(message: any, previous?: CachedMessage): string {
@@ -198,6 +209,7 @@ function makeCachedMessage(message: any, channelId: string, previous?: CachedMes
 		authorName: getAuthorName(message, previous),
 		content: typeof message.content === "string" ? message.content : previous?.content ?? "",
 		attachments: Array.isArray(message.attachments) ? getAttachments(message) : previous?.attachments ?? [],
+		embeds: Array.isArray(message.embeds) ? getEmbedText(message) : previous?.embeds ?? [],
 		timestamp: toEmbedTimestamp(date) ?? new Date().toISOString(),
 		guildId: message.guild_id ?? message.guildId ?? channel?.guild_id ?? previous?.guildId,
 	};
@@ -219,14 +231,14 @@ function onMessageCreate(event: any) {
 function onMessageUpdate(event: any) {
 	if (!storage.messageLoggerEnabled) return;
 	const message = event?.message;
-	if (typeof message?.content !== "string" && !Array.isArray(message?.attachments)) return;
+	if (typeof message?.content !== "string" && !Array.isArray(message?.attachments) && !Array.isArray(message?.embeds)) return;
 	const channelId = String(message?.channel_id ?? message?.channelId ?? event?.channelId ?? "");
 	const messageId = String(message?.id ?? event?.id ?? "");
 	if (!channelId || !messageId || parseChannelId(String(storage.messageLoggerSourceChannelId ?? "")) !== channelId) return;
 
 	const cached = findCachedMessage(channelId, messageId);
 	const nextContent = getMessageContent(message, cached);
-	const originalContent = cached ? [cached.content, ...cached.attachments].filter(Boolean).join("\n") : "";
+	const originalContent = cached ? [cached.content, ...cached.attachments, ...cached.embeds].filter(Boolean).join("\n") : "";
 	if (cached && nextContent !== originalContent) {
 		const date = getMessageDate(message);
 		const channel = ChannelStore?.getChannel?.(channelId);
@@ -257,7 +269,7 @@ function onMessageDelete(event: any) {
 	const link = makeJumpUrl(channelId, messageId, cached.guildId ?? channel?.guild_id);
 	const time = toDiscordTimestamp(date) ?? "Time unavailable";
 	const embed = makeEmbed(`Deleted Message: ${cached.authorName}`, [
-		{ name: "Message", value: linkedEmbedField(cached.content || cached.attachments.join("\n") || "(no text)", link) },
+		{ name: "Message", value: linkedEmbedField([cached.content, ...cached.attachments, ...cached.embeds].filter(Boolean).join("\n") || "(no text)", link) },
 		{ name: "Time", value: time },
 	], date);
 	void postToChannel(String(storage.messageLoggerDestinationChannelId ?? ""), embed)
@@ -266,7 +278,8 @@ function onMessageDelete(event: any) {
 
 function onMessageDeleteBulk(event: any) {
 	if (!Array.isArray(event?.ids)) return;
-	for (const id of event.ids) onMessageDelete({ channelId: event.channelId, id });
+	const channelId = event.channelId ?? event.channel_id;
+	for (const id of event.ids) onMessageDelete({ channelId, id });
 }
 
 export function installChatLogger(): () => void {

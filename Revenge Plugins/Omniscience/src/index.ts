@@ -21,6 +21,7 @@ let removeCrashGuard: (() => void) | undefined = registerCrashGuard();
 
 const FluxDispatcher = findByProps("dispatch", "subscribe");
 const ChannelStore = findByProps("getChannel");
+const GuildStore = findByProps("getGuild");
 const UserStore = findByProps("getUser", "getCurrentUser");
 const RelationshipStore = findByProps("getFriendIDs");
 const RestAPI = findByProps("get", "post", "del", "patch");
