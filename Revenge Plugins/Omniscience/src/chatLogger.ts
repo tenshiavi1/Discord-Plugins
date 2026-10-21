@@ -1,6 +1,7 @@
 import { findByProps } from "../../compat";
 import { storage } from "@vendetta/plugin";
 import { limitEmbedField, linkedEmbedField, parseChannelId, parseDiscordWebhookUrl, toDiscordTimestamp, toEmbedTimestamp } from "./logFormatting";
+import { createDeliveryGate } from "./deliveryGate";
 
 const FluxDispatcher = findByProps("dispatch", "subscribe", "unsubscribe");
 const ChannelStore = findByProps("getChannel");
@@ -8,6 +9,9 @@ const UserStore = findByProps("getCurrentUser");
 const RestAPI = findByProps("get", "post", "del", "patch");
 const snowflakeUtils = findByProps("extractTimestamp");
 const MAX_CACHED_MESSAGES = 500;
+const deliveryGate = createDeliveryGate();
+const CHAT_LOGGER_CLEANUP_KEY = "__omniscienceChatLoggerCleanup";
+const globalLoggerState = globalThis as typeof globalThis & { [CHAT_LOGGER_CLEANUP_KEY]?: () => void };
 
 type CachedMessage = {
 	id: string;
@@ -181,8 +185,56 @@ async function postToWebhook(value: unknown, embed: ReturnType<typeof makeEmbed>
 	}
 }
 
+function hashEventValue(value: string): string {
+	let hash = 2166136261;
+	for (let index = 0; index < value.length; index++) {
+		hash = Math.imul(hash ^ value.charCodeAt(index), 16777619);
+	}
+	return (hash >>> 0).toString(36);
+}
+
+type LogTarget = {
+	key: string;
+	send: (embed: ReturnType<typeof makeEmbed>) => Promise<boolean>;
+};
+
+async function deliverLogOnce(
+	eventKey: string,
+	embed: ReturnType<typeof makeEmbed>,
+	targets: LogTarget[],
+): Promise<boolean> {
+	if (targets.length === 0) return false;
+	const results = await Promise.all(targets.map(async (target) => {
+		if (deliveryGate.hasDelivered(eventKey, target.key)) return true;
+		if (!deliveryGate.begin(eventKey, target.key)) return false;
+
+		let succeeded = false;
+		try {
+			succeeded = await target.send(embed);
+			return succeeded;
+		} finally {
+			deliveryGate.finish(eventKey, target.key, succeeded);
+		}
+	}));
+	return results.every(Boolean);
+}
+
 function makeJumpUrl(channelId: string, messageId: string, guildId?: string) {
 	return `https://discord.com/channels/${guildId ?? "@me"}/${channelId}/${messageId}`;
+}
+
+function getDmLogTargets(): LogTarget[] {
+	const targets: LogTarget[] = [];
+	if (storage.dmLoggerSendToChannel) {
+		const channelInput = String(storage.dmLoggerChannelId ?? "");
+		targets.push({ key: `channel:${parseChannelId(channelInput) ?? channelInput}`, send: (embed) => postToChannel(channelInput, embed) });
+	}
+	if (storage.dmLoggerSendToWebhook) {
+		const webhookUrl = getWebhookUrl(storage.dmLoggerWebhookUrl);
+		const webhookKey = webhookUrl ? hashEventValue(webhookUrl) : "invalid";
+		targets.push({ key: `webhook:${webhookKey}`, send: (embed) => postToWebhook(storage.dmLoggerWebhookUrl, embed) });
+	}
+	return targets;
 }
 
 function logDirectMessage(message: any, channelId: string, channel: any, event: any) {
@@ -198,21 +250,23 @@ function logDirectMessage(message: any, channelId: string, channel: any, event: 
 		{ name: "Time", value: time },
 	], date);
 
-	if (storage.dmLoggerSendToChannel) void postToChannel(String(storage.dmLoggerChannelId ?? ""), embed);
-	if (storage.dmLoggerSendToWebhook) void postToWebhook(storage.dmLoggerWebhookUrl, embed);
+	const messageId = String(message.id ?? "");
+	if (!messageId) return;
+	void deliverLogOnce(`dm:${channelId}:${messageId}`, embed, getDmLogTargets());
 }
 
-async function postMessageLog(embed: ReturnType<typeof makeEmbed>): Promise<boolean> {
-	const sends: Promise<boolean>[] = [];
+function getMessageLogTargets(): LogTarget[] {
+	const targets: LogTarget[] = [];
 	if (storage.messageLoggerSendToChannel) {
-		sends.push(postToChannel(String(storage.messageLoggerDestinationChannelId ?? ""), embed));
+		const channelInput = String(storage.messageLoggerDestinationChannelId ?? "");
+		targets.push({ key: `channel:${parseChannelId(channelInput) ?? channelInput}`, send: (embed) => postToChannel(channelInput, embed) });
 	}
 	if (storage.messageLoggerSendToWebhook) {
-		sends.push(postToWebhook(storage.messageLoggerWebhookUrl, embed));
+		const webhookUrl = getWebhookUrl(storage.messageLoggerWebhookUrl);
+		const webhookKey = webhookUrl ? hashEventValue(webhookUrl) : "invalid";
+		targets.push({ key: `webhook:${webhookKey}`, send: (embed) => postToWebhook(storage.messageLoggerWebhookUrl, embed) });
 	}
-	if (sends.length === 0) return false;
-	const results = await Promise.all(sends);
-	return results.every(Boolean);
+	return targets;
 }
 
 function makeCachedMessage(message: any, channelId: string, previous?: CachedMessage): CachedMessage {
@@ -266,7 +320,9 @@ function onMessageUpdate(event: any) {
 			{ name: "Edited", value: linkedEmbedField(nextContent || "(no text)", link) },
 			{ name: "Time", value: time },
 		], date);
-		void postMessageLog(embed)
+		const version = String(message.edited_timestamp ?? event?.edited_timestamp ?? "");
+		const eventKey = `edit:${channelId}:${messageId}:${version}:${hashEventValue(nextContent)}`;
+		void deliverLogOnce(eventKey, embed, getMessageLogTargets())
 			.then((sent) => { if (sent) rememberMessage(makeCachedMessage(message, channelId, cached)); });
 		return;
 	}
@@ -289,7 +345,7 @@ function onMessageDelete(event: any) {
 		{ name: "Message", value: linkedEmbedField([cached.content, ...cached.attachments, ...cached.embeds].filter(Boolean).join("\n") || "(no text)", link) },
 		{ name: "Time", value: time },
 	], date);
-	void postMessageLog(embed)
+	void deliverLogOnce(`delete:${channelId}:${messageId}`, embed, getMessageLogTargets())
 		.then((sent) => { if (sent) removeCachedMessage(channelId, messageId); });
 }
 
@@ -304,15 +360,26 @@ export function installChatLogger(): () => void {
 		console.warn("[Omniscience] Discord's message dispatcher was not found; chat logging is unavailable.");
 		return () => {};
 	}
+	globalLoggerState[CHAT_LOGGER_CLEANUP_KEY]?.();
 
-	FluxDispatcher.subscribe("MESSAGE_CREATE", onMessageCreate);
-	FluxDispatcher.subscribe("MESSAGE_UPDATE", onMessageUpdate);
-	FluxDispatcher.subscribe("MESSAGE_DELETE", onMessageDelete);
-	FluxDispatcher.subscribe("MESSAGE_DELETE_BULK", onMessageDeleteBulk);
-	return () => {
-		FluxDispatcher.unsubscribe("MESSAGE_CREATE", onMessageCreate);
-		FluxDispatcher.unsubscribe("MESSAGE_UPDATE", onMessageUpdate);
-		FluxDispatcher.unsubscribe("MESSAGE_DELETE", onMessageDelete);
-		FluxDispatcher.unsubscribe("MESSAGE_DELETE_BULK", onMessageDeleteBulk);
+	const subscriptions = [
+		["MESSAGE_CREATE", onMessageCreate],
+		["MESSAGE_UPDATE", onMessageUpdate],
+		["MESSAGE_DELETE", onMessageDelete],
+		["MESSAGE_DELETE_BULK", onMessageDeleteBulk],
+	] as const;
+	for (const [event, listener] of subscriptions) FluxDispatcher.subscribe(event, listener);
+
+	let active = true;
+	const cleanup = () => {
+		if (!active) return;
+		active = false;
+		for (const [event, listener] of subscriptions) FluxDispatcher.unsubscribe(event, listener);
+		if (globalLoggerState[CHAT_LOGGER_CLEANUP_KEY] === cleanup) {
+			delete globalLoggerState[CHAT_LOGGER_CLEANUP_KEY];
+		}
 	};
+
+	globalLoggerState[CHAT_LOGGER_CLEANUP_KEY] = cleanup;
+	return cleanup;
 }
