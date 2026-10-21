@@ -6,6 +6,7 @@ import { useProxy } from "@vendetta/storage";
 import { getAssetIDByName } from "@vendetta/ui/assets";
 import StableTextInput from "../../StableTextInput";
 import { PluginSettingsToggle } from "../../shared/pluginSettings";
+import { clearMessageLoggerCache } from "./chatLogger";
 
 const { ScrollView } = findByProps("ScrollView");
 const { TableRowGroup, TableRow, TableSwitchRow, Stack } = findByProps(
@@ -16,6 +17,7 @@ const { TableRowGroup, TableRow, TableSwitchRow, Stack } = findByProps(
 );
 const { Text } = findByProps("Text", "View");
 const { Clipboard } = RN;
+const rootNavigationRef = findByProps("getRootNavigationRef");
 const inputStyle = {
   color: "#f2f3f5",
   backgroundColor: "#1e1f22",
@@ -24,7 +26,7 @@ const inputStyle = {
   paddingVertical: 10,
 };
 
-export default function Settings() {
+export function WordTrackerSettings() {
   useProxy(storage);
   const [, forceUpdate] = React.useReducer((x) => x + 1, 0);
   const [newKeyword, setNewKeyword] = React.useState("");
@@ -426,10 +428,152 @@ export default function Settings() {
           </TableRowGroup>
         )}
 
+      </Stack>
+    </ScrollView>
+  );
+}
+
+function openSettingsPage(title: string, page: () => unknown) {
+  const navigation = rootNavigationRef?.getRootNavigationRef?.();
+  if (typeof navigation?.navigate !== "function") {
+    showToast(`Could not open ${title} settings.`, getAssetIDByName("Warning"));
+    return;
+  }
+  navigation.navigate("VendettaCustomPage", {
+    title,
+    render: () => React.createElement(page),
+  });
+}
+
+export function ChatLoggerSettings() {
+  useProxy(storage);
+  const [, forceUpdate] = React.useReducer((value: number) => value + 1, 0);
+
+  return (
+    <ScrollView style={{ flex: 1 }} contentContainerStyle={{ padding: 10 }}>
+      <Stack spacing={8}>
+        <TableRowGroup title="DM Logger">
+          <TableSwitchRow
+            label="Enable DM Logger"
+            subLabel="Forward incoming direct and group DMs while Revenge is active. Message requests are included only when Discord delivers their messages to this client."
+            value={Boolean(storage.dmLoggerEnabled)}
+            onValueChange={(value: boolean) => { storage.dmLoggerEnabled = value; forceUpdate(); }}
+          />
+          <TableSwitchRow
+            label="Send to a Channel"
+            subLabel="Send DM logs to a channel you control."
+            disabled={!storage.dmLoggerEnabled}
+            value={Boolean(storage.dmLoggerSendToChannel)}
+            onValueChange={(value: boolean) => {
+              storage.dmLoggerSendToChannel = value;
+              if (value) storage.dmLoggerSendToWebhook = false;
+              forceUpdate();
+            }}
+          />
+          {storage.dmLoggerSendToChannel && (
+            <Stack spacing={4} style={{ padding: 10 }}>
+              <StableTextInput
+                key="dmLoggerChannelId"
+                placeholder="Destination channel ID or link."
+                value={String(storage.dmLoggerChannelId ?? "")}
+                onChangeText={(value: string) => { storage.dmLoggerChannelId = value; }}
+                style={inputStyle}
+              />
+            </Stack>
+          )}
+          <TableSwitchRow
+            label="Send to a Webhook"
+            subLabel="Send DM logs to a Discord webhook you control."
+            disabled={!storage.dmLoggerEnabled}
+            value={Boolean(storage.dmLoggerSendToWebhook)}
+            onValueChange={(value: boolean) => {
+              storage.dmLoggerSendToWebhook = value;
+              if (value) storage.dmLoggerSendToChannel = false;
+              forceUpdate();
+            }}
+          />
+          {storage.dmLoggerSendToWebhook && (
+            <Stack spacing={4} style={{ padding: 10 }}>
+              <StableTextInput
+                key="dmLoggerWebhookUrl"
+                placeholder="Discord webhook URL."
+                value={String(storage.dmLoggerWebhookUrl ?? "")}
+                onChangeText={(value: string) => { storage.dmLoggerWebhookUrl = value; }}
+                style={inputStyle}
+              />
+            </Stack>
+          )}
+        </TableRowGroup>
+
+        <TableRowGroup title="Message Logger">
+          <TableSwitchRow
+            label="Enable Message Logger"
+            subLabel="Record edits and deletions in one channel you can access. Only messages observed while this logger is active can be compared or recovered."
+            value={Boolean(storage.messageLoggerEnabled)}
+            onValueChange={(value: boolean) => {
+              storage.messageLoggerEnabled = value;
+              if (!value) clearMessageLoggerCache();
+              forceUpdate();
+            }}
+          />
+          <Stack spacing={4} style={{ padding: 10 }}>
+            <StableTextInput
+              key="messageLoggerSourceChannelId"
+              placeholder="Channel to monitor: ID or link."
+              value={String(storage.messageLoggerSourceChannelId ?? "")}
+              editable={Boolean(storage.messageLoggerEnabled)}
+              onChangeText={(value: string) => { storage.messageLoggerSourceChannelId = value; }}
+              style={{ ...inputStyle, opacity: storage.messageLoggerEnabled ? 1 : 0.5 }}
+            />
+            <StableTextInput
+              key="messageLoggerDestinationChannelId"
+              placeholder="Log destination: channel ID or link."
+              value={String(storage.messageLoggerDestinationChannelId ?? "")}
+              editable={Boolean(storage.messageLoggerEnabled)}
+              onChangeText={(value: string) => { storage.messageLoggerDestinationChannelId = value; }}
+              style={{ ...inputStyle, opacity: storage.messageLoggerEnabled ? 1 : 0.5 }}
+            />
+          </Stack>
+          <TableRow
+            label="Clear Cached Messages"
+            subLabel="Forget up to 500 locally cached messages for edit and delete detection."
+            disabled={!storage.messageLoggerEnabled}
+            trailing={<TableRow.Arrow />}
+            onPress={() => {
+              if (!storage.messageLoggerEnabled) return;
+              clearMessageLoggerCache();
+              showToast("Cleared cached messages for Message Logger.", getAssetIDByName("Check"));
+              forceUpdate();
+            }}
+          />
+        </TableRowGroup>
+      </Stack>
+    </ScrollView>
+  );
+}
+
+export default function Settings() {
+  useProxy(storage);
+  return (
+    <ScrollView style={{ flex: 1 }} contentContainerStyle={{ padding: 10 }}>
+      <Stack spacing={8}>
+        <TableRowGroup title="Omniscience">
+          <TableRow
+            label="Word Tracker"
+            subLabel="Manage keywords, matching rules, tracking targets, and alert delivery."
+            trailing={<TableRow.Arrow />}
+            onPress={() => openSettingsPage("Word Tracker", WordTrackerSettings)}
+          />
+          <TableRow
+            label="Chat Logger"
+            subLabel="Configure incoming DM logs and edit or delete logs for one selected channel."
+            trailing={<TableRow.Arrow />}
+            onPress={() => openSettingsPage("Chat Logger", ChatLoggerSettings)}
+          />
+        </TableRowGroup>
         <TableRowGroup title="Plugin Settings">
           <PluginSettingsToggle id="omniscience" />
         </TableRowGroup>
-
       </Stack>
     </ScrollView>
   );

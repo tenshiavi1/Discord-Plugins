@@ -5,10 +5,14 @@ import { installPluginCrashGuard } from "../../shared/crashGuard";
 import { getAssetIDByName } from "@vendetta/ui/assets";
 import Settings from "./settings";
 import { registerPluginSettingsShortcut } from "../../shared/pluginSettings";
+import { installChatLogger } from "./chatLogger";
+import { linkedEmbedField, parseChannelId, parseDiscordWebhookUrl, toDiscordTimestamp, toEmbedTimestamp, underlineFirstMatch } from "./logFormatting";
 
 const registerCrashGuard = () => installPluginCrashGuard("Omniscience", storage, {
   features: [
     { storageKey: "enabled", patterns: [/onMessage|MESSAGE_CREATE|track.?message|notification/i] },
+    { storageKey: "dmLoggerEnabled", patterns: [/MESSAGE_CREATE|dm.?logger/i] },
+    { storageKey: "messageLoggerEnabled", patterns: [/MESSAGE_CREATE|MESSAGE_UPDATE|MESSAGE_DELETE|message.?logger/i] },
     { storageKey: "showInSettings", patterns: [/registerPluginSettingsShortcut|pluginSettings/i] },
   ],
   fallbackKeys: ["enabled", "showInSettings"],
@@ -17,10 +21,10 @@ let removeCrashGuard: (() => void) | undefined = registerCrashGuard();
 
 const FluxDispatcher = findByProps("dispatch", "subscribe");
 const ChannelStore = findByProps("getChannel");
-const GuildStore = findByProps("getGuild");
 const UserStore = findByProps("getUser", "getCurrentUser");
 const RelationshipStore = findByProps("getFriendIDs");
 const RestAPI = findByProps("get", "post", "del", "patch");
+const snowflakeUtils = findByProps("extractTimestamp");
 
 const defaults = {
   enabled: true,
@@ -63,10 +67,12 @@ storage.keywords = [...new Set(storage.keywords.map((keyword: string) => keyword
 
 let unsubMessage: (() => void) | null = null;
 let unregisterSettingsShortcut: (() => void) | undefined;
+let removeChatLogger: (() => void) | undefined;
 
 export default {
   onLoad() {
     removeCrashGuard ??= registerCrashGuard();
+    removeChatLogger = installChatLogger();
   unregisterSettingsShortcut = registerPluginSettingsShortcut({
     id: "omniscience",
     title: "Omniscience",
@@ -211,50 +217,42 @@ export default {
       const sendToWebhook = storage.sendNotificationToWebhook && storage.webhookUrl;
 
       if (sendToChannel || sendToWebhook) {
-        let messageContent = `# **Keyword Detected!**\n\n`;
-        messageContent += `**User:** <@${author.id}>\n`;
-        messageContent += `    Username: \`@${authorName}\`\n`;
-        messageContent += `    ID: \`${author.id}\`\n`;
-        messageContent += `**Keyword:** \`${matchedKeyword}\`\n`;
-        messageContent += `**Message:**\n${m.content || "[Embed Message]"}\n`;
-
-        if (c.guild_id) {
-          const g = GuildStore?.getGuild?.(c.guild_id);
-          messageContent += `**Location:** Server\n`;
-          messageContent += `**Server:**\n`;
-          messageContent += `    Name: \`${g?.name}\`\n`;
-          messageContent += `    ID: \`${c.guild_id}\`\n`;
-          messageContent += `**Channel:** <#${c.id}>\n`;
-          messageContent += `    Name: \`${c.name}\`\n`;
-          messageContent += `    ID: \`${c.id}\`\n`;
-          messageContent += `**Message Link:** https://discord.com/channels/${c.guild_id}/${c.id}/${m.id}`;
-        } else if (c.type === 3) {
-          messageContent += `**Location:** Group\n`;
-          messageContent += `**Group:** <#${c.id}>\n`;
-          messageContent += `    Name: \`${c.name || 'Unnamed Group'}\`\n`;
-          messageContent += `    ID: \`${c.id}\`\n`;
-          messageContent += `**Message Link:** https://discord.com/channels/@me/${c.id}/${m.id}`;
-        } else {
-          messageContent += `**Location:** DM\n`;
-          messageContent += `**Message Link:** https://discord.com/channels/@me/${c.id}/${m.id}`;
+        let timestampValue: string | number | Date = typeof m.timestamp === "string" ? m.timestamp : Date.now();
+        if (!m.timestamp && typeof m.id === "string" && typeof snowflakeUtils?.extractTimestamp === "function") {
+          try {
+            timestampValue = snowflakeUtils.extractTimestamp(m.id);
+          } catch (error) {
+            console.warn("[Omniscience] Could not determine the tracked message timestamp.", error);
+          }
         }
-
-        const notificationContent = currentUserId
-          ? `<@${currentUserId}>\n${messageContent}`
-          : messageContent;
-        const allowedMentions = currentUserId
-          ? { users: [currentUserId] }
-          : { parse: [] };
+        const timestamp = toEmbedTimestamp(timestampValue);
+        const messageTime = toDiscordTimestamp(timestampValue) ?? "Time unavailable";
+        const messageLink = `https://discord.com/channels/${c.guild_id ?? "@me"}/${c.id}/${m.id}`;
+        const highlightedContent = underlineFirstMatch(fullContent || "[Embed Message]", matchedKeyword, storage.caseSensitive);
+        const embed = {
+          title: "Monitored Word Detected",
+          color: 0x5865f2,
+          fields: [
+            {
+              name: "Message",
+              value: linkedEmbedField(`<@${author.id}>: ${highlightedContent}`, messageLink),
+              inline: true,
+            },
+            { name: "Time", value: messageTime, inline: true },
+          ],
+          ...(timestamp ? { timestamp } : {}),
+        };
 
         if (sendToChannel) {
-          if (typeof RestAPI?.post !== "function") {
+          const targetChannelId = parseChannelId(String(storage.targetChannelId));
+          if (!targetChannelId || typeof RestAPI?.post !== "function") {
             console.warn("[Omniscience] Discord's REST module is unavailable; channel notifications cannot be sent.");
           } else {
             void RestAPI.post({
-              url: `/channels/${storage.targetChannelId.trim()}/messages`,
+              url: `/channels/${targetChannelId}/messages`,
               body: {
-                content: notificationContent,
-                allowed_mentions: allowedMentions
+                embeds: [embed],
+                allowed_mentions: { parse: [] },
               }
             }).catch((error: unknown) => {
               console.error("[Omniscience] Could not send the channel notification.", error);
@@ -263,17 +261,18 @@ export default {
         }
 
         if (sendToWebhook) {
-          if (typeof fetch !== "function") {
-            console.error("[Omniscience] Fetch is unavailable; webhook notifications cannot be sent.");
+          const webhookUrl = parseDiscordWebhookUrl(String(storage.webhookUrl));
+          if (!webhookUrl || typeof fetch !== "function") {
+            console.error("[Omniscience] A valid Discord webhook URL is required for webhook notifications.");
           } else {
-            void fetch(storage.webhookUrl.trim(), {
+            void fetch(webhookUrl, {
             method: "POST",
             headers: {
               "Content-Type": "application/json"
             },
             body: JSON.stringify({
-              content: notificationContent,
-              allowed_mentions: allowedMentions
+              embeds: [embed],
+              allowed_mentions: { parse: [] },
             })
             }).then((response) => {
               if (!response.ok) throw new Error(`Webhook returned HTTP ${response.status}.`);
@@ -307,6 +306,8 @@ export default {
   onUnload() {
     removeCrashGuard?.();
     removeCrashGuard = undefined;
+    removeChatLogger?.();
+    removeChatLogger = undefined;
     unsubMessage?.();
     unregisterSettingsShortcut?.();
     unregisterSettingsShortcut = undefined;
