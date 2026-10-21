@@ -91,10 +91,11 @@ export function WordTrackerSettings() {
 
         <TableRowGroup title="Keyword Monitoring">
           <TableSwitchRow
-            label="Enable Omniscience"
+            label="Enable Word Tracker"
             subLabel="Turn message keyword monitoring on or off."
-            value={storage.enabled !== false}
-            onValueChange={(v: boolean) => { storage.enabled = v; forceUpdate(); }}
+            disabled={storage.enabled === false}
+            value={storage.wordTrackerEnabled !== false}
+            onValueChange={(v: boolean) => { storage.wordTrackerEnabled = v; forceUpdate(); }}
           />
         </TableRowGroup>
 
@@ -594,11 +595,22 @@ export function ChatLoggerSettings() {
 
 export default function Settings() {
   useProxy(storage);
+  const [, forceUpdate] = React.useReducer((value: number) => value + 1, 0);
   const navigation = NavigationNative.useNavigation();
   return (
     <ScrollView style={{ flex: 1 }} contentContainerStyle={{ padding: 10 }}>
       <Stack spacing={8}>
         <TableRowGroup title="Omniscience">
+          <TableSwitchRow
+            label="Enable Omniscience"
+            subLabel="Turn Word Tracker and all chat logging on or off."
+            value={storage.enabled !== false}
+            onValueChange={(value: boolean) => {
+              storage.enabled = value;
+              if (!value) clearMessageLoggerCache();
+              forceUpdate();
+            }}
+          />
           <TableRow
             label="Word Tracker"
             subLabel="Manage keywords, matching rules, tracking targets, and alert delivery."

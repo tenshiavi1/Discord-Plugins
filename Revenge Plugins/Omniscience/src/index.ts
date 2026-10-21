@@ -5,14 +5,16 @@ import { installPluginCrashGuard } from "../../shared/crashGuard";
 import { getAssetIDByName } from "@vendetta/ui/assets";
 import Settings from "./settings";
 import { registerPluginSettingsShortcut } from "../../shared/pluginSettings";
-import { installChatLogger } from "./chatLogger";
+import { clearMessageLoggerCache, installChatLogger } from "./chatLogger";
 import { linkedEmbedField, parseChannelId, parseDiscordWebhookUrl, toDiscordTimestamp, toEmbedTimestamp, underlineFirstMatch } from "./logFormatting";
+import { migrateOmniscienceSettings } from "./settingsMigration";
 
 const registerCrashGuard = () => installPluginCrashGuard("Omniscience", storage, {
   features: [
-    { storageKey: "enabled", patterns: [/onMessage|MESSAGE_CREATE|track.?message|notification/i] },
-    { storageKey: "dmLoggerEnabled", patterns: [/MESSAGE_CREATE|dm.?logger/i] },
-    { storageKey: "messageLoggerEnabled", patterns: [/MESSAGE_CREATE|MESSAGE_UPDATE|MESSAGE_DELETE|message.?logger/i] },
+    { storageKey: "wordTrackerEnabled", patterns: [/onMessage|track.?message|keyword/i] },
+    { storageKey: "dmLoggerEnabled", patterns: [/logDirectMessage|dm.?logger/i] },
+    { storageKey: "messageLoggerEnabled", patterns: [/MESSAGE_UPDATE|MESSAGE_DELETE|message.?logger/i] },
+    { storageKey: "enabled", patterns: [/installChatLogger|Omniscience.*settings/i] },
     { storageKey: "showInSettings", patterns: [/registerPluginSettingsShortcut|pluginSettings/i] },
   ],
   fallbackKeys: ["enabled", "showInSettings"],
@@ -29,6 +31,7 @@ const snowflakeUtils = findByProps("extractTimestamp");
 
 const defaults = {
   enabled: true,
+  wordTrackerEnabled: true,
   trackServers: true,
   trackGroups: true,
   trackDMs: true,
@@ -57,6 +60,8 @@ const defaults = {
   showInSettings: false
 };
 
+migrateOmniscienceSettings(storage);
+
 for (const [key, value] of Object.entries(defaults)) {
   if (storage[key] === undefined) storage[key] = value;
 }
@@ -83,7 +88,7 @@ export default {
   });
 
     const onMessage = (p: any) => {
-      if (!storage.enabled) return;
+      if (storage.enabled === false || storage.wordTrackerEnabled === false) return;
       const m = p?.message ?? p;
       if (!m) return;
 

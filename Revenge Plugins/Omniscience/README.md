@@ -5,7 +5,7 @@ Omniscience tracks configured words in selected server channels, group DMs, and 
 ## Features
 
 - Add, remove, import, and export tracked keywords.
-- Enable or pause keyword monitoring with its master toggle.
+- Enable or pause Omniscience globally, or pause only Word Tracker.
 - Optionally track direct mentions of the currently active Discord account.
 - Choose whether to track everyone, friends, or selected user IDs.
 - Include or exclude servers, channels, and users; choose whether to track embeds or ignore bots.

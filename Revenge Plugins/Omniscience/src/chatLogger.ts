@@ -186,7 +186,7 @@ function makeJumpUrl(channelId: string, messageId: string, guildId?: string) {
 }
 
 function logDirectMessage(message: any, channelId: string, channel: any, event: any) {
-	if (!storage.dmLoggerEnabled || message.author?.id === UserStore?.getCurrentUser?.()?.id) return;
+	if (storage.enabled === false || !storage.dmLoggerEnabled || message.author?.id === UserStore?.getCurrentUser?.()?.id) return;
 	const channelType = channel?.type ?? message.channel_type ?? event?.channel_type;
 	if ((channelType !== 1 && channelType !== 3) || channel?.guild_id || message.guild_id || event?.guild_id) return;
 
@@ -232,6 +232,7 @@ function makeCachedMessage(message: any, channelId: string, previous?: CachedMes
 }
 
 function onMessageCreate(event: any) {
+	if (storage.enabled === false) return;
 	const message = event?.message ?? event;
 	if (!message || typeof message.id !== "string") return;
 	const channelId = String(message.channel_id ?? message.channelId ?? event?.channel_id ?? event?.channelId ?? "");
@@ -245,7 +246,7 @@ function onMessageCreate(event: any) {
 }
 
 function onMessageUpdate(event: any) {
-	if (!storage.messageLoggerEnabled) return;
+	if (storage.enabled === false || !storage.messageLoggerEnabled) return;
 	const message = event?.message;
 	if (typeof message?.content !== "string" && !Array.isArray(message?.attachments) && !Array.isArray(message?.embeds)) return;
 	const channelId = String(message?.channel_id ?? message?.channelId ?? event?.channelId ?? "");
@@ -273,7 +274,7 @@ function onMessageUpdate(event: any) {
 }
 
 function onMessageDelete(event: any) {
-	if (!storage.messageLoggerEnabled) return;
+	if (storage.enabled === false || !storage.messageLoggerEnabled) return;
 	const channelId = String(event?.channelId ?? event?.channel_id ?? "");
 	const messageId = String(event?.id ?? "");
 	if (!channelId || !messageId || parseChannelId(String(storage.messageLoggerSourceChannelId ?? "")) !== channelId) return;
