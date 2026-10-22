@@ -9,10 +9,16 @@ import { PluginSettingsSection } from "../../shared/pluginSettings";
 import {
   clearDeletedMessageHistory,
   clearMessageLoggerCache,
+  setEditHistoryEnabled,
   setMessageLoggerKeepAfterRestart,
   setMessageLoggerLimit,
-  setMessageLoggerShowEditHistory,
 } from "./chatLogger";
+import {
+  clearMessageHistory,
+  setMessageHistoryFeatureEnabled,
+  updateMessageHistorySettings,
+} from "./messageHistory";
+import { setServerInfoFeatureEnabled } from "./serverInfo";
 
 const { ScrollView } = findByProps("ScrollView");
 const { TableRowGroup, TableRow, TableSwitchRow, Stack } = findByProps(
@@ -461,7 +467,7 @@ function openSettingsPage(navigation: any, title: string, page: () => unknown) {
   });
 }
 
-function DeletedMessagesPreview({ showHistory }: { showHistory: boolean }) {
+function DeletedMessagesPreview({ showHistory, deletedIndicatorText }: { showHistory: boolean; deletedIndicatorText: string }) {
   return (
     <RN.View style={{ marginHorizontal: 8, overflow: "hidden", borderRadius: 8, backgroundColor: "#1e1f22" }}>
       <RN.View style={{ paddingHorizontal: 12, paddingVertical: 10, borderBottomWidth: 1, borderBottomColor: "#3f4147" }}>
@@ -484,16 +490,18 @@ function DeletedMessagesPreview({ showHistory }: { showHistory: boolean }) {
       </RN.View>
       <RN.View style={{ flexDirection: "row", backgroundColor: "#f23f431a" }}>
         <RN.View style={{ width: 4, backgroundColor: "#f23f43" }} />
-        <RN.View style={{ flexDirection: "row", gap: 10, padding: 10 }}>
+        <RN.View style={{ flex: 1, minWidth: 0, flexDirection: "row", gap: 10, padding: 10 }}>
           <RN.View style={{ width: 30, height: 30, borderRadius: 15, backgroundColor: "#eb459e", alignItems: "center", justifyContent: "center" }}>
             <Text style={{ color: "#ffffff", fontWeight: "700" }}>S</Text>
           </RN.View>
-          <RN.View style={{ flex: 1 }}>
+          <RN.View style={{ flex: 1, minWidth: 0 }}>
             <RN.View style={{ flexDirection: "row", gap: 8, alignItems: "baseline" }}>
               <Text style={{ color: "#f2f3f5", fontWeight: "600" }}>Sam</Text>
               <Text style={{ color: "#949ba4", fontSize: 11 }}>Today at 4:03 PM</Text>
             </RN.View>
-            <Text style={{ color: "#f2f3f5" }}>Oops, wrong chat. Deleting this.</Text>
+            <Text style={{ color: "#f23f43", fontWeight: "600" }}>
+              {deletedIndicatorText.trim() || "This message was deleted"}
+            </Text>
           </RN.View>
         </RN.View>
       </RN.View>
@@ -568,6 +576,7 @@ export function DeletedMessagesSettings() {
   useProxy(storage);
   const [, forceUpdate] = React.useReducer((value: number) => value + 1, 0);
   const enabled = Boolean(storage.messageLoggerEnabled);
+  const historyEnabled = Boolean(storage.enableMessageHistory);
   const keepAfterRestart = Boolean(storage.messageLoggerKeepAfterRestart);
   const deletedCount = Number(storage.messageLoggerDeletedCount) || 0;
   const editCount = Number(storage.messageLoggerEditCount) || 0;
@@ -619,7 +628,10 @@ export function DeletedMessagesSettings() {
         </RN.View>
 
         <TableRowGroup title="Preview">
-          <DeletedMessagesPreview showHistory={Boolean(storage.messageLoggerShowEditHistory)} />
+          <DeletedMessagesPreview
+            showHistory={storage.keepEditHistory !== false}
+            deletedIndicatorText={String(storage.deletedIndicatorText ?? "This message was deleted")}
+          />
         </TableRowGroup>
 
         <TableRowGroup title="Edited Messages">
@@ -627,9 +639,10 @@ export function DeletedMessagesSettings() {
             label="Show edit history"
             subLabel="Keep up to 10 earlier versions of each observed message."
             disabled={!enabled}
-            value={Boolean(storage.messageLoggerShowEditHistory)}
+            value={storage.keepEditHistory !== false}
             onValueChange={(value: boolean) => {
-              setMessageLoggerShowEditHistory(value);
+              setEditHistoryEnabled(value);
+              updateMessageHistorySettings({ keepEditHistory: value });
               forceUpdate();
             }}
           />
@@ -722,6 +735,155 @@ export function DeletedMessagesSettings() {
             </Stack>
           )}
         </TableRowGroup>
+
+        <TableRowGroup title="In-chat Message History">
+          <TableSwitchRow
+            label="Enable Message History"
+            subLabel="Show deleted-message notices and temporary notices with earlier text after edits."
+            value={historyEnabled}
+            onValueChange={(value: boolean) => {
+              storage.enableMessageHistory = value;
+              setMessageHistoryFeatureEnabled(value && storage.enabled !== false);
+              forceUpdate();
+            }}
+          />
+          <TableSwitchRow
+            label="Log Deleted Messages"
+            subLabel="Retain deleted messages in chat with the configured notice."
+            disabled={!historyEnabled}
+            value={Boolean(storage.keepDeletedMessages)}
+            onValueChange={(value: boolean) => {
+              storage.keepDeletedMessages = value;
+              updateMessageHistorySettings({ keepDeletedMessages: value });
+              forceUpdate();
+            }}
+          />
+          <TableSwitchRow
+            label="Show edit history"
+            subLabel="Show up to 10 earlier versions in a temporary notice; edits continue through Discord normally."
+            disabled={!historyEnabled}
+            value={storage.keepEditHistory !== false}
+            onValueChange={(value: boolean) => {
+              setEditHistoryEnabled(value);
+              updateMessageHistorySettings({ keepEditHistory: value });
+              forceUpdate();
+            }}
+          />
+          <TableSwitchRow
+            label="Ignore Bot Messages"
+            subLabel="Do not retain deletions or edits from bots."
+            disabled={!historyEnabled}
+            value={Boolean(storage.ignoreBotMessages)}
+            onValueChange={(value: boolean) => {
+              storage.ignoreBotMessages = value;
+              updateMessageHistorySettings({ ignoreBotMessages: value });
+              forceUpdate();
+            }}
+          />
+          <TableSwitchRow
+            label="Ignore Your Messages"
+            subLabel="Do not retain deletions or edits to your own messages."
+            disabled={!historyEnabled}
+            value={Boolean(storage.ignoreOwnMessages)}
+            onValueChange={(value: boolean) => {
+              storage.ignoreOwnMessages = value;
+              updateMessageHistorySettings({ ignoreOwnMessages: value });
+              forceUpdate();
+            }}
+          />
+          <TableSwitchRow
+            label="Enable Ignored Users"
+            subLabel="Skip users added from their profile menu."
+            disabled={!historyEnabled}
+            value={Boolean(storage.enableIgnoreUsers)}
+            onValueChange={(value: boolean) => {
+              storage.enableIgnoreUsers = value;
+              updateMessageHistorySettings({ enableIgnoreUsers: value });
+              forceUpdate();
+            }}
+          />
+          <TableSwitchRow
+            label="Add Edit Timestamps"
+            subLabel="Include a relative time in each temporary edit notice."
+            disabled={!historyEnabled}
+            value={Boolean(storage.timestampForEdits)}
+            onValueChange={(value: boolean) => {
+              storage.timestampForEdits = value;
+              updateMessageHistorySettings({ timestampForEdits: value });
+              forceUpdate();
+            }}
+          />
+          <Stack spacing={4} style={{ padding: 10, opacity: historyEnabled ? 1 : 0.5 }}>
+            <StableTextInput
+              key="deletedIndicatorText"
+              placeholder="This message was deleted"
+              value={String(storage.deletedIndicatorText ?? "This message was deleted")}
+              editable={historyEnabled}
+              onChangeText={(value: string) => {
+                storage.deletedIndicatorText = value;
+                updateMessageHistorySettings({ deletedIndicatorText: value });
+              }}
+              style={inputStyle}
+            />
+          </Stack>
+          <TableRow
+            label={`Ignored Users (${Array.isArray(storage.messageHistoryIgnoredUserIds) ? storage.messageHistoryIgnoredUserIds.length : 0})`}
+            subLabel="Add users from their profile menu; remove them here."
+            disabled={!historyEnabled || !storage.enableIgnoreUsers}
+          />
+          {Array.isArray(storage.messageHistoryIgnoredUserIds) && storage.messageHistoryIgnoredUserIds.length > 0
+            ? storage.messageHistoryIgnoredUserIds.map((userId: string) => (
+              <TableRow
+                key={userId}
+                label={`User ${userId}`}
+                disabled={!historyEnabled || !storage.enableIgnoreUsers}
+                trailing={(
+                  <RN.TouchableOpacity
+                    accessibilityRole="button"
+                    accessibilityLabel={`Remove ${userId} from message-history ignored users`}
+                    disabled={!historyEnabled || !storage.enableIgnoreUsers}
+                    onPress={() => {
+                      if (!historyEnabled || !storage.enableIgnoreUsers) return;
+                      const messageHistoryIgnoredUserIds = storage.messageHistoryIgnoredUserIds.filter((id: string) => id !== userId);
+                      storage.messageHistoryIgnoredUserIds = messageHistoryIgnoredUserIds;
+                      updateMessageHistorySettings({ ignoredUserIds: messageHistoryIgnoredUserIds });
+                      forceUpdate();
+                    }}
+                    style={{ paddingHorizontal: 12, paddingVertical: 8, opacity: historyEnabled && storage.enableIgnoreUsers ? 1 : 0.5 }}
+                  >
+                    <Text style={{ color: "#ed4245", fontWeight: "600" }}>Remove</Text>
+                  </RN.TouchableOpacity>
+                )}
+              />
+            ))
+            : <TableRow label="No users are currently ignored." disabled={!historyEnabled || !storage.enableIgnoreUsers} />}
+          <TableRow
+            label="Clear in-chat history"
+            subLabel="Forget retained edits and deleted-message records."
+            disabled={!historyEnabled}
+            trailing={<TableRow.Arrow />}
+            onPress={() => {
+              if (!historyEnabled) return;
+              clearMessageHistory();
+              clearDeletedMessageHistory();
+              showToast("Cleared Omniscience message history.", getAssetIDByName("Check"));
+              forceUpdate();
+            }}
+          />
+        </TableRowGroup>
+
+        <TableRowGroup title="Server Info">
+          <TableSwitchRow
+            label="Enable Server Info"
+            subLabel="Add a Server Info action to server icons in the server list."
+            value={storage.enableServerInfo !== false}
+            onValueChange={(value: boolean) => {
+              storage.enableServerInfo = value;
+              setServerInfoFeatureEnabled(value && storage.enabled !== false);
+              forceUpdate();
+            }}
+          />
+        </TableRowGroup>
       </Stack>
     </ScrollView>
   );
@@ -742,6 +904,8 @@ export default function Settings() {
             onValueChange={(value: boolean) => {
               storage.enabled = value;
               if (!value) clearMessageLoggerCache();
+              setMessageHistoryFeatureEnabled(value && storage.enableMessageHistory !== false);
+              setServerInfoFeatureEnabled(value && storage.enableServerInfo !== false);
               forceUpdate();
             }}
           />

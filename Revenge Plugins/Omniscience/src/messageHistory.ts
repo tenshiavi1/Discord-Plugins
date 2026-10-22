@@ -5,6 +5,7 @@ import { after, before } from "@vendetta/patcher";
 import { findInReactTree } from "@vendetta/utils";
 import { getAssetIDByName } from "@vendetta/ui/assets";
 import { showToast } from "../../shared/toast";
+import { recordMessageDelete, recordMessageUpdate } from "./chatLogger";
 
 const channelMessages = findByProps("_channelMessages");
 const messageStore = findByProps("getMessage", "getMessages");
@@ -41,6 +42,7 @@ type DeletedRecord = {
 };
 
 type MessageHistorySettings = {
+	enabled: boolean;
 	keepDeletedMessages: boolean;
 	keepEditHistory: boolean;
 	enableIgnoreUsers: boolean;
@@ -118,7 +120,7 @@ function getMessageTimestamp(message: MessageRecord) {
 		if (typeof timestamp === "number" && Number.isFinite(timestamp)) return new Date(timestamp).toISOString();
 		if (typeof timestamp === "string" && Number.isFinite(Date.parse(timestamp))) return timestamp;
 	} catch (error) {
-		console.warn("[Sage Eyes] Could not determine a message timestamp.", error);
+		console.warn("[Omniscience] Could not determine a message timestamp.", error);
 	}
 	return null;
 }
@@ -174,7 +176,7 @@ function dismissEditNotice(noticeId: string) {
 			otherPluginBypass: true,
 		});
 	} catch (error) {
-		console.error("[Sage Eyes] Could not dismiss the temporary edit notice.", error);
+		console.error("[Omniscience] Could not dismiss the temporary edit notice.", error);
 	}
 }
 
@@ -194,7 +196,7 @@ function showOriginalEditNotice(channelId: string, messageId: string, original: 
 		timestamp: new Date().toISOString(),
 		edited_timestamp: null,
 		flags: 0,
-		sageEyesOriginalMessageId: messageId,
+		omniscienceOriginalMessageId: messageId,
 	};
 	const key = getMessageKey(channelId, messageId);
 	const noticeIds = editNoticeIdsByMessage.get(key) ?? new Set<string>();
@@ -210,7 +212,7 @@ function showOriginalEditNotice(channelId: string, messageId: string, original: 
 		});
 		FluxDispatcher.dispatch(createMessageNotice(channelId, noticeId, content));
 	} catch (error) {
-		console.error("[Sage Eyes] Could not show the original text edit notice.", error);
+		console.error("[Omniscience] Could not show the original text edit notice.", error);
 		dismissEditNotice(noticeId);
 		return;
 	}
@@ -222,8 +224,10 @@ function showOriginalEditNotice(channelId: string, messageId: string, original: 
 function handleDispatch(args: unknown[]): unknown[] | void {
 	const event = args[0] as Record<string, any> | undefined;
 	if (!event || typeof event.type !== "string" || event.otherPluginBypass) return;
+	if (event.type === "MESSAGE_UPDATE") recordMessageUpdate(event);
+	if (event.type === "MESSAGE_DELETE") recordMessageDelete(event);
 
-	if (event.type === "MESSAGE_DELETE" && settings.keepDeletedMessages) {
+	if (event.type === "MESSAGE_DELETE" && settings.enabled && settings.keepDeletedMessages) {
 		const channelId = event.channelId;
 		const messageId = event.id;
 		if (typeof channelId !== "string" || typeof messageId !== "string") return;
@@ -251,12 +255,12 @@ function handleDispatch(args: unknown[]): unknown[] | void {
 				otherPluginBypass: true,
 			});
 		} catch (error) {
-			console.error("[Sage Eyes] Could not forward the original message deletion to other listeners.", error);
+			console.error("[Omniscience] Could not forward the original message deletion to other listeners.", error);
 		}
 		return retainMessageNotice(args, channelId, messageId, settings.deletedIndicatorText.trim() || "This message was deleted");
 	}
 
-	if (event.type !== "MESSAGE_UPDATE" || !settings.keepEditHistory) return;
+	if (event.type !== "MESSAGE_UPDATE" || !settings.enabled || !settings.keepEditHistory) return;
 	const message = event.message;
 	if (!message || typeof message.content !== "string" || !message.edited_timestamp) return;
 
@@ -317,8 +321,8 @@ function createActionRow(
 	const icon = getAssetIDByName(iconName) ?? getAssetIDByName("TrashIcon");
 	const iconComponent = ActionSheetRow.Icon;
 	return React.createElement(ActionSheetRow, {
-		key: `sage-eyes-${label.toLowerCase().replaceAll(" ", "-")}`,
-		sageEyesActionFor: messageKey,
+		key: `omniscience-${label.toLowerCase().replaceAll(" ", "-")}`,
+		omniscienceActionFor: messageKey,
 		label,
 		subLabel,
 		isDestructive: destructive,
@@ -343,7 +347,7 @@ function removeDeletedMessage(channelId: string, messageId: string) {
 		showToast("Removed the deleted-message record.", getAssetIDByName("TrashIcon"));
 	} catch (error) {
 		rememberMessage(deletedMessages, key, record);
-		console.error("[Sage Eyes] Could not remove the deleted-message log.", error);
+		console.error("[Omniscience] Could not remove the deleted-message log.", error);
 		showToast("Could not remove the deleted-message record.");
 	}
 }
@@ -378,14 +382,14 @@ function removeEditHistory(channelId: string, messageId: string) {
 		showToast("Removed the message's edit history.", getAssetIDByName("ic_edit_24px"));
 	} catch (error) {
 		rememberMessage(editHistory, key, record);
-		console.error("[Sage Eyes] Could not remove edit history.", error);
+		console.error("[Omniscience] Could not remove edit history.", error);
 		showToast("Could not remove the message's edit history.");
 	}
 }
 
 function installMessageActionSheetPatch() {
 	if (!actionSheet?.openLazy || !actionSheet?.hideActionSheet || !ActionSheetRow) {
-		console.warn("[Sage Eyes] Message action-sheet components were not found; message cleanup actions are unavailable.");
+		console.warn("[Omniscience] Message action-sheet components were not found; message cleanup actions are unavailable.");
 		return;
 	}
 
@@ -407,7 +411,7 @@ function installMessageActionSheetPatch() {
 				React.useEffect(() => () => unpatch(), []);
 				const rows = getActionArray(rendered);
 				if (!rows) return rendered;
-				if (rows.some((row) => row?.props?.sageEyesActionFor === key)) return rendered;
+				if (rows.some((row) => row?.props?.omniscienceActionFor === key)) return rendered;
 
 				const replyIndex = rows.findIndex((row) => row?.props?.label?.toLowerCase?.() === "reply");
 				let insertIndex = replyIndex >= 0 ? replyIndex + 1 : rows.length;
@@ -415,7 +419,7 @@ function installMessageActionSheetPatch() {
 					rows.splice(insertIndex++, 0, createActionRow(
 						"Remove Edit History",
 						key,
-						"Sage Eyes · restores the current text",
+						"Omniscience · restores the current text",
 						"ic_edit_24px",
 						() => removeEditHistory(channelId, messageId),
 					));
@@ -424,7 +428,7 @@ function installMessageActionSheetPatch() {
 					rows.splice(insertIndex, 0, createActionRow(
 						"Remove Deleted Message",
 						key,
-						"Sage Eyes · permanently removes this local log",
+						"Omniscience · permanently removes this local log",
 						"TrashIcon",
 						() => removeDeletedMessage(channelId, messageId),
 						true,
@@ -434,7 +438,7 @@ function installMessageActionSheetPatch() {
 			});
 			return module;
 		}).catch((error: unknown) => {
-			console.error("[Sage Eyes] Could not open message cleanup actions.", error);
+			console.error("[Omniscience] Could not open message cleanup actions.", error);
 		});
 	}));
 }
@@ -459,21 +463,21 @@ function installIgnoredUserMenuPatches() {
 			const userId = args[0]?.user?.id ?? args[0]?.userId;
 			if (typeof userId !== "string") return result;
 			const items = getProfileMenuItems(result);
-			if (!items || items.some((item) => item?.sageEyesIgnoreAction)) return result;
+			if (!items || items.some((item) => item?.omniscienceIgnoreAction)) return result;
 
 			const isIgnored = settings.ignoredUserIds.includes(userId);
 			items.push({
-				label: isIgnored ? "Unignore in Sage Eyes" : "Ignore in Sage Eyes",
-				sageEyesIgnoreAction: true,
+				label: isIgnored ? "Unignore in Omniscience" : "Ignore in Omniscience",
+				omniscienceIgnoreAction: true,
 				action: () => {
 					settings.ignoredUserIds = isIgnored
 						? settings.ignoredUserIds.filter((id) => id !== userId)
 						: [...settings.ignoredUserIds, userId];
-					storage.ignoredUserIds = settings.ignoredUserIds;
+					storage.messageHistoryIgnoredUserIds = settings.ignoredUserIds;
 					updateMessageHistorySettings({ ignoredUserIds: settings.ignoredUserIds });
 					showToast(isIgnored
-						? "Removed this user from the Sage Eyes ignore list."
-						: "Added this user to the Sage Eyes ignore list.");
+						? "Removed this user from the Omniscience ignore list."
+						: "Added this user to the Omniscience ignore list.");
 				},
 			});
 			return result;
@@ -482,6 +486,7 @@ function installIgnoredUserMenuPatches() {
 }
 
 export function initializeMessageHistory(pluginSettings: {
+	enabled?: boolean;
 	keepDeletedMessages: boolean;
 	keepEditHistory: boolean;
 	enableIgnoreUsers?: boolean;
@@ -492,6 +497,7 @@ export function initializeMessageHistory(pluginSettings: {
 	deletedIndicatorText?: string;
 }): boolean {
 	settings = {
+		enabled: pluginSettings.enabled !== false,
 		keepDeletedMessages: pluginSettings.keepDeletedMessages,
 		keepEditHistory: pluginSettings.keepEditHistory,
 		enableIgnoreUsers: pluginSettings.enableIgnoreUsers ?? true,
@@ -505,7 +511,7 @@ export function initializeMessageHistory(pluginSettings: {
 	};
 
 	if (typeof FluxDispatcher?.dispatch !== "function") {
-		console.warn("[Sage Eyes] Discord's message dispatcher was not found; message history is unavailable.");
+		console.warn("[Omniscience] Discord's message dispatcher was not found; message history is unavailable.");
 		return false;
 	}
 
@@ -514,7 +520,7 @@ export function initializeMessageHistory(pluginSettings: {
 			try {
 				return handleDispatch(args);
 			} catch (error) {
-				console.error("[Sage Eyes] Could not update message history.", error);
+				console.error("[Omniscience] Could not update message history.", error);
 			}
 		}));
 		dispatcherPatchInstalled = true;
@@ -522,8 +528,20 @@ export function initializeMessageHistory(pluginSettings: {
 		installIgnoredUserMenuPatches();
 		return true;
 	} catch (error) {
-		console.error("[Sage Eyes] Could not install message-history features.", error);
+		console.error("[Omniscience] Could not install message-history features.", error);
 		return false;
+	}
+}
+
+export function setMessageHistoryFeatureEnabled(enabled: boolean) {
+	if (dispatcherPatchInstalled) {
+		updateMessageHistorySettings({ enabled });
+		return;
+	}
+	if (!initializeMessageHistory({ ...storage, enabled, ignoredUserIds: storage.messageHistoryIgnoredUserIds })) {
+		removeMessageHistoryPatch();
+		storage.enableMessageHistory = false;
+		showToast("Could not enable Omniscience message history. Check the console for details.");
 	}
 }
 
@@ -539,6 +557,7 @@ export function updateMessageHistorySettings(patch: Partial<MessageHistorySettin
 }
 
 export function clearMessageHistory() {
+	for (const noticeId of [...editNotices.keys()]) dismissEditNotice(noticeId);
 	deletedMessages.clear();
 	editHistory.clear();
 }

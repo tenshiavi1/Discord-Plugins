@@ -42,7 +42,6 @@ for (const [key, value] of Object.entries({
 	messageLoggerSourceChannelId: "",
 	messageLoggerDestinationChannelId: "",
 	messageLoggerWebhookUrl: "",
-	messageLoggerShowEditHistory: true,
 	messageLoggerKeepAfterRestart: false,
 	messageLoggerLimit: 512,
 	messageLoggerCache: [],
@@ -135,8 +134,8 @@ export function setMessageLoggerKeepAfterRestart(enabled: boolean) {
 	persistMessageHistory();
 }
 
-export function setMessageLoggerShowEditHistory(enabled: boolean) {
-	storage.messageLoggerShowEditHistory = enabled;
+export function setEditHistoryEnabled(enabled: boolean) {
+	storage.keepEditHistory = enabled;
 	if (!enabled) {
 		cachedMessages = cachedMessages.map((message) => ({ ...message, editHistory: [] }));
 		deletedMessages = deletedMessages.map((message) => ({ ...message, editHistory: [] }));
@@ -368,7 +367,7 @@ function makeCachedMessage(message: any, channelId: string, previous?: CachedMes
 }
 
 function onMessageCreate(event: any) {
-	if (storage.enabled === false) return;
+	if (storage.enabled === false || event?.otherPluginBypass) return;
 	const message = event?.message ?? event;
 	if (!message || typeof message.id !== "string") return;
 	const channelId = String(message.channel_id ?? message.channelId ?? event?.channel_id ?? event?.channelId ?? "");
@@ -382,7 +381,7 @@ function onMessageCreate(event: any) {
 }
 
 function onMessageUpdate(event: any) {
-	if (storage.enabled === false || !storage.messageLoggerEnabled) return;
+	if (storage.enabled === false || !storage.messageLoggerEnabled || event?.otherPluginBypass) return;
 	const message = event?.message;
 	if (typeof message?.content !== "string" && !Array.isArray(message?.attachments) && !Array.isArray(message?.embeds)) return;
 	const channelId = String(message?.channel_id ?? message?.channelId ?? event?.channelId ?? "");
@@ -394,7 +393,7 @@ function onMessageUpdate(event: any) {
 	const originalContent = cached ? [cached.content, ...cached.attachments, ...cached.embeds].filter(Boolean).join("\n") : "";
 	if (cached && nextContent !== originalContent) {
 		const date = getMessageDate(message);
-		const editHistory = storage.messageLoggerShowEditHistory
+		const editHistory = storage.keepEditHistory !== false
 			? [...cached.editHistory, { content: originalContent || "(no text)", timestamp: cached.timestamp }].slice(-MAX_EDIT_VERSIONS)
 			: cached.editHistory;
 		const updatedMessage = { ...makeCachedMessage(message, channelId, cached), editHistory };
@@ -417,8 +416,12 @@ function onMessageUpdate(event: any) {
 	rememberMessage(makeCachedMessage(message, channelId, cached));
 }
 
+export function recordMessageUpdate(event: any) {
+	onMessageUpdate(event);
+}
+
 function onMessageDelete(event: any) {
-	if (storage.enabled === false || !storage.messageLoggerEnabled) return;
+	if (storage.enabled === false || !storage.messageLoggerEnabled || event?.otherPluginBypass) return;
 	const channelId = String(event?.channelId ?? event?.channel_id ?? "");
 	const messageId = String(event?.id ?? "");
 	if (!channelId || !messageId || parseChannelId(String(storage.messageLoggerSourceChannelId ?? "")) !== channelId) return;
@@ -445,8 +448,12 @@ function onMessageDelete(event: any) {
 		.then((sent) => { if (sent) removeCachedMessage(channelId, messageId); });
 }
 
+export function recordMessageDelete(event: any) {
+	onMessageDelete(event);
+}
+
 function onMessageDeleteBulk(event: any) {
-	if (!Array.isArray(event?.ids)) return;
+	if (event?.otherPluginBypass || !Array.isArray(event?.ids)) return;
 	const channelId = event.channelId ?? event.channel_id;
 	for (const id of event.ids) onMessageDelete({ channelId, id });
 }
@@ -460,8 +467,6 @@ export function installChatLogger(): () => void {
 
 	const subscriptions = [
 		["MESSAGE_CREATE", onMessageCreate],
-		["MESSAGE_UPDATE", onMessageUpdate],
-		["MESSAGE_DELETE", onMessageDelete],
 		["MESSAGE_DELETE_BULK", onMessageDeleteBulk],
 	] as const;
 	for (const [event, listener] of subscriptions) FluxDispatcher.subscribe(event, listener);

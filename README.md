@@ -10,8 +10,7 @@ Mobile plugins compatible with Revenge:
 - [Avatar Handler](./Revenge%20Plugins/Avatar%20Handler/README.md) — Use Discord's native account switcher for accounts already saved on your device.
 - [Ephemeral Entity](./Revenge%20Plugins/Ephemeral%20Entity/README.md) — Anonymize uploaded file names, remove tracking parameters from sent URLs, hide typing status, and leave group DMs silently.
 - [God Console](./Revenge%20Plugins/God%20Console/README.md) — Mark channels as read, jump to chat history, resolve uncached mentions, and add files to your messages.
-- [Omniscience](./Revenge%20Plugins/Omniscience/README.md) — Track message keywords and active-account mentions, with optional channel or webhook alerts.
-- [Sage Eyes](./Revenge%20Plugins/Sage%20Eyes/README.md) — View client-visible details for hidden channels, inspect server information, and keep in-session message history.
+- [Omniscience](./Revenge%20Plugins/Omniscience/README.md) — Track keywords, keep message history, inspect client-visible server details, and optionally forward alerts.
 - [Tenshi's Plugins](./Revenge%20Plugins/Tenshi's%20Plugins/README.md) — Manage Revenge plugins, keep Developer Mode enabled, and review crash diagnostics.
 
 Add a plugin's integration URL in Revenge:
@@ -23,7 +22,6 @@ Add a plugin's integration URL in Revenge:
 | Ephemeral Entity | `https://tenshiavi1.github.io/Discord-Plugins/Revenge%20Plugins/Ephemeral%20Entity/` |
 | God Console | `https://tenshiavi1.github.io/Discord-Plugins/Revenge%20Plugins/God%20Console/` |
 | Omniscience | `https://tenshiavi1.github.io/Discord-Plugins/Revenge%20Plugins/Omniscience/` |
-| Sage Eyes | `https://tenshiavi1.github.io/Discord-Plugins/Revenge%20Plugins/Sage%20Eyes/` |
 | Tenshi's Plugins | `https://tenshiavi1.github.io/Discord-Plugins/Revenge%20Plugins/Tenshi's%20Plugins/` |
 
 The build also publishes the previous singular `Revenge%20Plugin` category path beneath the new repository URL for compatibility.

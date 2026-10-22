@@ -116,7 +116,7 @@ function ServerInfoSheet({ guildId }: { guildId: string }) {
 			actionSheet?.hideActionSheet?.();
 			showToast("Copied the server ID to your clipboard.");
 		} catch (error) {
-			console.error("[Sage Eyes] Could not copy the server ID.", error);
+			console.error("[Omniscience] Could not copy the server ID.", error);
 			showToast("Could not copy the server ID to your clipboard.");
 		}
 	};
@@ -212,14 +212,14 @@ function ServerInfoSheet({ guildId }: { guildId: string }) {
 
 function openServerInfo(guildId: string) {
 	if (typeof actionSheet?.openLazy !== "function") {
-		console.error("[Sage Eyes] Discord's action-sheet API is unavailable; server information cannot be opened.");
+		console.error("[Omniscience] Discord's action-sheet API is unavailable; server information cannot be opened.");
 		showToast("Could not open server information because Discord's action sheet is unavailable.");
 		return;
 	}
 
 	actionSheet.openLazy(
 		Promise.resolve({ default: ServerInfoSheet }),
-		`sage-eyes-server-info-${guildId}`,
+		`omniscience-server-info-${guildId}`,
 		{ guildId },
 	);
 }
@@ -229,7 +229,7 @@ function installServerInfoMenuPatch() {
 		candidate?.default?.name === "getGuildsBarGuildMenuItems",
 	);
 	if (!menuModule) {
-		console.warn("[Sage Eyes] Server-list context menu was not found; Server Info is unavailable.");
+		console.warn("[Omniscience] Server-list context menu was not found; Server Info is unavailable.");
 		return;
 	}
 
@@ -237,7 +237,7 @@ function installServerInfoMenuPatch() {
 		if (!serverInfoEnabled || !Array.isArray(result)) return result;
 		const guildId = args[0];
 		if (typeof guildId !== "string" || !guildId) return result;
-		if (result.some((item: any) => item?.sageEyesServerInfoAction)) return result;
+		if (result.some((item: any) => item?.omniscienceServerInfoAction)) return result;
 		const infoIcon = getAssetIDByName("ic_information_24px");
 
 		return [
@@ -245,7 +245,7 @@ function installServerInfoMenuPatch() {
 			{
 				iconSource: infoIcon,
 				label: "Server Info",
-				sageEyesServerInfoAction: true,
+				omniscienceServerInfoAction: true,
 				action: () => openServerInfo(guildId),
 			},
 		];
@@ -264,7 +264,7 @@ export function setServerInfoFeatureEnabled(enabled: boolean) {
 	try {
 		installServerInfoMenuPatch();
 	} catch (error) {
-		console.error("[Sage Eyes] Could not enable Server Info.", error);
+		console.error("[Omniscience] Could not enable Server Info.", error);
 		for (const unpatch of unpatches.splice(0).reverse()) unpatch();
 		serverInfoEnabled = false;
 		showToast("Could not enable Server Info. Check the console for details.");

@@ -32,7 +32,6 @@ const LEGACY_FEATURE_STORAGE_KEYS: Record<string, string[]> = {
 		"hideTypingStatus",
 	],
 	Omniscience: ["enabled"],
-	"Sage Eyes": ["enableHiddenChannels", "enableMessageHistory"],
 };
 
 type LegacyPendingDisable = {
