@@ -6,7 +6,13 @@ import { useProxy } from "@vendetta/storage";
 import { getAssetIDByName } from "@vendetta/ui/assets";
 import StableTextInput from "../../StableTextInput";
 import { PluginSettingsSection } from "../../shared/pluginSettings";
-import { clearMessageLoggerCache } from "./chatLogger";
+import {
+  clearDeletedMessageHistory,
+  clearMessageLoggerCache,
+  setMessageLoggerKeepAfterRestart,
+  setMessageLoggerLimit,
+  setMessageLoggerShowEditHistory,
+} from "./chatLogger";
 
 const { ScrollView } = findByProps("ScrollView");
 const { TableRowGroup, TableRow, TableSwitchRow, Stack } = findByProps(
@@ -24,6 +30,7 @@ const inputStyle = {
   paddingHorizontal: 12,
   paddingVertical: 10,
 };
+const MESSAGE_LOG_LIMITS = [100, 512, 1000, 5000];
 
 export function WordTrackerSettings() {
   useProxy(storage);
@@ -454,7 +461,47 @@ function openSettingsPage(navigation: any, title: string, page: () => unknown) {
   });
 }
 
-export function ChatLoggerSettings() {
+function DeletedMessagesPreview({ showHistory }: { showHistory: boolean }) {
+  return (
+    <RN.View style={{ marginHorizontal: 8, overflow: "hidden", borderRadius: 8, backgroundColor: "#1e1f22" }}>
+      <RN.View style={{ paddingHorizontal: 12, paddingVertical: 10, borderBottomWidth: 1, borderBottomColor: "#3f4147" }}>
+        <Text style={{ color: "#f2f3f5", fontWeight: "600" }}># general</Text>
+      </RN.View>
+      <RN.View style={{ flexDirection: "row", gap: 10, padding: 10 }}>
+        <RN.View style={{ width: 30, height: 30, borderRadius: 15, backgroundColor: "#3ba55c", alignItems: "center", justifyContent: "center" }}>
+          <Text style={{ color: "#ffffff", fontWeight: "700" }}>A</Text>
+        </RN.View>
+        <RN.View style={{ flex: 1 }}>
+          <RN.View style={{ flexDirection: "row", gap: 8, alignItems: "baseline" }}>
+            <Text style={{ color: "#f2f3f5", fontWeight: "600" }}>Alex</Text>
+            <Text style={{ color: "#949ba4", fontSize: 11 }}>Today at 4:01 PM</Text>
+          </RN.View>
+          {showHistory && ["See you at 6", "See you at 7"].map((version) => (
+            <Text key={version} style={{ color: "#949ba4", textDecorationLine: "line-through" }}>{version}</Text>
+          ))}
+          <Text style={{ color: "#f2f3f5" }}>See you at 8 <Text style={{ color: "#949ba4" }}>(edited)</Text></Text>
+        </RN.View>
+      </RN.View>
+      <RN.View style={{ flexDirection: "row", backgroundColor: "#f23f431a" }}>
+        <RN.View style={{ width: 4, backgroundColor: "#f23f43" }} />
+        <RN.View style={{ flexDirection: "row", gap: 10, padding: 10 }}>
+          <RN.View style={{ width: 30, height: 30, borderRadius: 15, backgroundColor: "#eb459e", alignItems: "center", justifyContent: "center" }}>
+            <Text style={{ color: "#ffffff", fontWeight: "700" }}>S</Text>
+          </RN.View>
+          <RN.View style={{ flex: 1 }}>
+            <RN.View style={{ flexDirection: "row", gap: 8, alignItems: "baseline" }}>
+              <Text style={{ color: "#f2f3f5", fontWeight: "600" }}>Sam</Text>
+              <Text style={{ color: "#949ba4", fontSize: 11 }}>Today at 4:03 PM</Text>
+            </RN.View>
+            <Text style={{ color: "#f2f3f5" }}>Oops, wrong chat. Deleting this.</Text>
+          </RN.View>
+        </RN.View>
+      </RN.View>
+    </RN.View>
+  );
+}
+
+export function DirectMessageLoggerSettings() {
   useProxy(storage);
   const [, forceUpdate] = React.useReducer((value: number) => value + 1, 0);
 
@@ -512,56 +559,155 @@ export function ChatLoggerSettings() {
           )}
         </TableRowGroup>
 
-        <TableRowGroup title="Message Logger">
+      </Stack>
+    </ScrollView>
+  );
+}
+
+export function DeletedMessagesSettings() {
+  useProxy(storage);
+  const [, forceUpdate] = React.useReducer((value: number) => value + 1, 0);
+  const enabled = Boolean(storage.messageLoggerEnabled);
+  const keepAfterRestart = Boolean(storage.messageLoggerKeepAfterRestart);
+  const deletedCount = Number(storage.messageLoggerDeletedCount) || 0;
+  const editCount = Number(storage.messageLoggerEditCount) || 0;
+  const limit = Number(storage.messageLoggerLimit) || 512;
+  const limitIndex = Math.max(0, MESSAGE_LOG_LIMITS.indexOf(limit));
+  const summary = deletedCount || editCount
+    ? `${deletedCount} deleted message${deletedCount === 1 ? "" : "s"} and ${editCount} edit${editCount === 1 ? "" : "s"} kept${keepAfterRestart ? ", saved on this phone." : " until Discord restarts."}`
+    : "No deleted messages or edits kept yet.";
+
+  const changeLimit = (step: number) => {
+    const nextIndex = Math.max(0, Math.min(MESSAGE_LOG_LIMITS.length - 1, limitIndex + step));
+    setMessageLoggerLimit(MESSAGE_LOG_LIMITS[nextIndex]);
+    forceUpdate();
+  };
+
+  const confirmClear = () => {
+    RN.Alert.alert("Clear kept messages?", "Every locally kept deleted message and edit history will be removed. This cannot be undone.", [
+      { text: "Cancel", style: "cancel" },
+      {
+        text: "Clear",
+        style: "destructive",
+        onPress: () => {
+          clearDeletedMessageHistory();
+          showToast("Cleared kept messages and edit history.", getAssetIDByName("Check"));
+          forceUpdate();
+        },
+      },
+    ]);
+  };
+
+  return (
+    <ScrollView style={{ flex: 1 }} contentContainerStyle={{ padding: 10 }}>
+      <Stack spacing={8}>
+        <TableRowGroup title="Deleted Messages">
           <TableSwitchRow
-            label="Enable Message Logger"
-            subLabel="Record edits and deletions in one channel you can access. Only messages observed while this logger is active can be compared or recovered."
-            value={Boolean(storage.messageLoggerEnabled)}
+            label="Enable Deleted Message Logger"
+            subLabel="Keep a local history of deletions and edits observed while the logger is active."
+            value={enabled}
             onValueChange={(value: boolean) => {
               storage.messageLoggerEnabled = value;
               if (!value) clearMessageLoggerCache();
               forceUpdate();
             }}
           />
+        </TableRowGroup>
+
+        <RN.View style={{ padding: 12, borderRadius: 8, backgroundColor: "#2b2d31" }}>
+          <Text style={{ color: "#f2f3f5", fontWeight: "600" }}>{summary}</Text>
+        </RN.View>
+
+        <TableRowGroup title="Preview">
+          <DeletedMessagesPreview showHistory={Boolean(storage.messageLoggerShowEditHistory)} />
+        </TableRowGroup>
+
+        <TableRowGroup title="Edited Messages">
           <TableSwitchRow
-            label="Send logs to a Channel"
-            subLabel="Forward edited and deleted messages to a separate channel you control."
-            disabled={!storage.messageLoggerEnabled}
-            value={Boolean(storage.messageLoggerSendToChannel)}
+            label="Show edit history"
+            subLabel="Keep up to 10 earlier versions of each observed message."
+            disabled={!enabled}
+            value={Boolean(storage.messageLoggerShowEditHistory)}
             onValueChange={(value: boolean) => {
-              storage.messageLoggerSendToChannel = value;
+              setMessageLoggerShowEditHistory(value);
               forceUpdate();
             }}
+          />
+        </TableRowGroup>
+
+        <TableRowGroup title="Storage">
+          <TableSwitchRow
+            label="Keep after restarting"
+            subLabel="Deleted and edited messages survive closing Discord. Saved only on this phone."
+            disabled={!enabled}
+            value={keepAfterRestart}
+            onValueChange={(value: boolean) => {
+              setMessageLoggerKeepAfterRestart(value);
+              forceUpdate();
+            }}
+          />
+          <RN.View style={{ paddingHorizontal: 12, paddingVertical: 10 }}>
+            <RN.View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between" }}>
+              <Text style={{ color: "#f2f3f5", fontWeight: "600" }}>Keep up to</Text>
+              <RN.View style={{ flexDirection: "row", alignItems: "center", gap: 14 }}>
+                <RN.TouchableOpacity accessibilityLabel="Decrease message limit" accessibilityRole="button" disabled={!enabled || limitIndex === 0} onPress={() => changeLimit(-1)}>
+                  <Text style={{ color: !enabled || limitIndex === 0 ? "#6d6f78" : "#f2f3f5", fontSize: 20 }}>-</Text>
+                </RN.TouchableOpacity>
+                <Text style={{ color: "#f2f3f5", minWidth: 42, textAlign: "center" }}>{limit.toLocaleString()}</Text>
+                <RN.TouchableOpacity accessibilityLabel="Increase message limit" accessibilityRole="button" disabled={!enabled || limitIndex === MESSAGE_LOG_LIMITS.length - 1} onPress={() => changeLimit(1)}>
+                  <Text style={{ color: !enabled || limitIndex === MESSAGE_LOG_LIMITS.length - 1 ? "#6d6f78" : "#f2f3f5", fontSize: 20 }}>+</Text>
+                </RN.TouchableOpacity>
+              </RN.View>
+            </RN.View>
+            <Text style={{ color: "#949ba4", fontSize: 12, marginTop: 4 }}>When full, the oldest kept message is removed first.</Text>
+          </RN.View>
+        </TableRowGroup>
+
+        {deletedCount + editCount > 0 && (
+          <TableRowGroup title="Manage">
+            <TableRow
+              label="Clear kept messages"
+              subLabel="Remove locally kept deleted messages and edit history."
+              trailing={<TableRow.Arrow />}
+              onPress={confirmClear}
+            />
+          </TableRowGroup>
+        )}
+
+        <TableRowGroup title="Log Delivery">
+          <TableSwitchRow
+            label="Send logs to a Channel"
+            subLabel="Forward edit and deletion details to a separate channel you control."
+            disabled={!enabled}
+            value={Boolean(storage.messageLoggerSendToChannel)}
+            onValueChange={(value: boolean) => { storage.messageLoggerSendToChannel = value; forceUpdate(); }}
           />
           <Stack spacing={4} style={{ padding: 10 }}>
             <StableTextInput
               key="messageLoggerSourceChannelId"
               placeholder="Channel to monitor: ID or link."
               value={String(storage.messageLoggerSourceChannelId ?? "")}
-              editable={Boolean(storage.messageLoggerEnabled)}
+              editable={enabled}
               onChangeText={(value: string) => { storage.messageLoggerSourceChannelId = value; }}
-              style={{ ...inputStyle, opacity: storage.messageLoggerEnabled ? 1 : 0.5 }}
+              style={{ ...inputStyle, opacity: enabled ? 1 : 0.5 }}
             />
             {storage.messageLoggerSendToChannel && (
               <StableTextInput
                 key="messageLoggerDestinationChannelId"
-                placeholder="Message log destination channel ID or link."
+                placeholder="Log destination channel ID or link."
                 value={String(storage.messageLoggerDestinationChannelId ?? "")}
-                editable={Boolean(storage.messageLoggerEnabled)}
+                editable={enabled}
                 onChangeText={(value: string) => { storage.messageLoggerDestinationChannelId = value; }}
-                style={{ ...inputStyle, opacity: storage.messageLoggerEnabled ? 1 : 0.5 }}
+                style={{ ...inputStyle, opacity: enabled ? 1 : 0.5 }}
               />
             )}
           </Stack>
           <TableSwitchRow
             label="Send logs to a Webhook"
-            subLabel="Forward edited and deleted messages to a separate Discord webhook."
-            disabled={!storage.messageLoggerEnabled}
+            subLabel="Forward edit and deletion details to a Discord webhook you control."
+            disabled={!enabled}
             value={Boolean(storage.messageLoggerSendToWebhook)}
-            onValueChange={(value: boolean) => {
-              storage.messageLoggerSendToWebhook = value;
-              forceUpdate();
-            }}
+            onValueChange={(value: boolean) => { storage.messageLoggerSendToWebhook = value; forceUpdate(); }}
           />
           {storage.messageLoggerSendToWebhook && (
             <Stack spacing={4} style={{ padding: 10 }}>
@@ -569,24 +715,12 @@ export function ChatLoggerSettings() {
                 key="messageLoggerWebhookUrl"
                 placeholder="Message log Discord webhook URL."
                 value={String(storage.messageLoggerWebhookUrl ?? "")}
-                editable={Boolean(storage.messageLoggerEnabled)}
+                editable={enabled}
                 onChangeText={(value: string) => { storage.messageLoggerWebhookUrl = value; }}
-                style={{ ...inputStyle, opacity: storage.messageLoggerEnabled ? 1 : 0.5 }}
+                style={{ ...inputStyle, opacity: enabled ? 1 : 0.5 }}
               />
             </Stack>
           )}
-          <TableRow
-            label="Clear Cached Messages"
-            subLabel="Forget up to 500 locally cached messages for edit and delete detection."
-            disabled={!storage.messageLoggerEnabled}
-            trailing={<TableRow.Arrow />}
-            onPress={() => {
-              if (!storage.messageLoggerEnabled) return;
-              clearMessageLoggerCache();
-              showToast("Cleared cached messages for Message Logger.", getAssetIDByName("Check"));
-              forceUpdate();
-            }}
-          />
         </TableRowGroup>
       </Stack>
     </ScrollView>
@@ -618,10 +752,16 @@ export default function Settings() {
             onPress={() => openSettingsPage(navigation, "Word Tracker", WordTrackerSettings)}
           />
           <TableRow
-            label="Chat Logger"
-            subLabel="Configure incoming DM logs and edit or delete logs for one selected channel."
+            label="Direct Message Logger"
+            subLabel="Configure incoming direct and group DM logging."
             trailing={<TableRow.Arrow />}
-            onPress={() => openSettingsPage(navigation, "Chat Logger", ChatLoggerSettings)}
+            onPress={() => openSettingsPage(navigation, "Direct Message Logger", DirectMessageLoggerSettings)}
+          />
+          <TableRow
+            label="Deleted Messages"
+            subLabel="Keep deleted messages and edit history, with optional channel or webhook delivery."
+            trailing={<TableRow.Arrow />}
+            onPress={() => openSettingsPage(navigation, "Deleted Messages", DeletedMessagesSettings)}
           />
         </TableRowGroup>
         <PluginSettingsSection id="omniscience" />

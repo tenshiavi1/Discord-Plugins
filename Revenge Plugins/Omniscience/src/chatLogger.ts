@@ -9,6 +9,8 @@ const UserStore = findByProps("getCurrentUser");
 const RestAPI = findByProps("get", "post", "del", "patch");
 const snowflakeUtils = findByProps("extractTimestamp");
 const MAX_CACHED_MESSAGES = 500;
+const MAX_EDIT_VERSIONS = 10;
+const MESSAGE_LOG_LIMITS = [100, 512, 1000, 5000];
 const deliveryGate = createDeliveryGate();
 const CHAT_LOGGER_CLEANUP_KEY = "__omniscienceChatLoggerCleanup";
 const globalLoggerState = globalThis as typeof globalThis & { [CHAT_LOGGER_CLEANUP_KEY]?: () => void };
@@ -21,9 +23,12 @@ type CachedMessage = {
 	content: string;
 	attachments: string[];
 	embeds: string[];
+	editHistory: { content: string; timestamp: string }[];
 	timestamp: string;
 	guildId?: string;
 };
+
+type DeletedMessage = CachedMessage & { deletedAt: string };
 
 for (const [key, value] of Object.entries({
 	dmLoggerEnabled: false,
@@ -37,20 +42,67 @@ for (const [key, value] of Object.entries({
 	messageLoggerSourceChannelId: "",
 	messageLoggerDestinationChannelId: "",
 	messageLoggerWebhookUrl: "",
+	messageLoggerShowEditHistory: true,
+	messageLoggerKeepAfterRestart: false,
+	messageLoggerLimit: 512,
 	messageLoggerCache: [],
+	messageLoggerDeletedCache: [],
 })) {
 	if (storage[key] === undefined) storage[key] = value;
 }
 
-function getCache(): CachedMessage[] {
-	if (!Array.isArray(storage.messageLoggerCache)) return [];
-	return storage.messageLoggerCache.filter((entry: unknown): entry is CachedMessage =>
+function readMessageCache(value: unknown): CachedMessage[] {
+	if (!Array.isArray(value)) return [];
+	return value.filter((entry: unknown): entry is CachedMessage =>
 		typeof entry === "object" && entry !== null &&
 		typeof (entry as CachedMessage).id === "string" &&
 		typeof (entry as CachedMessage).channelId === "string" &&
 		typeof (entry as CachedMessage).content === "string" &&
 		Array.isArray((entry as CachedMessage).attachments),
-	);
+	).map((entry) => ({ ...entry, editHistory: Array.isArray(entry.editHistory) ? entry.editHistory.slice(-MAX_EDIT_VERSIONS) : [] }))
+		.slice(-MAX_CACHED_MESSAGES);
+}
+
+function readDeletedCache(value: unknown): DeletedMessage[] {
+	if (!Array.isArray(value)) return [];
+	return value.filter((entry: unknown): entry is DeletedMessage =>
+		typeof entry === "object" && entry !== null &&
+		typeof (entry as DeletedMessage).id === "string" &&
+		typeof (entry as DeletedMessage).channelId === "string" &&
+		typeof (entry as DeletedMessage).content === "string" &&
+		typeof (entry as DeletedMessage).deletedAt === "string" &&
+		Array.isArray((entry as DeletedMessage).attachments),
+	).map((entry) => ({
+		...entry,
+		editHistory: Array.isArray(entry.editHistory) ? entry.editHistory.slice(-MAX_EDIT_VERSIONS) : [],
+	}));
+}
+
+let cachedMessages = storage.messageLoggerKeepAfterRestart ? readMessageCache(storage.messageLoggerCache) : [];
+let deletedMessages = storage.messageLoggerKeepAfterRestart
+	? readDeletedCache(storage.messageLoggerDeletedCache).slice(-getMessageLogLimit())
+	: [];
+
+function getMessageLogLimit() {
+	const configured = Number(storage.messageLoggerLimit);
+	return MESSAGE_LOG_LIMITS.includes(configured) ? configured : 512;
+}
+
+function persistMessageHistory() {
+	const keepAfterRestart = Boolean(storage.messageLoggerKeepAfterRestart);
+	storage.messageLoggerCache = keepAfterRestart ? cachedMessages : [];
+	storage.messageLoggerDeletedCache = keepAfterRestart ? deletedMessages : [];
+	storage.messageLoggerDeletedCount = deletedMessages.length;
+	const history = new Map<string, CachedMessage>();
+	for (const message of [...cachedMessages, ...deletedMessages]) history.set(getMessageKey(message.channelId, message.id), message);
+	storage.messageLoggerEditCount = [...history.values()]
+		.reduce((total, message) => total + message.editHistory.length, 0);
+}
+
+persistMessageHistory();
+
+function getCache(): CachedMessage[] {
+	return cachedMessages;
 }
 
 function getMessageKey(channelId: string, messageId: string) {
@@ -60,7 +112,8 @@ function getMessageKey(channelId: string, messageId: string) {
 function rememberMessage(message: CachedMessage) {
 	const key = getMessageKey(message.channelId, message.id);
 	const messages = getCache().filter((entry) => getMessageKey(entry.channelId, entry.id) !== key);
-	storage.messageLoggerCache = [...messages, message].slice(-MAX_CACHED_MESSAGES);
+	cachedMessages = [...messages, message].slice(-MAX_CACHED_MESSAGES);
+	persistMessageHistory();
 }
 
 function findCachedMessage(channelId: string, messageId: string) {
@@ -68,11 +121,39 @@ function findCachedMessage(channelId: string, messageId: string) {
 }
 
 function removeCachedMessage(channelId: string, messageId: string) {
-	storage.messageLoggerCache = getCache().filter((entry) => entry.channelId !== channelId || entry.id !== messageId);
+	cachedMessages = getCache().filter((entry) => entry.channelId !== channelId || entry.id !== messageId);
+	persistMessageHistory();
 }
 
 export function clearMessageLoggerCache() {
-	storage.messageLoggerCache = [];
+	cachedMessages = [];
+	persistMessageHistory();
+}
+
+export function setMessageLoggerKeepAfterRestart(enabled: boolean) {
+	storage.messageLoggerKeepAfterRestart = enabled;
+	persistMessageHistory();
+}
+
+export function setMessageLoggerShowEditHistory(enabled: boolean) {
+	storage.messageLoggerShowEditHistory = enabled;
+	if (!enabled) {
+		cachedMessages = cachedMessages.map((message) => ({ ...message, editHistory: [] }));
+		deletedMessages = deletedMessages.map((message) => ({ ...message, editHistory: [] }));
+		persistMessageHistory();
+	}
+}
+
+export function setMessageLoggerLimit(limit: number) {
+	storage.messageLoggerLimit = MESSAGE_LOG_LIMITS.includes(limit) ? limit : 512;
+	deletedMessages = deletedMessages.slice(-getMessageLogLimit());
+	persistMessageHistory();
+}
+
+export function clearDeletedMessageHistory() {
+	deletedMessages = [];
+	cachedMessages = cachedMessages.map((message) => ({ ...message, editHistory: [] }));
+	persistMessageHistory();
 }
 
 function getMessageDate(message: any, fallback = Date.now()): Date {
@@ -280,6 +361,7 @@ function makeCachedMessage(message: any, channelId: string, previous?: CachedMes
 		content: typeof message.content === "string" ? message.content : previous?.content ?? "",
 		attachments: Array.isArray(message.attachments) ? getAttachments(message) : previous?.attachments ?? [],
 		embeds: Array.isArray(message.embeds) ? getEmbedText(message) : previous?.embeds ?? [],
+		editHistory: previous?.editHistory ?? [],
 		timestamp: toEmbedTimestamp(date) ?? new Date().toISOString(),
 		guildId: message.guild_id ?? message.guildId ?? channel?.guild_id ?? previous?.guildId,
 	};
@@ -312,6 +394,10 @@ function onMessageUpdate(event: any) {
 	const originalContent = cached ? [cached.content, ...cached.attachments, ...cached.embeds].filter(Boolean).join("\n") : "";
 	if (cached && nextContent !== originalContent) {
 		const date = getMessageDate(message);
+		const editHistory = storage.messageLoggerShowEditHistory
+			? [...cached.editHistory, { content: originalContent || "(no text)", timestamp: cached.timestamp }].slice(-MAX_EDIT_VERSIONS)
+			: cached.editHistory;
+		const updatedMessage = { ...makeCachedMessage(message, channelId, cached), editHistory };
 		const channel = ChannelStore?.getChannel?.(channelId);
 		const link = makeJumpUrl(channelId, messageId, cached.guildId ?? channel?.guild_id ?? message.guild_id ?? event?.guildId ?? event?.guild_id);
 		const time = toDiscordTimestamp(date) ?? "Time unavailable";
@@ -322,8 +408,10 @@ function onMessageUpdate(event: any) {
 		], date);
 		const version = String(message.edited_timestamp ?? event?.edited_timestamp ?? "");
 		const eventKey = `edit:${channelId}:${messageId}:${version}:${hashEventValue(nextContent)}`;
-		void deliverLogOnce(eventKey, embed, getMessageLogTargets())
-			.then((sent) => { if (sent) rememberMessage(makeCachedMessage(message, channelId, cached)); });
+		const targets = getMessageLogTargets();
+		void deliverLogOnce(eventKey, embed, targets).then((sent) => {
+			if (!targets.length || sent) rememberMessage(updatedMessage);
+		});
 		return;
 	}
 	rememberMessage(makeCachedMessage(message, channelId, cached));
@@ -341,8 +429,16 @@ function onMessageDelete(event: any) {
 	const channel = ChannelStore?.getChannel?.(channelId);
 	const link = makeJumpUrl(channelId, messageId, cached.guildId ?? channel?.guild_id);
 	const time = toDiscordTimestamp(date) ?? "Time unavailable";
+	const content = [cached.content, ...cached.attachments, ...cached.embeds].filter(Boolean).join("\n") || "(no text)";
+	const deletedEntry = { ...cached, deletedAt: date.toISOString() };
+	deletedMessages = [
+		...deletedMessages.filter((entry) => getMessageKey(entry.channelId, entry.id) !== getMessageKey(channelId, messageId)),
+		deletedEntry,
+	].slice(-getMessageLogLimit());
+	persistMessageHistory();
 	const embed = makeEmbed(`Deleted Message: ${cached.authorName}`, [
-		{ name: "Message", value: linkedEmbedField([cached.content, ...cached.attachments, ...cached.embeds].filter(Boolean).join("\n") || "(no text)", link) },
+		{ name: "Message", value: linkedEmbedField(content, link) },
+		...(cached.editHistory.length ? [{ name: "Edit history", value: cached.editHistory.map((version) => `${version.timestamp}: ${version.content}`).join("\n").slice(0, 1024) }] : []),
 		{ name: "Time", value: time },
 	], date);
 	void deliverLogOnce(`delete:${channelId}:${messageId}`, embed, getMessageLogTargets())
