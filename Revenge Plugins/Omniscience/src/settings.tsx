@@ -5,7 +5,7 @@ import { showToast } from "../../shared/toast";
 import { useProxy } from "@vendetta/storage";
 import { getAssetIDByName } from "@vendetta/ui/assets";
 import StableTextInput from "../../StableTextInput";
-import { PluginSettingsToggle } from "../../shared/pluginSettings";
+import { PluginSettingsSection } from "../../shared/pluginSettings";
 import { clearMessageLoggerCache } from "./chatLogger";
 
 const { ScrollView } = findByProps("ScrollView");
@@ -624,9 +624,7 @@ export default function Settings() {
             onPress={() => openSettingsPage(navigation, "Chat Logger", ChatLoggerSettings)}
           />
         </TableRowGroup>
-        <TableRowGroup title="Plugin Settings">
-          <PluginSettingsToggle id="omniscience" />
-        </TableRowGroup>
+        <PluginSettingsSection id="omniscience" />
       </Stack>
     </ScrollView>
   );

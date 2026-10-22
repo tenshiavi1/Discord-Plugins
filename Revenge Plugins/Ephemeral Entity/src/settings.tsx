@@ -5,7 +5,7 @@ import { findByProps } from "../../compat";
 import { METHODS } from "./filenames";
 import { setTypingStatusHidden } from "./privacy";
 import StableTextInput from "../../StableTextInput";
-import { PluginSettingsSection } from "../../shared/pluginSettings";
+import { PluginSettingsLabel, PluginSettingsSection } from "../../shared/pluginSettings";
 
 const { TableRow, TableRowGroup, TableSwitchRow, Stack } = findByProps(
 	"TableRow",
@@ -22,7 +22,7 @@ function TextSetting({ label, storageKey, placeholder, keyboardType = "default" 
 }) {
 	return (
 		<RN.View style={{ padding: 10 }}>
-			<RN.Text style={{ color: "#f2f3f5", fontSize: 14, marginBottom: 6 }}>{label}</RN.Text>
+			<PluginSettingsLabel label={label} />
 			<StableTextInput
 				key={storageKey}
 				value={String(storage[storageKey] ?? "")}

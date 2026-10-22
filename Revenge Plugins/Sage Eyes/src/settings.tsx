@@ -4,7 +4,7 @@ import { storage } from "@vendetta/plugin";
 import { findByProps } from "../../compat";
 import { getAssetIDByName } from "@vendetta/ui/assets";
 import { showToast } from "../../shared/toast";
-import { PluginSettingsSection } from "../../shared/pluginSettings";
+import { PluginSettingsLabel, PluginSettingsSection } from "../../shared/pluginSettings";
 import { clearMessageHistory, updateMessageHistorySettings } from "./messageHistory";
 import { setMessageHistoryFeatureEnabled } from "./messageHistoryToggle";
 import { setHiddenChannelFeatureEnabled } from "./hiddenChannelToggle";
@@ -27,9 +27,7 @@ function TextSetting({ label, value, placeholder, disabled, onChangeText }: {
 }) {
 	return (
 		<RN.View style={{ padding: 10, opacity: disabled ? 0.5 : 1 }}>
-			<RN.Text style={{ color: "#b5bac1", fontSize: 14, fontWeight: "600", marginBottom: 6 }}>
-				{label}
-			</RN.Text>
+			<PluginSettingsLabel label={label} />
 			<StableTextInput
 				key={label}
 				value={value}

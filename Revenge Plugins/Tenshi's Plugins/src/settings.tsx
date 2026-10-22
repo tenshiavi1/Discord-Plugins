@@ -17,7 +17,7 @@ import { cancelScheduledAutoFetch, getAutoFetchProgress } from "./autoFetch";
 import { formatAutoFetchProgress } from "./autoFetchGate";
 import { getPendingManagerRestart } from "./restartState";
 import { formatActivityConsoleHeader, formatLatestError, summarizeActivityConsole, type ActivityConsoleAction, type ActivityConsolePhase } from "./activityConsole";
-import { PluginSettingsToggle } from "../../shared/pluginSettings";
+import { PluginSettingsSection } from "../../shared/pluginSettings";
 
 const { TableRow, TableRowGroup } = findByProps("TableRow", "TableRowGroup");
 const showSimpleActionSheet = findByProps("showSimpleActionSheet")?.showSimpleActionSheet;
@@ -1023,9 +1023,7 @@ export default function Settings() {
 					/>
 				)}
 			</TableRowGroup>
-			<TableRowGroup title="Plugin Settings">
-				<PluginSettingsToggle id="tenshi-plugins" />
-			</TableRowGroup>
+			<PluginSettingsSection id="tenshi-plugins" />
 		</RN.ScrollView>
 	);
 }

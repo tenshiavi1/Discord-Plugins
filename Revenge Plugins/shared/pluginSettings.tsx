@@ -169,12 +169,9 @@ export function PluginSettingsToggle({ id }: { id: string }) {
 }
 
 export function PluginSettingsSection({ id }: { id: string }) {
-	return (
-		<RN.View style={{ marginTop: 12 }}>
-			<RN.View style={{ height: 1, marginHorizontal: 10, marginBottom: 8, backgroundColor: "#3f4147" }} />
-			<TableRowGroup title="Plugin Settings">
-				<PluginSettingsToggle id={id} />
-			</TableRowGroup>
-		</RN.View>
-	);
+	return <TableRowGroup title="Plugin Settings"><PluginSettingsToggle id={id} /></TableRowGroup>;
+}
+
+export function PluginSettingsLabel({ label }: { label: string }) {
+	return <RN.Text style={{ color: "#b5bac1", fontSize: 14, fontWeight: "600", marginBottom: 6 }}>{label}</RN.Text>;
 }

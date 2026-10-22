@@ -3,7 +3,7 @@ import { storage } from "@vendetta/plugin";
 import { useProxy } from "@vendetta/storage";
 import { findByProps } from "../../compat";
 import { showToast } from "../../shared/toast";
-import { PluginSettingsSection } from "../../shared/pluginSettings";
+import { PluginSettingsLabel, PluginSettingsSection } from "../../shared/pluginSettings";
 import StableTextInput from "../../StableTextInput";
 import {
 	ACTIVITY_TYPES,
@@ -32,7 +32,7 @@ function TextSetting({ label, storageKey, placeholder, limit = 128 }: {
 }) {
 	return (
 		<RN.View style={{ padding: 10 }}>
-			<RN.Text style={{ color: "#f2f3f5", fontSize: 14, marginBottom: 6 }}>{label}</RN.Text>
+			<PluginSettingsLabel label={label} />
 			<StableTextInput
 				key={storageKey}
 				value={typeof storage[storageKey] === "string" ? storage[storageKey] : ""}
