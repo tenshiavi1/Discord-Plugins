@@ -14,9 +14,8 @@ import { migrateOmniscienceSettings } from "./settingsMigration";
 const registerCrashGuard = () => installPluginCrashGuard("Omniscience", storage, {
   features: [
     { storageKey: "wordTrackerEnabled", patterns: [/onMessage|track.?message|keyword/i] },
-    { storageKey: "dmLoggerEnabled", patterns: [/logDirectMessage|dm.?logger/i] },
-    { storageKey: "messageLoggerEnabled", patterns: [/MESSAGE_UPDATE|MESSAGE_DELETE|message.?logger/i] },
-    { storageKey: "enableMessageHistory", patterns: [/MESSAGE_UPDATE|MESSAGE_DELETE|message.?history|edit.?notice/i] },
+    { storageKey: "keepDeletedMessages", patterns: [/MESSAGE_DELETE|deleted.?message/i] },
+    { storageKey: "keepEditHistory", patterns: [/MESSAGE_UPDATE|edit.?history/i] },
     { storageKey: "enableServerInfo", patterns: [/server.?info|ServerInfoSheet/i] },
     { storageKey: "enabled", patterns: [/installChatLogger|Omniscience.*settings/i] },
     { storageKey: "showInSettings", patterns: [/registerPluginSettingsShortcut|pluginSettings/i] },
@@ -62,15 +61,8 @@ const defaults = {
   ignoreUsersEnabled: false,
   ignoredUserIds: "",
   showInSettings: false,
-  enableMessageHistory: true,
   keepDeletedMessages: true,
   keepEditHistory: true,
-  enableIgnoreUsers: true,
-  ignoreBotMessages: false,
-  ignoreOwnMessages: false,
-  messageHistoryIgnoredUserIds: [],
-  timestampForEdits: false,
-  deletedIndicatorText: "This message was deleted",
   enableServerInfo: true,
 };
 
@@ -89,8 +81,6 @@ if (!Array.isArray(storage.keywords) || !storage.keywords.every((keyword: unknow
   storage.keywords = [];
 }
 storage.keywords = [...new Set(storage.keywords.map((keyword: string) => keyword.trim()).filter(Boolean))];
-if (!Array.isArray(storage.messageHistoryIgnoredUserIds)) storage.messageHistoryIgnoredUserIds = [];
-
 let unsubMessage: (() => void) | null = null;
 let unregisterSettingsShortcut: (() => void) | undefined;
 let removeChatLogger: (() => void) | undefined;
@@ -99,7 +89,7 @@ export default {
   onLoad() {
     removeCrashGuard ??= registerCrashGuard();
     removeChatLogger = installChatLogger();
-    setMessageHistoryFeatureEnabled(storage.enabled !== false && storage.enableMessageHistory !== false);
+    setMessageHistoryFeatureEnabled(storage.enabled !== false && (storage.keepDeletedMessages !== false || storage.keepEditHistory !== false));
     setServerInfoFeatureEnabled(storage.enabled !== false && storage.enableServerInfo !== false);
   unregisterSettingsShortcut = registerPluginSettingsShortcut({
     id: "omniscience",

@@ -15,6 +15,7 @@ import {
 } from "./chatLogger";
 import {
   clearMessageHistory,
+  hasMessageHistory,
   setMessageHistoryFeatureEnabled,
   updateMessageHistorySettings,
 } from "./messageHistory";
@@ -474,224 +475,231 @@ function PreviewIcon({ asset, fallback }: { asset: string; fallback: string }) {
     : <Text style={{ color: "#b5bac1", fontSize: 18, fontWeight: "600" }}>{fallback}</Text>;
 }
 
+function useReducedMotion() {
+  const [reduceMotion, setReduceMotion] = React.useState(false);
+  React.useEffect(() => {
+    let active = true;
+    const accessibility = RN.AccessibilityInfo;
+    if (typeof accessibility?.isReduceMotionEnabled === "function") {
+      void Promise.resolve(accessibility.isReduceMotionEnabled()).then((enabled: boolean) => {
+        if (active) setReduceMotion(enabled);
+      }).catch(() => {});
+    }
+    const subscription = accessibility?.addEventListener?.("reduceMotionChanged", (enabled: boolean) => {
+      if (active) setReduceMotion(enabled);
+    });
+    return () => {
+      active = false;
+      subscription?.remove?.();
+    };
+  }, []);
+  return reduceMotion;
+}
+
+function PreviewPopIn({ children, reduceMotion }: { children: unknown; reduceMotion: boolean }) {
+  const Animated = RN.Animated;
+  const value = React.useRef<any>(null);
+  if (!value.current && typeof Animated?.Value === "function") {
+    value.current = new Animated.Value(reduceMotion ? 1 : 0);
+  }
+  React.useEffect(() => {
+    const animatedValue = value.current;
+    if (!animatedValue) return undefined;
+    if (reduceMotion || typeof Animated.spring !== "function") {
+      animatedValue.setValue(1);
+      return undefined;
+    }
+    const animation = Animated.spring(animatedValue, {
+      toValue: 1,
+      speed: 20,
+      bounciness: 12,
+      useNativeDriver: true,
+    });
+    animation.start();
+    return () => animation.stop();
+  }, [reduceMotion]);
+
+  if (!value.current || !Animated?.View) return <RN.View>{children}</RN.View>;
+  return (
+    <Animated.View
+      pointerEvents="none"
+      style={{
+        opacity: value.current.interpolate({ inputRange: [0, 1], outputRange: [0, 1], extrapolate: "clamp" }),
+        transform: [{ scale: value.current.interpolate({ inputRange: [0, 1], outputRange: [0.4, 1] }) }],
+      }}
+    >
+      {children}
+    </Animated.View>
+  );
+}
+
+function PreviewMessage({ name, color, time, children }: { name: string; color: string; time: string; children: unknown }) {
+  return (
+    <RN.View style={{ flexDirection: "row", gap: 12, paddingHorizontal: 12, paddingVertical: 6 }}>
+      <RN.View style={{ width: 40, height: 40, borderRadius: 20, backgroundColor: color, alignItems: "center", justifyContent: "center" }}>
+        <Text style={{ color: "#ffffff", fontSize: 16, fontWeight: "700" }}>{name.slice(0, 1).toUpperCase()}</Text>
+      </RN.View>
+      <RN.View style={{ flex: 1, minWidth: 0 }}>
+        <RN.View style={{ flexDirection: "row", alignItems: "baseline", marginBottom: 2 }}>
+          <Text style={{ color: "#f2f3f5", fontSize: 15, fontWeight: "600" }}>{name}</Text>
+          <Text style={{ marginLeft: 8, color: "#949ba4", fontSize: 12 }}>{time}</Text>
+        </RN.View>
+        {children}
+      </RN.View>
+    </RN.View>
+  );
+}
+
+function PreviewHeader() {
+  return (
+    <RN.View style={{ minHeight: 48, flexDirection: "row", alignItems: "center", gap: 10, paddingHorizontal: 12, borderBottomWidth: 1, borderBottomColor: "#ffffff14" }}>
+      <Text style={{ width: 28, color: "#b5bac1", fontSize: 24 }}>‹</Text>
+      <RN.View style={{ flex: 1, flexDirection: "row", alignItems: "center", gap: 6 }}>
+        <Text style={{ color: "#949ba4", fontSize: 18 }}>#</Text>
+        <Text style={{ color: "#f2f3f5", fontSize: 15, fontWeight: "600" }}>general</Text>
+        <Text style={{ color: "#80848e", fontSize: 16 }}>›</Text>
+      </RN.View>
+      <RN.View style={{ flexDirection: "row", gap: 8 }}>
+        <RN.View style={{ width: 32, height: 32, borderRadius: 16, backgroundColor: "#2b2d31", alignItems: "center", justifyContent: "center" }}>
+          <PreviewIcon asset="ThreadIcon" fallback="⋯" />
+        </RN.View>
+        <RN.View style={{ width: 32, height: 32, borderRadius: 16, backgroundColor: "#2b2d31", alignItems: "center", justifyContent: "center" }}>
+          <PreviewIcon asset="MagnifyingGlassIcon" fallback="⌕" />
+        </RN.View>
+      </RN.View>
+    </RN.View>
+  );
+}
+
+function PreviewInput() {
+  return (
+    <RN.View style={{ flexDirection: "row", alignItems: "center", gap: 8, paddingHorizontal: 10, paddingVertical: 9, borderTopWidth: 1, borderTopColor: "#ffffff0f", backgroundColor: "#232428" }}>
+      <RN.View style={{ width: 40, height: 40, borderRadius: 20, alignItems: "center", justifyContent: "center", backgroundColor: "#2b2d31" }}>
+        <PreviewIcon asset="PlusLargeIcon" fallback="+" />
+      </RN.View>
+      <RN.View style={{ flex: 1, minHeight: 40, flexDirection: "row", alignItems: "center", gap: 10, paddingHorizontal: 14, borderRadius: 20, backgroundColor: "#2b2d31" }}>
+        <Text numberOfLines={1} style={{ flex: 1, color: "#949ba4", fontSize: 14 }}>Message #general</Text>
+        <PreviewIcon asset="GiftIcon" fallback="GIF" />
+        <PreviewIcon asset="ReactionIcon" fallback="☺" />
+      </RN.View>
+      <RN.View style={{ width: 40, height: 40, borderRadius: 20, alignItems: "center", justifyContent: "center", backgroundColor: "#2b2d31" }}>
+        <PreviewIcon asset="MicrophoneIcon" fallback="◖" />
+      </RN.View>
+    </RN.View>
+  );
+}
+
+function MessageLimitChoice({ value, disabled, onChange }: {
+  value: number;
+  disabled: boolean;
+  onChange: (value: number) => void;
+}) {
+  const reduceMotion = useReducedMotion();
+  const [width, setWidth] = React.useState(0);
+  const nearest = MESSAGE_LOG_LIMITS.reduce((best, current) =>
+    Math.abs(current - value) < Math.abs(best - value) ? current : best,
+  MESSAGE_LOG_LIMITS[0]);
+  const selectedIndex = MESSAGE_LOG_LIMITS.indexOf(nearest);
+  const selection = React.useRef<any>(null);
+  if (!selection.current && RN.Animated?.Value) selection.current = new RN.Animated.Value(selectedIndex);
+
+  React.useEffect(() => {
+    if (!selection.current) return;
+    if (reduceMotion || typeof RN.Animated?.spring !== "function") {
+      selection.current.setValue(selectedIndex);
+      return;
+    }
+    const animation = RN.Animated.spring(selection.current, {
+      toValue: selectedIndex,
+      speed: 20,
+      bounciness: 8,
+      useNativeDriver: false,
+    });
+    animation.start();
+    return () => animation.stop();
+  }, [selectedIndex, reduceMotion]);
+
+  const segmentWidth = width / MESSAGE_LOG_LIMITS.length;
+  const indicatorStyle = selection.current
+    ? { transform: [{ translateX: selection.current.interpolate({ inputRange: [0, MESSAGE_LOG_LIMITS.length - 1], outputRange: [0, Math.max(0, width - segmentWidth)] }) }] }
+    : { left: selectedIndex * segmentWidth };
+
+  return (
+    <RN.View>
+      <RN.View
+        onLayout={(event: any) => setWidth(event.nativeEvent.layout.width)}
+        style={{ position: "relative", flexDirection: "row", padding: 3, borderRadius: 16, backgroundColor: "#1e1f22", opacity: disabled ? 0.5 : 1 }}
+      >
+        <RN.Animated.View pointerEvents="none" style={[{ position: "absolute", top: 3, bottom: 3, width: segmentWidth, borderRadius: 13, backgroundColor: "#4e5058" }, indicatorStyle]} />
+        {MESSAGE_LOG_LIMITS.map((limit) => (
+          <RN.TouchableOpacity
+            key={limit}
+            accessibilityRole="button"
+            accessibilityState={{ selected: limit === nearest, disabled }}
+            disabled={disabled}
+            onPress={() => onChange(limit)}
+            style={{ flex: 1, minHeight: 34, alignItems: "center", justifyContent: "center" }}
+          >
+            <Text style={{ color: limit === nearest ? "#ffffff" : "#b5bac1", fontSize: 12, fontWeight: "600" }}>{limit}</Text>
+          </RN.TouchableOpacity>
+        ))}
+      </RN.View>
+      <Text style={{ marginTop: 6, color: "#949ba4", fontSize: 12 }}>When it’s full, the oldest message is removed first.</Text>
+    </RN.View>
+  );
+}
+
 function DeletedMessagesPreview({
-  historyEnabled,
-  loggerEnabled,
   showHistory,
   showDeletedMessages,
-  timestampForEdits,
-  ignoreOwnMessages,
-  ignoreBotMessages,
-  ignoredUserCount,
-  ignoredUsersEnabled,
-  sendToChannel,
-  sendToWebhook,
-  keepAfterRestart,
-  messageLimit,
-  sourceConfigured,
-  deletedIndicatorText,
 }: {
-  historyEnabled: boolean;
-  loggerEnabled: boolean;
   showHistory: boolean;
   showDeletedMessages: boolean;
-  timestampForEdits: boolean;
-  ignoreOwnMessages: boolean;
-  ignoreBotMessages: boolean;
-  ignoredUserCount: number;
-  ignoredUsersEnabled: boolean;
-  sendToChannel: boolean;
-  sendToWebhook: boolean;
-  keepAfterRestart: boolean;
-  messageLimit: number;
-  sourceConfigured: boolean;
-  deletedIndicatorText: string;
 }) {
-  const showEditHistory = historyEnabled && showHistory;
-  const keepDeletedSample = historyEnabled && showDeletedMessages;
-  const deliveryTargets = [sendToChannel && "Channel", sendToWebhook && "Webhook"].filter(Boolean);
-
+  const reduceMotion = useReducedMotion();
+  const versions = ["See you at 6", "See you at 7"];
   return (
-    <RN.View style={{ marginHorizontal: 8, overflow: "hidden", borderRadius: 12, borderWidth: 1, borderColor: "#1e1f22", backgroundColor: "#313338" }}>
-      <RN.View style={{ minHeight: 44, flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingHorizontal: 12, borderBottomWidth: 1, borderBottomColor: "#232428" }}>
-        <RN.View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
-          <Text style={{ color: "#b5bac1", fontSize: 20, fontWeight: "500" }}>#</Text>
-          <Text style={{ color: "#f2f3f5", fontWeight: "700" }}>general</Text>
-        </RN.View>
-        <PreviewIcon asset="MagnifyingGlassIcon" fallback="⌕" />
-      </RN.View>
-      <RN.View style={{ paddingTop: 6, paddingBottom: 10 }}>
-        <RN.View style={{ flexDirection: "row", gap: 12, paddingHorizontal: 12, paddingVertical: 8 }}>
-          <RN.View style={{ width: 36, height: 36, borderRadius: 18, backgroundColor: ignoreOwnMessages ? "#3ba55c" : "#5865f2", alignItems: "center", justifyContent: "center" }}>
-            <Text style={{ color: "#ffffff", fontSize: 13, fontWeight: "700" }}>{ignoreOwnMessages ? "A" : "Y"}</Text>
+    <RN.View style={{ marginHorizontal: 8, overflow: "hidden", borderRadius: 16, borderWidth: 1, borderColor: "#ffffff14", backgroundColor: "#1a1a1e" }}>
+      <PreviewHeader />
+      <RN.View style={{ paddingVertical: 4 }}>
+        <PreviewMessage name="Alex" color="#3ba55c" time="Today at 4:01 PM">
+          <RN.View>
+            {showHistory && versions.map((version, index) => (
+              <PreviewPopIn key={`${version}-${index}`} reduceMotion={reduceMotion}>
+                <Text style={{ color: "#949ba4", fontSize: 14, textDecorationLine: "line-through" }}>{version}</Text>
+              </PreviewPopIn>
+            ))}
+            <Text style={{ color: "#dbdee1", fontSize: 15, lineHeight: 20 }}>See you at 8<Text style={{ color: "#949ba4", fontSize: 12 }}> (edited)</Text></Text>
           </RN.View>
-          <RN.View style={{ flex: 1, minWidth: 0 }}>
-            <RN.View style={{ flexDirection: "row", flexWrap: "wrap", alignItems: "baseline", columnGap: 7, rowGap: 2, marginBottom: 3 }}>
-              <Text style={{ color: "#f2f3f5", fontSize: 14, fontWeight: "600" }}>{ignoreOwnMessages ? "Alex" : "You"}</Text>
-              <Text style={{ color: "#949ba4", fontSize: 10, fontWeight: "700" }}>{ignoreOwnMessages ? "MEMBER" : "YOU"}</Text>
-              <Text style={{ color: "#949ba4", fontSize: 11 }}>Today at 4:01 PM</Text>
-            </RN.View>
-            <Text style={{ color: "#dbdee1", fontSize: 14 }}>
-              {ignoreOwnMessages ? "Alex: See you at 8." : "See you at 8."}
-              {showEditHistory ? <Text style={{ color: "#949ba4", fontSize: 11 }}> (edited)</Text> : null}
+        </PreviewMessage>
+        <RN.View style={{ position: "relative", backgroundColor: showDeletedMessages ? "#f23f431a" : "transparent" }}>
+          {showDeletedMessages ? <RN.View style={{ position: "absolute", left: 0, top: 0, bottom: 0, width: 4, backgroundColor: "#f23f43" }} /> : null}
+          <PreviewMessage name="Sam" color="#eb459e" time="Today at 4:03 PM">
+            <Text style={{ color: "#dbdee1", fontSize: 15, lineHeight: 20 }}>
+              {showDeletedMessages ? "Oops, wrong chat. Deleting this." : "I’ll send the link right after this."}
             </Text>
-            {showEditHistory ? (
-              <RN.View style={{ marginTop: 5, paddingLeft: 8, borderLeftWidth: 2, borderLeftColor: "#f23f43" }}>
-                <Text style={{ color: "#f47778", fontSize: 13 }}>
-                  Earlier text: {ignoreOwnMessages ? "Alex: See you at 6." : "See you at 6."}{timestampForEdits ? <Text style={{ color: "#949ba4", fontSize: 11 }}> · 2m ago</Text> : null}
-                </Text>
-              </RN.View>
-            ) : !historyEnabled ? (
-              <Text style={{ marginTop: 3, color: "#949ba4", fontSize: 11 }}>In-chat history is off; this message remains in chat.</Text>
-            ) : null}
-          </RN.View>
-        </RN.View>
-        <RN.View style={{ flexDirection: "row", marginTop: 4, backgroundColor: keepDeletedSample ? "#f23f4312" : "transparent" }}>
-          {keepDeletedSample ? <RN.View style={{ width: 4, backgroundColor: "#f23f43" }} /> : null}
-          <RN.View style={{ flex: 1, minWidth: 0, flexDirection: "row", gap: 12, paddingHorizontal: 12, paddingVertical: 9 }}>
-            <RN.View style={{ width: 36, height: 36, borderRadius: 18, backgroundColor: ignoreBotMessages ? "#3ba55c" : "#eb459e", alignItems: "center", justifyContent: "center" }}>
-              <Text style={{ color: "#ffffff", fontSize: 13, fontWeight: "700" }}>{ignoreBotMessages ? "M" : "S"}</Text>
-            </RN.View>
-            <RN.View style={{ flex: 1, minWidth: 0 }}>
-              <RN.View style={{ flexDirection: "row", flexWrap: "wrap", alignItems: "baseline", columnGap: 7, rowGap: 2, marginBottom: 3 }}>
-                <Text style={{ color: "#f2f3f5", fontSize: 14, fontWeight: "600" }}>{ignoreBotMessages ? "Morgan" : "Sam"}</Text>
-                <Text style={{ color: "#949ba4", fontSize: 10, fontWeight: "700" }}>{ignoreBotMessages ? "MEMBER" : "BOT"}</Text>
-                <Text style={{ color: "#949ba4", fontSize: 11 }}>Today at 4:03 PM</Text>
-              </RN.View>
-              <Text style={{ color: keepDeletedSample ? "#f47778" : "#dbdee1", fontSize: 14, lineHeight: 20, fontWeight: keepDeletedSample ? "500" : "400" }}>
-                {keepDeletedSample ? deletedIndicatorText.trim() || "This message was deleted" : "I’ll send the link right after this."}
-              </Text>
-              {!historyEnabled ? <Text style={{ marginTop: 3, color: "#949ba4", fontSize: 11 }}>In-chat history is off; this message remains in chat.</Text> : null}
-            </RN.View>
-          </RN.View>
+          </PreviewMessage>
         </RN.View>
       </RN.View>
-      <RN.View style={{ paddingHorizontal: 10, paddingBottom: 10 }}>
-        <RN.View style={{ minHeight: 42, flexDirection: "row", alignItems: "center", gap: 10, paddingHorizontal: 10, borderRadius: 21, backgroundColor: "#383a40" }}>
-          <PreviewIcon asset="PlusSmallIcon" fallback="+" />
-          <Text numberOfLines={1} style={{ flex: 1, color: "#949ba4", fontSize: 13 }}>Message #general</Text>
-          <PreviewIcon asset="GiftIcon" fallback="GIF" />
-          <PreviewIcon asset="ReactionIcon" fallback="☺" />
-        </RN.View>
-      </RN.View>
-      <RN.View style={{ flexDirection: "row", flexWrap: "wrap", gap: 6, paddingHorizontal: 10, paddingBottom: 10 }}>
-        <PreviewStatus label="In-chat history" enabled={historyEnabled} />
-        <PreviewStatus label="Message logger" enabled={loggerEnabled} />
-        <PreviewStatus label="Source configured" enabled={sourceConfigured} />
-        <PreviewStatus label="Persistent storage" enabled={keepAfterRestart} />
-        <PreviewStatus label="Ignored users" enabled={ignoredUsersEnabled} />
-        <RN.View style={{ paddingHorizontal: 8, paddingVertical: 4, borderRadius: 10, backgroundColor: "#232428" }}>
-          <Text style={{ color: "#b5bac1", fontSize: 10 }}>Limit: {messageLimit.toLocaleString()}</Text>
-        </RN.View>
-        {loggerEnabled && deliveryTargets.length > 0 && (
-          <RN.View style={{ paddingHorizontal: 8, paddingVertical: 4, borderRadius: 10, backgroundColor: "#232428" }}>
-            <Text style={{ color: "#b5bac1", fontSize: 10 }}>Forwarding: {deliveryTargets.join(" + ")}</Text>
-          </RN.View>
-        )}
-        {ignoredUsersEnabled && ignoredUserCount > 0 && (
-          <RN.View style={{ paddingHorizontal: 8, paddingVertical: 4, borderRadius: 10, backgroundColor: "#232428" }}>
-            <Text style={{ color: "#b5bac1", fontSize: 10 }}>Ignoring {ignoredUserCount} users</Text>
-          </RN.View>
-        )}
-      </RN.View>
+      <PreviewInput />
     </RN.View>
-  );
-}
-
-function PreviewStatus({ label, enabled }: { label: string; enabled: boolean }) {
-  return (
-    <RN.View style={{ paddingHorizontal: 8, paddingVertical: 4, borderRadius: 10, backgroundColor: enabled ? "#174b35" : "#232428" }}>
-      <Text style={{ color: enabled ? "#57f287" : "#949ba4", fontSize: 10 }}>{label}: {enabled ? "On" : "Off"}</Text>
-    </RN.View>
-  );
-}
-
-export function DirectMessageLoggerSettings() {
-  useProxy(storage);
-  const [, forceUpdate] = React.useReducer((value: number) => value + 1, 0);
-
-  return (
-    <ScrollView style={{ flex: 1 }} contentContainerStyle={{ padding: 10 }}>
-      <Stack spacing={8}>
-        <TableRowGroup title="DM Logger">
-          <TableSwitchRow
-            label="Enable DM Logger"
-            subLabel="Forward incoming direct and group DMs while Revenge is active. Message requests are included only when Discord delivers their messages to this client."
-            value={Boolean(storage.dmLoggerEnabled)}
-            onValueChange={(value: boolean) => { storage.dmLoggerEnabled = value; forceUpdate(); }}
-          />
-          <TableSwitchRow
-            label="Send to a Channel"
-            subLabel="Send DM logs to a channel you control."
-            disabled={!storage.dmLoggerEnabled}
-            value={Boolean(storage.dmLoggerSendToChannel)}
-            onValueChange={(value: boolean) => {
-              storage.dmLoggerSendToChannel = value;
-              forceUpdate();
-            }}
-          />
-          {storage.dmLoggerSendToChannel && (
-            <Stack spacing={4} style={{ padding: 10 }}>
-              <StableTextInput
-                key="dmLoggerChannelId"
-                placeholder="Destination channel ID or link."
-                value={String(storage.dmLoggerChannelId ?? "")}
-                onChangeText={(value: string) => { storage.dmLoggerChannelId = value; }}
-                style={inputStyle}
-              />
-            </Stack>
-          )}
-          <TableSwitchRow
-            label="Send to a Webhook"
-            subLabel="Send DM logs to a Discord webhook you control."
-            disabled={!storage.dmLoggerEnabled}
-            value={Boolean(storage.dmLoggerSendToWebhook)}
-            onValueChange={(value: boolean) => {
-              storage.dmLoggerSendToWebhook = value;
-              forceUpdate();
-            }}
-          />
-          {storage.dmLoggerSendToWebhook && (
-            <Stack spacing={4} style={{ padding: 10 }}>
-              <StableTextInput
-                key="dmLoggerWebhookUrl"
-                placeholder="Discord webhook URL."
-                value={String(storage.dmLoggerWebhookUrl ?? "")}
-                onChangeText={(value: string) => { storage.dmLoggerWebhookUrl = value; }}
-                style={inputStyle}
-              />
-            </Stack>
-          )}
-        </TableRowGroup>
-
-      </Stack>
-    </ScrollView>
   );
 }
 
 export function DeletedMessagesSettings() {
   useProxy(storage);
   const [, forceUpdate] = React.useReducer((value: number) => value + 1, 0);
-  const enabled = Boolean(storage.messageLoggerEnabled);
-  const historyEnabled = Boolean(storage.enableMessageHistory);
   const keepAfterRestart = Boolean(storage.messageLoggerKeepAfterRestart);
+  const limit = Number(storage.messageLoggerLimit) || 512;
   const deletedCount = Number(storage.messageLoggerDeletedCount) || 0;
   const editCount = Number(storage.messageLoggerEditCount) || 0;
-  const limit = Number(storage.messageLoggerLimit) || 512;
-  const limitIndex = Math.max(0, MESSAGE_LOG_LIMITS.indexOf(limit));
-  const hasStoredHistory = deletedCount > 0 || editCount > 0;
+  const hasStoredHistory = deletedCount > 0 || editCount > 0 || hasMessageHistory();
   const summary = hasStoredHistory
     ? `${deletedCount} deleted message${deletedCount === 1 ? "" : "s"} and ${editCount} edit${editCount === 1 ? "" : "s"} kept${keepAfterRestart ? ", saved on this phone." : " until Discord restarts."}`
     : "";
 
-  const changeLimit = (step: number) => {
-    const nextIndex = Math.max(0, Math.min(MESSAGE_LOG_LIMITS.length - 1, limitIndex + step));
-    setMessageLoggerLimit(MESSAGE_LOG_LIMITS[nextIndex]);
-    forceUpdate();
-  };
-
   const confirmClear = () => {
-    RN.Alert.alert("Clear saved history?", "Saved deletion and edit records and temporary edit notices will be cleared. Deletion notices already visible in chat may remain until the channel reloads.", [
+    RN.Alert.alert("Clear saved history?", "Every kept deleted message and edit history will be removed from chat and this phone. This cannot be undone.", [
       { text: "Cancel", style: "cancel" },
       {
         text: "Clear",
@@ -699,7 +707,7 @@ export function DeletedMessagesSettings() {
         onPress: () => {
           clearMessageHistory();
           clearDeletedMessageHistory();
-          showToast("Cleared message history.", getAssetIDByName("Check"));
+          showToast("Cleared kept messages and edit history.", getAssetIDByName("Check"));
           forceUpdate();
         },
       },
@@ -709,19 +717,6 @@ export function DeletedMessagesSettings() {
   return (
     <ScrollView style={{ flex: 1 }} contentContainerStyle={{ padding: 10 }}>
       <Stack spacing={8}>
-        <TableRowGroup title="Message Logger">
-          <TableSwitchRow
-            label="Enable message logger"
-            subLabel="Keep edits and deletions from the selected channel."
-            value={enabled}
-            onValueChange={(value: boolean) => {
-              storage.messageLoggerEnabled = value;
-              if (!value) clearMessageLoggerCache();
-              forceUpdate();
-            }}
-          />
-        </TableRowGroup>
-
         {hasStoredHistory && (
           <RN.View style={{ padding: 12, borderRadius: 8, backgroundColor: "#2b2d31" }}>
             <Text style={{ color: "#f2f3f5", fontWeight: "600" }}>{summary}</Text>
@@ -730,241 +725,60 @@ export function DeletedMessagesSettings() {
 
         <TableRowGroup title="Preview">
           <DeletedMessagesPreview
-            historyEnabled={historyEnabled}
-            loggerEnabled={enabled}
             showHistory={storage.keepEditHistory !== false}
             showDeletedMessages={Boolean(storage.keepDeletedMessages)}
-            timestampForEdits={Boolean(storage.timestampForEdits)}
-            ignoreOwnMessages={Boolean(storage.ignoreOwnMessages)}
-            ignoreBotMessages={Boolean(storage.ignoreBotMessages)}
-            ignoredUserCount={Array.isArray(storage.messageHistoryIgnoredUserIds) ? storage.messageHistoryIgnoredUserIds.length : 0}
-            ignoredUsersEnabled={Boolean(storage.enableIgnoreUsers)}
-            sendToChannel={Boolean(storage.messageLoggerSendToChannel)}
-            sendToWebhook={Boolean(storage.messageLoggerSendToWebhook)}
-            keepAfterRestart={keepAfterRestart}
-            messageLimit={limit}
-            sourceConfigured={Boolean(String(storage.messageLoggerSourceChannelId ?? "").trim())}
-            deletedIndicatorText={String(storage.deletedIndicatorText ?? "This message was deleted")}
           />
         </TableRowGroup>
 
-        <TableRowGroup title="Message History">
-          <TableSwitchRow
-            label="Enable in-chat history"
-            subLabel="Show deleted-message notices and temporary notices with earlier text after edits."
-            value={historyEnabled}
-            onValueChange={(value: boolean) => {
-              storage.enableMessageHistory = value;
-              setMessageHistoryFeatureEnabled(value && storage.enabled !== false);
-              forceUpdate();
-            }}
-          />
+        <TableRowGroup title="Edited messages">
           <TableSwitchRow
             label="Show edit history"
-            subLabel="Keep up to 10 earlier versions of each observed message."
-            disabled={!enabled && !historyEnabled}
+            subLabel="What a message said before it was edited, faded and crossed out above it. Up to 10 versions each."
             value={storage.keepEditHistory !== false}
             onValueChange={(value: boolean) => {
               setEditHistoryEnabled(value);
               updateMessageHistorySettings({ keepEditHistory: value });
+              setMessageHistoryFeatureEnabled(
+                storage.enabled !== false && (storage.keepDeletedMessages !== false || value),
+              );
               forceUpdate();
             }}
           />
-          <TableSwitchRow
-            label="Keep deleted messages"
-            subLabel="Retain deleted messages in chat with the configured notice."
-            disabled={!historyEnabled}
-            value={Boolean(storage.keepDeletedMessages)}
-            onValueChange={(value: boolean) => {
-              storage.keepDeletedMessages = value;
-              updateMessageHistorySettings({ keepDeletedMessages: value });
-              forceUpdate();
-            }}
-          />
-          <TableSwitchRow
-            label="Ignore bot messages"
-            subLabel="Do not retain deletions or edits from bots."
-            disabled={!historyEnabled}
-            value={Boolean(storage.ignoreBotMessages)}
-            onValueChange={(value: boolean) => {
-              storage.ignoreBotMessages = value;
-              updateMessageHistorySettings({ ignoreBotMessages: value });
-              forceUpdate();
-            }}
-          />
-          <TableSwitchRow
-            label="Ignore your messages"
-            subLabel="Do not retain deletions or edits to your own messages."
-            disabled={!historyEnabled}
-            value={Boolean(storage.ignoreOwnMessages)}
-            onValueChange={(value: boolean) => {
-              storage.ignoreOwnMessages = value;
-              updateMessageHistorySettings({ ignoreOwnMessages: value });
-              forceUpdate();
-            }}
-          />
-          <TableSwitchRow
-            label="Enable ignored users"
-            subLabel="Skip users added from their profile menu."
-            disabled={!historyEnabled}
-            value={Boolean(storage.enableIgnoreUsers)}
-            onValueChange={(value: boolean) => {
-              storage.enableIgnoreUsers = value;
-              updateMessageHistorySettings({ enableIgnoreUsers: value });
-              forceUpdate();
-            }}
-          />
-          <TableSwitchRow
-            label="Add edit timestamps"
-            subLabel="Include a relative time in each temporary edit notice."
-            disabled={!historyEnabled}
-            value={Boolean(storage.timestampForEdits)}
-            onValueChange={(value: boolean) => {
-              storage.timestampForEdits = value;
-              updateMessageHistorySettings({ timestampForEdits: value });
-              forceUpdate();
-            }}
-          />
-          <Stack spacing={4} style={{ padding: 10, opacity: historyEnabled ? 1 : 0.5 }}>
-            <Text style={{ color: "#f2f3f5", fontWeight: "600" }}>Deleted message notice</Text>
-            <StableTextInput
-              key="deletedIndicatorText"
-              placeholder="This message was deleted"
-              value={String(storage.deletedIndicatorText ?? "This message was deleted")}
-              editable={historyEnabled}
-              onChangeText={(value: string) => {
-                storage.deletedIndicatorText = value;
-                updateMessageHistorySettings({ deletedIndicatorText: value });
-              }}
-              style={inputStyle}
-            />
-          </Stack>
-          <TableRow
-            label={`Ignored users (${Array.isArray(storage.messageHistoryIgnoredUserIds) ? storage.messageHistoryIgnoredUserIds.length : 0})`}
-            subLabel="Add users from their profile menu; remove them here."
-            disabled={!historyEnabled || !storage.enableIgnoreUsers}
-          />
-          {Array.isArray(storage.messageHistoryIgnoredUserIds) && storage.messageHistoryIgnoredUserIds.length > 0
-            ? storage.messageHistoryIgnoredUserIds.map((userId: string) => (
-              <TableRow
-                key={userId}
-                label={`User ${userId}`}
-                disabled={!historyEnabled || !storage.enableIgnoreUsers}
-                trailing={(
-                  <RN.TouchableOpacity
-                    accessibilityRole="button"
-                    accessibilityLabel={`Remove ${userId} from message-history ignored users`}
-                    disabled={!historyEnabled || !storage.enableIgnoreUsers}
-                    onPress={() => {
-                      if (!historyEnabled || !storage.enableIgnoreUsers) return;
-                      const messageHistoryIgnoredUserIds = storage.messageHistoryIgnoredUserIds.filter((id: string) => id !== userId);
-                      storage.messageHistoryIgnoredUserIds = messageHistoryIgnoredUserIds;
-                      updateMessageHistorySettings({ ignoredUserIds: messageHistoryIgnoredUserIds });
-                      forceUpdate();
-                    }}
-                    style={{ paddingHorizontal: 12, paddingVertical: 8, opacity: historyEnabled && storage.enableIgnoreUsers ? 1 : 0.5 }}
-                  >
-                    <Text style={{ color: "#ed4245", fontWeight: "600" }}>Remove</Text>
-                  </RN.TouchableOpacity>
-                )}
-              />
-            ))
-            : <TableRow label="No users are currently ignored." disabled={!historyEnabled || !storage.enableIgnoreUsers} />}
-        </TableRowGroup>
-
-        <TableRowGroup title="Log Delivery">
-          <Stack spacing={4} style={{ padding: 10 }}>
-            <Text style={{ color: "#f2f3f5", fontWeight: "600" }}>Source channel</Text>
-            <StableTextInput
-              key="messageLoggerSourceChannelId"
-              placeholder="Channel to monitor: ID or link."
-              value={String(storage.messageLoggerSourceChannelId ?? "")}
-              editable={enabled}
-              onChangeText={(value: string) => { storage.messageLoggerSourceChannelId = value; }}
-              style={{ ...inputStyle, opacity: enabled ? 1 : 0.5 }}
-            />
-          </Stack>
-          <TableSwitchRow
-            label="Send logs to a channel"
-            subLabel="Forward edit and deletion details to a channel you control."
-            disabled={!enabled}
-            value={Boolean(storage.messageLoggerSendToChannel)}
-            onValueChange={(value: boolean) => {
-              storage.messageLoggerSendToChannel = value;
-              forceUpdate();
-            }}
-          />
-          {storage.messageLoggerSendToChannel && (
-            <Stack spacing={4} style={{ padding: 10 }}>
-              <Text style={{ color: "#f2f3f5", fontWeight: "600" }}>Destination channel</Text>
-              <StableTextInput
-                key="messageLoggerDestinationChannelId"
-                placeholder="Log destination channel ID or link."
-                value={String(storage.messageLoggerDestinationChannelId ?? "")}
-                editable={enabled}
-                onChangeText={(value: string) => { storage.messageLoggerDestinationChannelId = value; }}
-                style={{ ...inputStyle, opacity: enabled ? 1 : 0.5 }}
-              />
-            </Stack>
-          )}
-          <TableSwitchRow
-            label="Send logs to a webhook"
-            subLabel="Forward edit and deletion details to a Discord webhook you control."
-            disabled={!enabled}
-            value={Boolean(storage.messageLoggerSendToWebhook)}
-            onValueChange={(value: boolean) => { storage.messageLoggerSendToWebhook = value; forceUpdate(); }}
-          />
-          {storage.messageLoggerSendToWebhook && (
-            <Stack spacing={4} style={{ padding: 10 }}>
-              <Text style={{ color: "#f2f3f5", fontWeight: "600" }}>Webhook URL</Text>
-              <StableTextInput
-                key="messageLoggerWebhookUrl"
-                placeholder="Message log Discord webhook URL."
-                value={String(storage.messageLoggerWebhookUrl ?? "")}
-                editable={enabled}
-                onChangeText={(value: string) => { storage.messageLoggerWebhookUrl = value; }}
-                style={{ ...inputStyle, opacity: enabled ? 1 : 0.5 }}
-              />
-            </Stack>
-          )}
         </TableRowGroup>
 
         <TableRowGroup title="Storage">
           <TableSwitchRow
-            label="Keep history after restart"
-            subLabel="Keep locally logged messages after closing Discord. Saved only on this phone."
-            disabled={!enabled}
+              label="Keep after restarting"
+              subLabel="Deleted and edited messages survive closing Discord. Saved only on this phone, for this account."
             value={keepAfterRestart}
             onValueChange={(value: boolean) => {
               setMessageLoggerKeepAfterRestart(value);
               forceUpdate();
             }}
           />
+        </TableRowGroup>
+
+        <TableRowGroup title="Keep up to">
           <RN.View style={{ paddingHorizontal: 12, paddingVertical: 10 }}>
-            <RN.View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between" }}>
-              <Text style={{ color: "#f2f3f5", fontWeight: "600" }}>Keep up to</Text>
-              <RN.View style={{ flexDirection: "row", alignItems: "center", gap: 14 }}>
-                <RN.TouchableOpacity accessibilityLabel="Decrease message limit" accessibilityRole="button" disabled={!enabled || limitIndex === 0} onPress={() => changeLimit(-1)}>
-                  <Text style={{ color: !enabled || limitIndex === 0 ? "#6d6f78" : "#f2f3f5", fontSize: 20 }}>-</Text>
-                </RN.TouchableOpacity>
-                <Text style={{ color: "#f2f3f5", minWidth: 42, textAlign: "center" }}>{limit.toLocaleString()}</Text>
-                <RN.TouchableOpacity accessibilityLabel="Increase message limit" accessibilityRole="button" disabled={!enabled || limitIndex === MESSAGE_LOG_LIMITS.length - 1} onPress={() => changeLimit(1)}>
-                  <Text style={{ color: !enabled || limitIndex === MESSAGE_LOG_LIMITS.length - 1 ? "#6d6f78" : "#f2f3f5", fontSize: 20 }}>+</Text>
-                </RN.TouchableOpacity>
-              </RN.View>
-            </RN.View>
-            <Text style={{ color: "#949ba4", fontSize: 12, marginTop: 4 }}>When full, the oldest kept message is removed first.</Text>
+            <MessageLimitChoice
+              value={limit}
+              disabled={!storage.keepDeletedMessages}
+              onChange={(value: number) => {
+                setMessageLoggerLimit(value);
+                forceUpdate();
+              }}
+            />
           </RN.View>
         </TableRowGroup>
 
-        <TableRowGroup title="Manage">
+        {hasStoredHistory && <TableRowGroup title="Manage">
           <TableRow
-            label="Clear saved history"
-            subLabel="Remove saved deletion and edit records, plus temporary edit notices."
+            label="Clear kept messages"
+            subLabel="Remove every deleted message and edit history kept from chat and this phone."
             trailing={<TableRow.Arrow />}
             onPress={confirmClear}
           />
-        </TableRowGroup>
+        </TableRowGroup>}
       </Stack>
     </ScrollView>
   );
@@ -985,8 +799,21 @@ export default function Settings() {
             onValueChange={(value: boolean) => {
               storage.enabled = value;
               if (!value) clearMessageLoggerCache();
-              setMessageHistoryFeatureEnabled(value && storage.enableMessageHistory !== false);
+              setMessageHistoryFeatureEnabled(value && (storage.keepDeletedMessages !== false || storage.keepEditHistory !== false));
               setServerInfoFeatureEnabled(value && storage.enableServerInfo !== false);
+              forceUpdate();
+            }}
+          />
+          <TableSwitchRow
+            label="Keep deleted messages"
+            subLabel="Deleted messages stay in chat, outlined in red."
+            value={storage.keepDeletedMessages !== false}
+            onValueChange={(value: boolean) => {
+              storage.keepDeletedMessages = value;
+              updateMessageHistorySettings({ keepDeletedMessages: value });
+              setMessageHistoryFeatureEnabled(
+                storage.enabled !== false && (value || storage.keepEditHistory !== false),
+              );
               forceUpdate();
             }}
           />
@@ -1007,14 +834,8 @@ export default function Settings() {
             onPress={() => openSettingsPage(navigation, "Word Tracker", WordTrackerSettings)}
           />
           <TableRow
-            label="Direct Message Logger"
-            subLabel="Configure incoming direct and group DM logging."
-            trailing={<TableRow.Arrow />}
-            onPress={() => openSettingsPage(navigation, "Direct Message Logger", DirectMessageLoggerSettings)}
-          />
-          <TableRow
             label="Deleted Messages"
-            subLabel="Keep deleted messages and edit history, with optional channel or webhook delivery."
+            subLabel="Edit history, storage and retention options."
             trailing={<TableRow.Arrow />}
             onPress={() => openSettingsPage(navigation, "Deleted Messages", DeletedMessagesSettings)}
           />

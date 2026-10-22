@@ -2,6 +2,9 @@ declare namespace JSX {
 	interface IntrinsicAttributes {
 		key?: string | number;
 	}
+	interface ElementChildrenAttribute {
+		children: {};
+	}
 }
 
 declare module "@vendetta/metro" {

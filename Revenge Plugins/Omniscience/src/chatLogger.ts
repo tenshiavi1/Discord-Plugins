@@ -1,19 +1,15 @@
 import { findByProps } from "../../compat";
 import { storage } from "@vendetta/plugin";
-import { limitEmbedField, linkedEmbedField, parseChannelId, parseDiscordWebhookUrl, toDiscordTimestamp, toEmbedTimestamp } from "./logFormatting";
-import { createDeliveryGate } from "./deliveryGate";
+import { toEmbedTimestamp } from "./logFormatting";
 
 const FluxDispatcher = findByProps("dispatch", "subscribe", "unsubscribe");
-const ChannelStore = findByProps("getChannel");
-const UserStore = findByProps("getCurrentUser");
-const RestAPI = findByProps("get", "post", "del", "patch");
 const snowflakeUtils = findByProps("extractTimestamp");
 const MAX_CACHED_MESSAGES = 500;
+const MAX_DELETED_MESSAGES = 5000;
 const MAX_EDIT_VERSIONS = 10;
-const MESSAGE_LOG_LIMITS = [100, 512, 1000, 5000];
-const deliveryGate = createDeliveryGate();
-const CHAT_LOGGER_CLEANUP_KEY = "__omniscienceChatLoggerCleanup";
-const globalLoggerState = globalThis as typeof globalThis & { [CHAT_LOGGER_CLEANUP_KEY]?: () => void };
+const MESSAGE_LOG_LIMITS = [100, 512, 1000, MAX_DELETED_MESSAGES];
+const MESSAGE_HISTORY_CLEANUP_KEY = "__omniscienceMessageHistoryCleanup";
+const globalHistoryState = globalThis as typeof globalThis & { [MESSAGE_HISTORY_CLEANUP_KEY]?: () => void };
 
 type CachedMessage = {
 	id: string;
@@ -25,23 +21,11 @@ type CachedMessage = {
 	embeds: string[];
 	editHistory: { content: string; timestamp: string }[];
 	timestamp: string;
-	guildId?: string;
 };
 
 type DeletedMessage = CachedMessage & { deletedAt: string };
 
 for (const [key, value] of Object.entries({
-	dmLoggerEnabled: false,
-	dmLoggerSendToChannel: false,
-	dmLoggerSendToWebhook: false,
-	dmLoggerChannelId: "",
-	dmLoggerWebhookUrl: "",
-	messageLoggerEnabled: false,
-	messageLoggerSendToChannel: false,
-	messageLoggerSendToWebhook: false,
-	messageLoggerSourceChannelId: "",
-	messageLoggerDestinationChannelId: "",
-	messageLoggerWebhookUrl: "",
 	messageLoggerKeepAfterRestart: false,
 	messageLoggerLimit: 512,
 	messageLoggerCache: [],
@@ -150,8 +134,20 @@ export function setMessageLoggerLimit(limit: number) {
 }
 
 export function clearDeletedMessageHistory() {
+	for (const message of deletedMessages) {
+		try {
+			FluxDispatcher.dispatch({
+				type: "MESSAGE_DELETE",
+				channelId: message.channelId,
+				id: message.id,
+				otherPluginBypass: true,
+			});
+		} catch (error) {
+			console.error("[Omniscience] Could not remove a retained deleted message from chat.", error);
+		}
+	}
+	cachedMessages = [];
 	deletedMessages = [];
-	cachedMessages = cachedMessages.map((message) => ({ ...message, editHistory: [] }));
 	persistMessageHistory();
 }
 
@@ -210,148 +206,8 @@ function getAuthorName(message: any, previous?: CachedMessage): string {
 		: previous?.authorName ?? "Unknown user";
 }
 
-function makeEmbed(title: string, fields: { name: string; value: string; inline?: boolean }[], date: Date) {
-	return {
-		title: limitEmbedField(title, 256),
-		color: 0x5865f2,
-		fields: fields.map((field) => ({
-			name: field.name,
-			value: limitEmbedField(field.value),
-			inline: field.inline ?? true,
-		})),
-		timestamp: toEmbedTimestamp(date),
-	};
-}
-
-async function postToChannel(channelInput: string, embed: ReturnType<typeof makeEmbed>): Promise<boolean> {
-	const channelId = parseChannelId(channelInput);
-	if (!channelId || typeof RestAPI?.post !== "function") {
-		console.warn("[Omniscience] A valid destination channel and Discord REST module are required for chat logging.");
-		return false;
-	}
-	try {
-		await RestAPI.post({
-			url: `/channels/${channelId}/messages`,
-			body: { embeds: [embed], allowed_mentions: { parse: [] } },
-		});
-		return true;
-	} catch (error) {
-		console.error("[Omniscience] Could not send a chat log to the destination channel.", error);
-		return false;
-	}
-}
-
-function getWebhookUrl(value: unknown): string | undefined {
-	return parseDiscordWebhookUrl(String(value ?? ""));
-}
-
-async function postToWebhook(value: unknown, embed: ReturnType<typeof makeEmbed>): Promise<boolean> {
-	const webhookUrl = getWebhookUrl(value);
-	if (!webhookUrl || typeof fetch !== "function") {
-		console.warn("[Omniscience] A valid Discord webhook URL is required for chat logging.");
-		return false;
-	}
-	try {
-		const response = await fetch(webhookUrl, {
-			method: "POST",
-			headers: { "Content-Type": "application/json" },
-			body: JSON.stringify({ embeds: [embed], allowed_mentions: { parse: [] } }),
-		});
-		if (!response.ok) throw new Error(`Webhook returned HTTP ${response.status}.`);
-		return true;
-	} catch (error) {
-		console.error("[Omniscience] Could not send a chat log to the configured webhook.", error);
-		return false;
-	}
-}
-
-function hashEventValue(value: string): string {
-	let hash = 2166136261;
-	for (let index = 0; index < value.length; index++) {
-		hash = Math.imul(hash ^ value.charCodeAt(index), 16777619);
-	}
-	return (hash >>> 0).toString(36);
-}
-
-type LogTarget = {
-	key: string;
-	send: (embed: ReturnType<typeof makeEmbed>) => Promise<boolean>;
-};
-
-async function deliverLogOnce(
-	eventKey: string,
-	embed: ReturnType<typeof makeEmbed>,
-	targets: LogTarget[],
-): Promise<boolean> {
-	if (targets.length === 0) return false;
-	const results = await Promise.all(targets.map(async (target) => {
-		if (deliveryGate.hasDelivered(eventKey, target.key)) return true;
-		if (!deliveryGate.begin(eventKey, target.key)) return false;
-
-		let succeeded = false;
-		try {
-			succeeded = await target.send(embed);
-			return succeeded;
-		} finally {
-			deliveryGate.finish(eventKey, target.key, succeeded);
-		}
-	}));
-	return results.every(Boolean);
-}
-
-function makeJumpUrl(channelId: string, messageId: string, guildId?: string) {
-	return `https://discord.com/channels/${guildId ?? "@me"}/${channelId}/${messageId}`;
-}
-
-function getDmLogTargets(): LogTarget[] {
-	const targets: LogTarget[] = [];
-	if (storage.dmLoggerSendToChannel) {
-		const channelInput = String(storage.dmLoggerChannelId ?? "");
-		targets.push({ key: `channel:${parseChannelId(channelInput) ?? channelInput}`, send: (embed) => postToChannel(channelInput, embed) });
-	}
-	if (storage.dmLoggerSendToWebhook) {
-		const webhookUrl = getWebhookUrl(storage.dmLoggerWebhookUrl);
-		const webhookKey = webhookUrl ? hashEventValue(webhookUrl) : "invalid";
-		targets.push({ key: `webhook:${webhookKey}`, send: (embed) => postToWebhook(storage.dmLoggerWebhookUrl, embed) });
-	}
-	return targets;
-}
-
-function logDirectMessage(message: any, channelId: string, channel: any, event: any) {
-	if (storage.enabled === false || !storage.dmLoggerEnabled || message.author?.id === UserStore?.getCurrentUser?.()?.id) return;
-	const channelType = channel?.type ?? message.channel_type ?? event?.channel_type;
-	if ((channelType !== 1 && channelType !== 3) || channel?.guild_id || message.guild_id || event?.guild_id) return;
-
-	const date = getMessageDate(message);
-	const content = getMessageContent(message);
-	const time = toDiscordTimestamp(date) ?? "Time unavailable";
-	const embed = makeEmbed(`Direct Message: ${getAuthorName(message)}`, [
-		{ name: "Message", value: content || "(no text)" },
-		{ name: "Time", value: time },
-	], date);
-
-	const messageId = String(message.id ?? "");
-	if (!messageId) return;
-	void deliverLogOnce(`dm:${channelId}:${messageId}`, embed, getDmLogTargets());
-}
-
-function getMessageLogTargets(): LogTarget[] {
-	const targets: LogTarget[] = [];
-	if (storage.messageLoggerSendToChannel) {
-		const channelInput = String(storage.messageLoggerDestinationChannelId ?? "");
-		targets.push({ key: `channel:${parseChannelId(channelInput) ?? channelInput}`, send: (embed) => postToChannel(channelInput, embed) });
-	}
-	if (storage.messageLoggerSendToWebhook) {
-		const webhookUrl = getWebhookUrl(storage.messageLoggerWebhookUrl);
-		const webhookKey = webhookUrl ? hashEventValue(webhookUrl) : "invalid";
-		targets.push({ key: `webhook:${webhookKey}`, send: (embed) => postToWebhook(storage.messageLoggerWebhookUrl, embed) });
-	}
-	return targets;
-}
-
 function makeCachedMessage(message: any, channelId: string, previous?: CachedMessage): CachedMessage {
 	const date = getMessageDate(message);
-	const channel = ChannelStore?.getChannel?.(channelId);
 	return {
 		id: String(message.id ?? previous?.id ?? ""),
 		channelId,
@@ -362,7 +218,6 @@ function makeCachedMessage(message: any, channelId: string, previous?: CachedMes
 		embeds: Array.isArray(message.embeds) ? getEmbedText(message) : previous?.embeds ?? [],
 		editHistory: previous?.editHistory ?? [],
 		timestamp: toEmbedTimestamp(date) ?? new Date().toISOString(),
-		guildId: message.guild_id ?? message.guildId ?? channel?.guild_id ?? previous?.guildId,
 	};
 }
 
@@ -372,45 +227,27 @@ function onMessageCreate(event: any) {
 	if (!message || typeof message.id !== "string") return;
 	const channelId = String(message.channel_id ?? message.channelId ?? event?.channel_id ?? event?.channelId ?? "");
 	if (!channelId) return;
-	const channel = ChannelStore?.getChannel?.(channelId) ?? message.channel ?? event?.channel;
 
-	logDirectMessage(message, channelId, channel, event);
-
-	if (!storage.messageLoggerEnabled || parseChannelId(String(storage.messageLoggerSourceChannelId ?? "")) !== channelId) return;
+	if (storage.keepDeletedMessages === false && storage.keepEditHistory === false) return;
 	rememberMessage(makeCachedMessage(message, channelId));
 }
 
 function onMessageUpdate(event: any) {
-	if (storage.enabled === false || !storage.messageLoggerEnabled || event?.otherPluginBypass) return;
+	if (storage.enabled === false || (storage.keepDeletedMessages === false && storage.keepEditHistory === false) || event?.otherPluginBypass) return;
 	const message = event?.message;
 	if (typeof message?.content !== "string" && !Array.isArray(message?.attachments) && !Array.isArray(message?.embeds)) return;
 	const channelId = String(message?.channel_id ?? message?.channelId ?? event?.channelId ?? "");
 	const messageId = String(message?.id ?? event?.id ?? "");
-	if (!channelId || !messageId || parseChannelId(String(storage.messageLoggerSourceChannelId ?? "")) !== channelId) return;
+	if (!channelId || !messageId) return;
 
 	const cached = findCachedMessage(channelId, messageId);
 	const nextContent = getMessageContent(message, cached);
 	const originalContent = cached ? [cached.content, ...cached.attachments, ...cached.embeds].filter(Boolean).join("\n") : "";
 	if (cached && nextContent !== originalContent) {
-		const date = getMessageDate(message);
 		const editHistory = storage.keepEditHistory !== false
 			? [...cached.editHistory, { content: originalContent || "(no text)", timestamp: cached.timestamp }].slice(-MAX_EDIT_VERSIONS)
-			: cached.editHistory;
-		const updatedMessage = { ...makeCachedMessage(message, channelId, cached), editHistory };
-		const channel = ChannelStore?.getChannel?.(channelId);
-		const link = makeJumpUrl(channelId, messageId, cached.guildId ?? channel?.guild_id ?? message.guild_id ?? event?.guildId ?? event?.guild_id);
-		const time = toDiscordTimestamp(date) ?? "Time unavailable";
-		const embed = makeEmbed(`Edited Message: ${cached.authorName}`, [
-			{ name: "Original", value: originalContent || "(no text)" },
-			{ name: "Edited", value: linkedEmbedField(nextContent || "(no text)", link) },
-			{ name: "Time", value: time },
-		], date);
-		const version = String(message.edited_timestamp ?? event?.edited_timestamp ?? "");
-		const eventKey = `edit:${channelId}:${messageId}:${version}:${hashEventValue(nextContent)}`;
-		const targets = getMessageLogTargets();
-		void deliverLogOnce(eventKey, embed, targets).then((sent) => {
-			if (!targets.length || sent) rememberMessage(updatedMessage);
-		});
+			: [];
+		rememberMessage({ ...makeCachedMessage(message, channelId, cached), editHistory });
 		return;
 	}
 	rememberMessage(makeCachedMessage(message, channelId, cached));
@@ -421,31 +258,20 @@ export function recordMessageUpdate(event: any) {
 }
 
 function onMessageDelete(event: any) {
-	if (storage.enabled === false || !storage.messageLoggerEnabled || event?.otherPluginBypass) return;
+	if (storage.enabled === false || storage.keepDeletedMessages === false || event?.otherPluginBypass) return;
 	const channelId = String(event?.channelId ?? event?.channel_id ?? "");
 	const messageId = String(event?.id ?? "");
-	if (!channelId || !messageId || parseChannelId(String(storage.messageLoggerSourceChannelId ?? "")) !== channelId) return;
+	if (!channelId || !messageId) return;
 	const cached = findCachedMessage(channelId, messageId);
 	if (!cached) return;
 
-	const date = new Date();
-	const channel = ChannelStore?.getChannel?.(channelId);
-	const link = makeJumpUrl(channelId, messageId, cached.guildId ?? channel?.guild_id);
-	const time = toDiscordTimestamp(date) ?? "Time unavailable";
-	const content = [cached.content, ...cached.attachments, ...cached.embeds].filter(Boolean).join("\n") || "(no text)";
-	const deletedEntry = { ...cached, deletedAt: date.toISOString() };
+	const deletedEntry = { ...cached, deletedAt: new Date().toISOString() };
 	deletedMessages = [
 		...deletedMessages.filter((entry) => getMessageKey(entry.channelId, entry.id) !== getMessageKey(channelId, messageId)),
 		deletedEntry,
 	].slice(-getMessageLogLimit());
 	persistMessageHistory();
-	const embed = makeEmbed(`Deleted Message: ${cached.authorName}`, [
-		{ name: "Message", value: linkedEmbedField(content, link) },
-		...(cached.editHistory.length ? [{ name: "Edit history", value: cached.editHistory.map((version) => `${version.timestamp}: ${version.content}`).join("\n").slice(0, 1024) }] : []),
-		{ name: "Time", value: time },
-	], date);
-	void deliverLogOnce(`delete:${channelId}:${messageId}`, embed, getMessageLogTargets())
-		.then((sent) => { if (sent) removeCachedMessage(channelId, messageId); });
+	removeCachedMessage(channelId, messageId);
 }
 
 export function recordMessageDelete(event: any) {
@@ -463,7 +289,7 @@ export function installChatLogger(): () => void {
 		console.warn("[Omniscience] Discord's message dispatcher was not found; chat logging is unavailable.");
 		return () => {};
 	}
-	globalLoggerState[CHAT_LOGGER_CLEANUP_KEY]?.();
+	globalHistoryState[MESSAGE_HISTORY_CLEANUP_KEY]?.();
 
 	const subscriptions = [
 		["MESSAGE_CREATE", onMessageCreate],
@@ -476,11 +302,11 @@ export function installChatLogger(): () => void {
 		if (!active) return;
 		active = false;
 		for (const [event, listener] of subscriptions) FluxDispatcher.unsubscribe(event, listener);
-		if (globalLoggerState[CHAT_LOGGER_CLEANUP_KEY] === cleanup) {
-			delete globalLoggerState[CHAT_LOGGER_CLEANUP_KEY];
+		if (globalHistoryState[MESSAGE_HISTORY_CLEANUP_KEY] === cleanup) {
+			delete globalHistoryState[MESSAGE_HISTORY_CLEANUP_KEY];
 		}
 	};
 
-	globalLoggerState[CHAT_LOGGER_CLEANUP_KEY] = cleanup;
+	globalHistoryState[MESSAGE_HISTORY_CLEANUP_KEY] = cleanup;
 	return cleanup;
 }
