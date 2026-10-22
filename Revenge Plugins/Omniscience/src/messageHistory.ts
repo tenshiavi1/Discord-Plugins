@@ -62,6 +62,7 @@ const ignoredUserUnpatches: (() => void)[] = [];
 let dispatcherPatchInstalled = false;
 let editNoticeSequence = 0n;
 let settings: MessageHistorySettings = {
+	enabled: true,
 	keepDeletedMessages: true,
 	keepEditHistory: true,
 	enableIgnoreUsers: true,
@@ -538,7 +539,13 @@ export function setMessageHistoryFeatureEnabled(enabled: boolean) {
 		updateMessageHistorySettings({ enabled });
 		return;
 	}
-	if (!initializeMessageHistory({ ...storage, enabled, ignoredUserIds: storage.messageHistoryIgnoredUserIds })) {
+	if (!initializeMessageHistory({
+		...storage,
+		enabled,
+		keepDeletedMessages: storage.keepDeletedMessages !== false,
+		keepEditHistory: storage.keepEditHistory !== false,
+		ignoredUserIds: storage.messageHistoryIgnoredUserIds,
+	})) {
 		removeMessageHistoryPatch();
 		storage.enableMessageHistory = false;
 		showToast("Could not enable Omniscience message history. Check the console for details.");

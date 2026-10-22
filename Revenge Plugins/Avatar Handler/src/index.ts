@@ -2,7 +2,6 @@ import { storage } from "@vendetta/plugin";
 import { installPluginCrashGuard } from "../../shared/crashGuard";
 import Settings from "./settings";
 import { disableNativeSwitcher, enableNativeSwitcher } from "./nativeSwitcher";
-import Settings from "./settings";
 import { registerPluginSettingsShortcut } from "../../shared/pluginSettings";
 
 const registerCrashGuard = () => installPluginCrashGuard("Avatar Handler", storage, {

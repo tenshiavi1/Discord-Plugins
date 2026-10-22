@@ -507,8 +507,8 @@ function DeletedMessagesPreview({
   sourceConfigured: boolean;
   deletedIndicatorText: string;
 }) {
-  const showEditSample = historyEnabled && showHistory && !ignoreOwnMessages;
-  const showDeleteSample = historyEnabled && showDeletedMessages && !ignoreBotMessages;
+  const showEditHistory = historyEnabled && showHistory;
+  const keepDeletedSample = historyEnabled && showDeletedMessages;
   const deliveryTargets = [sendToChannel && "Channel", sendToWebhook && "Webhook"].filter(Boolean);
 
   return (
@@ -521,55 +521,50 @@ function DeletedMessagesPreview({
         <PreviewIcon asset="MagnifyingGlassIcon" fallback="⌕" />
       </RN.View>
       <RN.View style={{ paddingTop: 6, paddingBottom: 10 }}>
-        {showEditSample && (
-          <RN.View style={{ flexDirection: "row", gap: 12, paddingHorizontal: 12, paddingVertical: 8 }}>
-            <RN.View style={{ width: 36, height: 36, borderRadius: 18, backgroundColor: "#5865f2", alignItems: "center", justifyContent: "center" }}>
-              <Text style={{ color: "#ffffff", fontSize: 13, fontWeight: "700" }}>A</Text>
+        <RN.View style={{ flexDirection: "row", gap: 12, paddingHorizontal: 12, paddingVertical: 8 }}>
+          <RN.View style={{ width: 36, height: 36, borderRadius: 18, backgroundColor: ignoreOwnMessages ? "#3ba55c" : "#5865f2", alignItems: "center", justifyContent: "center" }}>
+            <Text style={{ color: "#ffffff", fontSize: 13, fontWeight: "700" }}>{ignoreOwnMessages ? "A" : "Y"}</Text>
+          </RN.View>
+          <RN.View style={{ flex: 1, minWidth: 0 }}>
+            <RN.View style={{ flexDirection: "row", flexWrap: "wrap", alignItems: "baseline", columnGap: 7, rowGap: 2, marginBottom: 3 }}>
+              <Text style={{ color: "#f2f3f5", fontSize: 14, fontWeight: "600" }}>{ignoreOwnMessages ? "Alex" : "You"}</Text>
+              <Text style={{ color: "#949ba4", fontSize: 10, fontWeight: "700" }}>{ignoreOwnMessages ? "MEMBER" : "YOU"}</Text>
+              <Text style={{ color: "#949ba4", fontSize: 11 }}>Today at 4:01 PM</Text>
+            </RN.View>
+            <Text style={{ color: "#dbdee1", fontSize: 14 }}>
+              {ignoreOwnMessages ? "Alex: See you at 8." : "See you at 8."}
+              {showEditHistory ? <Text style={{ color: "#949ba4", fontSize: 11 }}> (edited)</Text> : null}
+            </Text>
+            {showEditHistory ? (
+              <RN.View style={{ marginTop: 5, paddingLeft: 8, borderLeftWidth: 2, borderLeftColor: "#f23f43" }}>
+                <Text style={{ color: "#f47778", fontSize: 13 }}>
+                  Earlier text: {ignoreOwnMessages ? "Alex: See you at 6." : "See you at 6."}{timestampForEdits ? <Text style={{ color: "#949ba4", fontSize: 11 }}> · 2m ago</Text> : null}
+                </Text>
+              </RN.View>
+            ) : !historyEnabled ? (
+              <Text style={{ marginTop: 3, color: "#949ba4", fontSize: 11 }}>In-chat history is off; this message remains in chat.</Text>
+            ) : null}
+          </RN.View>
+        </RN.View>
+        <RN.View style={{ flexDirection: "row", marginTop: 4, backgroundColor: keepDeletedSample ? "#f23f4312" : "transparent" }}>
+          {keepDeletedSample ? <RN.View style={{ width: 4, backgroundColor: "#f23f43" }} /> : null}
+          <RN.View style={{ flex: 1, minWidth: 0, flexDirection: "row", gap: 12, paddingHorizontal: 12, paddingVertical: 9 }}>
+            <RN.View style={{ width: 36, height: 36, borderRadius: 18, backgroundColor: ignoreBotMessages ? "#3ba55c" : "#eb459e", alignItems: "center", justifyContent: "center" }}>
+              <Text style={{ color: "#ffffff", fontSize: 13, fontWeight: "700" }}>{ignoreBotMessages ? "M" : "S"}</Text>
             </RN.View>
             <RN.View style={{ flex: 1, minWidth: 0 }}>
               <RN.View style={{ flexDirection: "row", flexWrap: "wrap", alignItems: "baseline", columnGap: 7, rowGap: 2, marginBottom: 3 }}>
-                <Text style={{ color: "#f2f3f5", fontSize: 14, fontWeight: "600" }}>Alex</Text>
-                <Text style={{ color: "#949ba4", fontSize: 10, fontWeight: "700" }}>YOU</Text>
-                <Text style={{ color: "#949ba4", fontSize: 11 }}>Today at 4:01 PM</Text>
+                <Text style={{ color: "#f2f3f5", fontSize: 14, fontWeight: "600" }}>{ignoreBotMessages ? "Morgan" : "Sam"}</Text>
+                <Text style={{ color: "#949ba4", fontSize: 10, fontWeight: "700" }}>{ignoreBotMessages ? "MEMBER" : "BOT"}</Text>
+                <Text style={{ color: "#949ba4", fontSize: 11 }}>Today at 4:03 PM</Text>
               </RN.View>
-              <Text style={{ color: "#dbdee1", fontSize: 14 }}>See you at 8 <Text style={{ color: "#949ba4", fontSize: 11 }}>(edited)</Text></Text>
-              {showHistory && (
-                <RN.View style={{ marginTop: 5, paddingLeft: 8, borderLeftWidth: 2, borderLeftColor: "#f23f43" }}>
-                  <Text style={{ color: "#f47778", fontSize: 13 }}>
-                    Earlier text: See you at 6{timestampForEdits ? <Text style={{ color: "#949ba4", fontSize: 11 }}> · 2m ago</Text> : null}
-                  </Text>
-                </RN.View>
-              )}
+              <Text style={{ color: keepDeletedSample ? "#f47778" : "#dbdee1", fontSize: 14, lineHeight: 20, fontWeight: keepDeletedSample ? "500" : "400" }}>
+                {keepDeletedSample ? deletedIndicatorText.trim() || "This message was deleted" : "I’ll send the link right after this."}
+              </Text>
+              {!historyEnabled ? <Text style={{ marginTop: 3, color: "#949ba4", fontSize: 11 }}>In-chat history is off; this message remains in chat.</Text> : null}
             </RN.View>
           </RN.View>
-        )}
-        {showDeleteSample && (
-          <RN.View style={{ flexDirection: "row", marginTop: showEditSample ? 4 : 0, backgroundColor: "#f23f4312" }}>
-            <RN.View style={{ width: 4, backgroundColor: "#f23f43" }} />
-            <RN.View style={{ flex: 1, minWidth: 0, flexDirection: "row", gap: 12, paddingHorizontal: 12, paddingVertical: 9 }}>
-              <RN.View style={{ width: 36, height: 36, borderRadius: 18, backgroundColor: "#eb459e", alignItems: "center", justifyContent: "center" }}>
-                <Text style={{ color: "#ffffff", fontSize: 13, fontWeight: "700" }}>S</Text>
-              </RN.View>
-              <RN.View style={{ flex: 1, minWidth: 0 }}>
-                <RN.View style={{ flexDirection: "row", flexWrap: "wrap", alignItems: "baseline", columnGap: 7, rowGap: 2, marginBottom: 3 }}>
-                  <Text style={{ color: "#f2f3f5", fontSize: 14, fontWeight: "600" }}>Sam</Text>
-                  <Text style={{ color: "#949ba4", fontSize: 10, fontWeight: "700" }}>BOT</Text>
-                  <Text style={{ color: "#949ba4", fontSize: 11 }}>Today at 4:03 PM</Text>
-                </RN.View>
-                <Text style={{ color: "#f47778", fontSize: 14, lineHeight: 20, fontWeight: "500" }}>
-                  {deletedIndicatorText.trim() || "This message was deleted"}
-                </Text>
-              </RN.View>
-            </RN.View>
-          </RN.View>
-        )}
-        {!showEditSample && !showDeleteSample && (
-          <RN.View style={{ minHeight: 72, alignItems: "center", justifyContent: "center", padding: 14 }}>
-            <Text style={{ color: "#949ba4", textAlign: "center", fontSize: 13 }}>
-              {historyEnabled ? "No sample messages match the current history filters." : "In-chat history is turned off."}
-            </Text>
-          </RN.View>
-        )}
+        </RN.View>
       </RN.View>
       <RN.View style={{ paddingHorizontal: 10, paddingBottom: 10 }}>
         <RN.View style={{ minHeight: 42, flexDirection: "row", alignItems: "center", gap: 10, paddingHorizontal: 10, borderRadius: 21, backgroundColor: "#383a40" }}>
