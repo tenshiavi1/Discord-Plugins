@@ -15,6 +15,8 @@ const snowflakeUtils = findByProps("extractTimestamp");
 const PROFILE_MENU_NAMES = ["UserProfileOverflowMenu", "BotUserProfileOverflowMenu"];
 const MAX_RETAINED_MESSAGES = 500;
 const MAX_EDIT_VERSIONS = 10;
+const EDIT_NOTICE_LIFETIME_MS = 8_000;
+const DISCORD_EPOCH = 1_420_070_400_000n;
 
 type MessageRecord = {
 	id: string;
@@ -51,9 +53,12 @@ type MessageHistorySettings = {
 
 const deletedMessages = new Map<string, DeletedRecord>();
 const editHistory = new Map<string, EditRecord>();
+const editNotices = new Map<string, { channelId: string; messageId: string; timer: ReturnType<typeof setTimeout> }>();
+const editNoticeIdsByMessage = new Map<string, Set<string>>();
 const unpatches: (() => void)[] = [];
 const ignoredUserUnpatches: (() => void)[] = [];
 let dispatcherPatchInstalled = false;
+let editNoticeSequence = 0n;
 let settings: MessageHistorySettings = {
 	keepDeletedMessages: true,
 	keepEditHistory: true,
@@ -147,6 +152,73 @@ function createMessageNotice(channelId: string, messageId: string, indicator: st
 	};
 }
 
+function createEditNoticeId() {
+	editNoticeSequence = (editNoticeSequence + 1n) & 0xfffn;
+	return (((BigInt(Date.now()) - DISCORD_EPOCH) << 22n) | editNoticeSequence).toString();
+}
+
+function dismissEditNotice(noticeId: string) {
+	const notice = editNotices.get(noticeId);
+	if (!notice) return;
+	clearTimeout(notice.timer);
+	editNotices.delete(noticeId);
+	const originalKey = getMessageKey(notice.channelId, notice.messageId);
+	const noticeIds = editNoticeIdsByMessage.get(originalKey);
+	noticeIds?.delete(noticeId);
+	if (noticeIds?.size === 0) editNoticeIdsByMessage.delete(originalKey);
+	try {
+		FluxDispatcher.dispatch({
+			type: "MESSAGE_DELETE",
+			channelId: notice.channelId,
+			id: noticeId,
+			otherPluginBypass: true,
+		});
+	} catch (error) {
+		console.error("[Sage Eyes] Could not dismiss the temporary edit notice.", error);
+	}
+}
+
+function dismissEditNoticesForMessage(channelId: string, messageId: string) {
+	const key = getMessageKey(channelId, messageId);
+	for (const noticeId of [...(editNoticeIdsByMessage.get(key) ?? [])]) dismissEditNotice(noticeId);
+}
+
+function showOriginalEditNotice(channelId: string, messageId: string, original: MessageRecord, content: string) {
+	dismissEditNoticesForMessage(channelId, messageId);
+	const noticeId = createEditNoticeId();
+	const noticeMessage = {
+		...original,
+		id: noticeId,
+		channel_id: channelId,
+		content,
+		timestamp: new Date().toISOString(),
+		edited_timestamp: null,
+		flags: 0,
+		sageEyesOriginalMessageId: messageId,
+	};
+	const key = getMessageKey(channelId, messageId);
+	const noticeIds = editNoticeIdsByMessage.get(key) ?? new Set<string>();
+	noticeIds.add(noticeId);
+	editNoticeIdsByMessage.set(key, noticeIds);
+
+	try {
+		FluxDispatcher.dispatch({
+			type: "MESSAGE_CREATE",
+			channelId,
+			message: noticeMessage,
+			otherPluginBypass: true,
+		});
+		FluxDispatcher.dispatch(createMessageNotice(channelId, noticeId, content));
+	} catch (error) {
+		console.error("[Sage Eyes] Could not show the original text edit notice.", error);
+		dismissEditNotice(noticeId);
+		return;
+	}
+
+	const timer = setTimeout(() => dismissEditNotice(noticeId), EDIT_NOTICE_LIFETIME_MS);
+	editNotices.set(noticeId, { channelId, messageId, timer });
+}
+
 function handleDispatch(args: unknown[]): unknown[] | void {
 	const event = args[0] as Record<string, any> | undefined;
 	if (!event || typeof event.type !== "string" || event.otherPluginBypass) return;
@@ -157,6 +229,7 @@ function handleDispatch(args: unknown[]): unknown[] | void {
 		if (typeof channelId !== "string" || typeof messageId !== "string") return;
 
 		const key = getMessageKey(channelId, messageId);
+		dismissEditNoticesForMessage(channelId, messageId);
 		const existingRecord = deletedMessages.get(key);
 		if (existingRecord) {
 			if (shouldIgnore(existingRecord.original.author) || (Number(existingRecord.original.flags) & 64) !== 0) return;
@@ -218,15 +291,12 @@ function handleDispatch(args: unknown[]): unknown[] | void {
 
 	const timestamp = settings.timestampForEdits ? ` (${getRelativeTimestamp(record.currentEditedAt)})` : "";
 	const originalContent = record.previous[0]?.content ?? original.content;
-	try {
-		FluxDispatcher.dispatch(createMessageNotice(
-			channelId,
-			messageId,
-			`${originalContent || "Original message"}${timestamp}`,
-		));
-	} catch (error) {
-		console.error("[Sage Eyes] Could not show the original text edit notice.", error);
-	}
+	showOriginalEditNotice(
+		channelId,
+		messageId,
+		{ ...original, edited_timestamp: record.currentEditedAt },
+		`${originalContent || "Original message"}${timestamp}`,
+	);
 	return args;
 }
 
@@ -476,6 +546,7 @@ export function clearMessageHistory() {
 export function removeMessageHistoryPatch(clearHistory = true) {
 	for (const unpatch of unpatches.splice(0).reverse()) unpatch();
 	for (const unpatch of ignoredUserUnpatches.splice(0).reverse()) unpatch();
+	for (const noticeId of [...editNotices.keys()]) dismissEditNotice(noticeId);
 	dispatcherPatchInstalled = false;
 	if (clearHistory) clearMessageHistory();
 }
