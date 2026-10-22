@@ -474,11 +474,43 @@ function PreviewIcon({ asset, fallback }: { asset: string; fallback: string }) {
     : <Text style={{ color: "#b5bac1", fontSize: 18, fontWeight: "600" }}>{fallback}</Text>;
 }
 
-function DeletedMessagesPreview({ showHistory, showDeletedMessages, deletedIndicatorText }: {
+function DeletedMessagesPreview({
+  historyEnabled,
+  loggerEnabled,
+  showHistory,
+  showDeletedMessages,
+  timestampForEdits,
+  ignoreOwnMessages,
+  ignoreBotMessages,
+  ignoredUserCount,
+  ignoredUsersEnabled,
+  sendToChannel,
+  sendToWebhook,
+  keepAfterRestart,
+  messageLimit,
+  sourceConfigured,
+  deletedIndicatorText,
+}: {
+  historyEnabled: boolean;
+  loggerEnabled: boolean;
   showHistory: boolean;
   showDeletedMessages: boolean;
+  timestampForEdits: boolean;
+  ignoreOwnMessages: boolean;
+  ignoreBotMessages: boolean;
+  ignoredUserCount: number;
+  ignoredUsersEnabled: boolean;
+  sendToChannel: boolean;
+  sendToWebhook: boolean;
+  keepAfterRestart: boolean;
+  messageLimit: number;
+  sourceConfigured: boolean;
   deletedIndicatorText: string;
 }) {
+  const showEditSample = historyEnabled && showHistory && !ignoreOwnMessages;
+  const showDeleteSample = historyEnabled && showDeletedMessages && !ignoreBotMessages;
+  const deliveryTargets = [sendToChannel && "Channel", sendToWebhook && "Webhook"].filter(Boolean);
+
   return (
     <RN.View style={{ marginHorizontal: 8, overflow: "hidden", borderRadius: 12, borderWidth: 1, borderColor: "#1e1f22", backgroundColor: "#313338" }}>
       <RN.View style={{ minHeight: 44, flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingHorizontal: 12, borderBottomWidth: 1, borderBottomColor: "#232428" }}>
@@ -489,7 +521,7 @@ function DeletedMessagesPreview({ showHistory, showDeletedMessages, deletedIndic
         <PreviewIcon asset="MagnifyingGlassIcon" fallback="⌕" />
       </RN.View>
       <RN.View style={{ paddingTop: 6, paddingBottom: 10 }}>
-        {showHistory && (
+        {showEditSample && (
           <RN.View style={{ flexDirection: "row", gap: 12, paddingHorizontal: 12, paddingVertical: 8 }}>
             <RN.View style={{ width: 36, height: 36, borderRadius: 18, backgroundColor: "#5865f2", alignItems: "center", justifyContent: "center" }}>
               <Text style={{ color: "#ffffff", fontSize: 13, fontWeight: "700" }}>A</Text>
@@ -497,17 +529,22 @@ function DeletedMessagesPreview({ showHistory, showDeletedMessages, deletedIndic
             <RN.View style={{ flex: 1, minWidth: 0 }}>
               <RN.View style={{ flexDirection: "row", flexWrap: "wrap", alignItems: "baseline", columnGap: 7, rowGap: 2, marginBottom: 3 }}>
                 <Text style={{ color: "#f2f3f5", fontSize: 14, fontWeight: "600" }}>Alex</Text>
+                <Text style={{ color: "#949ba4", fontSize: 10, fontWeight: "700" }}>YOU</Text>
                 <Text style={{ color: "#949ba4", fontSize: 11 }}>Today at 4:01 PM</Text>
               </RN.View>
-              {["See you at 6", "See you at 7"].map((version) => (
-                <Text key={version} style={{ color: "#a5a8ae", fontSize: 14, textDecorationLine: "line-through" }}>{version}</Text>
-              ))}
               <Text style={{ color: "#dbdee1", fontSize: 14 }}>See you at 8 <Text style={{ color: "#949ba4", fontSize: 11 }}>(edited)</Text></Text>
+              {showHistory && (
+                <RN.View style={{ marginTop: 5, paddingLeft: 8, borderLeftWidth: 2, borderLeftColor: "#f23f43" }}>
+                  <Text style={{ color: "#f47778", fontSize: 13 }}>
+                    Earlier text: See you at 6{timestampForEdits ? <Text style={{ color: "#949ba4", fontSize: 11 }}> · 2m ago</Text> : null}
+                  </Text>
+                </RN.View>
+              )}
             </RN.View>
           </RN.View>
         )}
-        {showDeletedMessages && (
-          <RN.View style={{ flexDirection: "row", marginTop: showHistory ? 4 : 0, backgroundColor: "#f23f4312" }}>
+        {showDeleteSample && (
+          <RN.View style={{ flexDirection: "row", marginTop: showEditSample ? 4 : 0, backgroundColor: "#f23f4312" }}>
             <RN.View style={{ width: 4, backgroundColor: "#f23f43" }} />
             <RN.View style={{ flex: 1, minWidth: 0, flexDirection: "row", gap: 12, paddingHorizontal: 12, paddingVertical: 9 }}>
               <RN.View style={{ width: 36, height: 36, borderRadius: 18, backgroundColor: "#eb459e", alignItems: "center", justifyContent: "center" }}>
@@ -516,6 +553,7 @@ function DeletedMessagesPreview({ showHistory, showDeletedMessages, deletedIndic
               <RN.View style={{ flex: 1, minWidth: 0 }}>
                 <RN.View style={{ flexDirection: "row", flexWrap: "wrap", alignItems: "baseline", columnGap: 7, rowGap: 2, marginBottom: 3 }}>
                   <Text style={{ color: "#f2f3f5", fontSize: 14, fontWeight: "600" }}>Sam</Text>
+                  <Text style={{ color: "#949ba4", fontSize: 10, fontWeight: "700" }}>BOT</Text>
                   <Text style={{ color: "#949ba4", fontSize: 11 }}>Today at 4:03 PM</Text>
                 </RN.View>
                 <Text style={{ color: "#f47778", fontSize: 14, lineHeight: 20, fontWeight: "500" }}>
@@ -525,9 +563,11 @@ function DeletedMessagesPreview({ showHistory, showDeletedMessages, deletedIndic
             </RN.View>
           </RN.View>
         )}
-        {!showHistory && !showDeletedMessages && (
+        {!showEditSample && !showDeleteSample && (
           <RN.View style={{ minHeight: 72, alignItems: "center", justifyContent: "center", padding: 14 }}>
-            <Text style={{ color: "#949ba4", textAlign: "center", fontSize: 13 }}>Both history previews are turned off.</Text>
+            <Text style={{ color: "#949ba4", textAlign: "center", fontSize: 13 }}>
+              {historyEnabled ? "No sample messages match the current history filters." : "In-chat history is turned off."}
+            </Text>
           </RN.View>
         )}
       </RN.View>
@@ -539,6 +579,34 @@ function DeletedMessagesPreview({ showHistory, showDeletedMessages, deletedIndic
           <PreviewIcon asset="ReactionIcon" fallback="☺" />
         </RN.View>
       </RN.View>
+      <RN.View style={{ flexDirection: "row", flexWrap: "wrap", gap: 6, paddingHorizontal: 10, paddingBottom: 10 }}>
+        <PreviewStatus label="In-chat history" enabled={historyEnabled} />
+        <PreviewStatus label="Message logger" enabled={loggerEnabled} />
+        <PreviewStatus label="Source configured" enabled={sourceConfigured} />
+        <PreviewStatus label="Persistent storage" enabled={keepAfterRestart} />
+        <PreviewStatus label="Ignored users" enabled={ignoredUsersEnabled} />
+        <RN.View style={{ paddingHorizontal: 8, paddingVertical: 4, borderRadius: 10, backgroundColor: "#232428" }}>
+          <Text style={{ color: "#b5bac1", fontSize: 10 }}>Limit: {messageLimit.toLocaleString()}</Text>
+        </RN.View>
+        {loggerEnabled && deliveryTargets.length > 0 && (
+          <RN.View style={{ paddingHorizontal: 8, paddingVertical: 4, borderRadius: 10, backgroundColor: "#232428" }}>
+            <Text style={{ color: "#b5bac1", fontSize: 10 }}>Forwarding: {deliveryTargets.join(" + ")}</Text>
+          </RN.View>
+        )}
+        {ignoredUsersEnabled && ignoredUserCount > 0 && (
+          <RN.View style={{ paddingHorizontal: 8, paddingVertical: 4, borderRadius: 10, backgroundColor: "#232428" }}>
+            <Text style={{ color: "#b5bac1", fontSize: 10 }}>Ignoring {ignoredUserCount} users</Text>
+          </RN.View>
+        )}
+      </RN.View>
+    </RN.View>
+  );
+}
+
+function PreviewStatus({ label, enabled }: { label: string; enabled: boolean }) {
+  return (
+    <RN.View style={{ paddingHorizontal: 8, paddingVertical: 4, borderRadius: 10, backgroundColor: enabled ? "#174b35" : "#232428" }}>
+      <Text style={{ color: enabled ? "#57f287" : "#949ba4", fontSize: 10 }}>{label}: {enabled ? "On" : "Off"}</Text>
     </RN.View>
   );
 }
@@ -667,8 +735,20 @@ export function DeletedMessagesSettings() {
 
         <TableRowGroup title="Preview">
           <DeletedMessagesPreview
+            historyEnabled={historyEnabled}
+            loggerEnabled={enabled}
             showHistory={storage.keepEditHistory !== false}
             showDeletedMessages={Boolean(storage.keepDeletedMessages)}
+            timestampForEdits={Boolean(storage.timestampForEdits)}
+            ignoreOwnMessages={Boolean(storage.ignoreOwnMessages)}
+            ignoreBotMessages={Boolean(storage.ignoreBotMessages)}
+            ignoredUserCount={Array.isArray(storage.messageHistoryIgnoredUserIds) ? storage.messageHistoryIgnoredUserIds.length : 0}
+            ignoredUsersEnabled={Boolean(storage.enableIgnoreUsers)}
+            sendToChannel={Boolean(storage.messageLoggerSendToChannel)}
+            sendToWebhook={Boolean(storage.messageLoggerSendToWebhook)}
+            keepAfterRestart={keepAfterRestart}
+            messageLimit={limit}
+            sourceConfigured={Boolean(String(storage.messageLoggerSourceChannelId ?? "").trim())}
             deletedIndicatorText={String(storage.deletedIndicatorText ?? "This message was deleted")}
           />
         </TableRowGroup>

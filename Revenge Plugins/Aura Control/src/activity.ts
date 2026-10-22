@@ -215,6 +215,14 @@ async function resolveAssetKey(key: string, applicationId: string): Promise<stri
 	return assetId;
 }
 
+export async function resolvePreviewAssetUrl(key: string, applicationId = ""): Promise<string> {
+	if (/^https?:\/\//i.test(key)) return key;
+	const resolvedAsset = await resolveAssetKey(key, applicationId || DEFAULT_APPLICATION_ID);
+	if (resolvedAsset.startsWith("mp:")) return resolvedAsset.slice(3);
+	if (/^https?:\/\//i.test(resolvedAsset)) return resolvedAsset;
+	return `https://cdn.discordapp.com/app-assets/${applicationId || DEFAULT_APPLICATION_ID}/${resolvedAsset}.png?size=128`;
+}
+
 export function resetPluginStartTime(): void {
 	pluginStartedAt = Date.now();
 	storage.timestampStartup = pluginStartedAt;

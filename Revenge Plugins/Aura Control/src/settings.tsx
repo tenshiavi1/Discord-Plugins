@@ -16,6 +16,7 @@ import {
 	type ActivityConfiguration,
 } from "./activity";
 import { formatLocalDateTime, getCalendarDates, parseLocalDateTime } from "./dateTime";
+import PresencePreview from "./presencePreview";
 
 const { TableRow, TableRowGroup, TableSwitchRow, Stack } = findByProps(
 	"TableRow",
@@ -498,6 +499,9 @@ export default function Settings() {
 	return (
 		<RN.ScrollView style={{ flex: 1 }} contentContainerStyle={{ padding: 10, paddingBottom: 24 }}>
 			<Stack spacing={8}>
+			<TableRowGroup title="Live Preview">
+				<PresencePreview config={storage as ActivityConfiguration} />
+			</TableRowGroup>
 			<TableRowGroup title="Application">
 				<TextSetting label="Application ID (Optional)" storageKey="applicationId" placeholder="Leave blank to use the default app." limit={21} />
 				<RN.Text style={{ color: "#b5bac1", paddingHorizontal: 16, paddingTop: 8 }}>
