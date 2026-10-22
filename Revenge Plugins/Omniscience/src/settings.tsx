@@ -467,44 +467,57 @@ function openSettingsPage(navigation: any, title: string, page: () => unknown) {
   });
 }
 
-function DeletedMessagesPreview({ showHistory, deletedIndicatorText }: { showHistory: boolean; deletedIndicatorText: string }) {
+function DeletedMessagesPreview({ showHistory, showDeletedMessages, deletedIndicatorText }: {
+  showHistory: boolean;
+  showDeletedMessages: boolean;
+  deletedIndicatorText: string;
+}) {
   return (
     <RN.View style={{ marginHorizontal: 8, overflow: "hidden", borderRadius: 8, backgroundColor: "#1e1f22" }}>
       <RN.View style={{ paddingHorizontal: 12, paddingVertical: 10, borderBottomWidth: 1, borderBottomColor: "#3f4147" }}>
         <Text style={{ color: "#f2f3f5", fontWeight: "600" }}># general</Text>
       </RN.View>
-      <RN.View style={{ flexDirection: "row", gap: 10, padding: 10 }}>
-        <RN.View style={{ width: 30, height: 30, borderRadius: 15, backgroundColor: "#3ba55c", alignItems: "center", justifyContent: "center" }}>
-          <Text style={{ color: "#ffffff", fontWeight: "700" }}>A</Text>
-        </RN.View>
-        <RN.View style={{ flex: 1 }}>
-          <RN.View style={{ flexDirection: "row", gap: 8, alignItems: "baseline" }}>
-            <Text style={{ color: "#f2f3f5", fontWeight: "600" }}>Alex</Text>
-            <Text style={{ color: "#949ba4", fontSize: 11 }}>Today at 4:01 PM</Text>
+      {showHistory && (
+        <RN.View style={{ flexDirection: "row", gap: 10, padding: 10 }}>
+          <RN.View style={{ width: 30, height: 30, borderRadius: 15, backgroundColor: "#3ba55c", alignItems: "center", justifyContent: "center" }}>
+            <Text style={{ color: "#ffffff", fontWeight: "700" }}>A</Text>
           </RN.View>
-          {showHistory && ["See you at 6", "See you at 7"].map((version) => (
-            <Text key={version} style={{ color: "#949ba4", textDecorationLine: "line-through" }}>{version}</Text>
-          ))}
-          <Text style={{ color: "#f2f3f5" }}>See you at 8 <Text style={{ color: "#949ba4" }}>(edited)</Text></Text>
-        </RN.View>
-      </RN.View>
-      <RN.View style={{ flexDirection: "row", backgroundColor: "#f23f431a" }}>
-        <RN.View style={{ width: 4, backgroundColor: "#f23f43" }} />
-        <RN.View style={{ flex: 1, minWidth: 0, flexDirection: "row", gap: 10, padding: 10 }}>
-          <RN.View style={{ width: 30, height: 30, borderRadius: 15, backgroundColor: "#eb459e", alignItems: "center", justifyContent: "center" }}>
-            <Text style={{ color: "#ffffff", fontWeight: "700" }}>S</Text>
-          </RN.View>
-          <RN.View style={{ flex: 1, minWidth: 0 }}>
+          <RN.View style={{ flex: 1 }}>
             <RN.View style={{ flexDirection: "row", gap: 8, alignItems: "baseline" }}>
-              <Text style={{ color: "#f2f3f5", fontWeight: "600" }}>Sam</Text>
-              <Text style={{ color: "#949ba4", fontSize: 11 }}>Today at 4:03 PM</Text>
+              <Text style={{ color: "#f2f3f5", fontWeight: "600" }}>Alex</Text>
+              <Text style={{ color: "#949ba4", fontSize: 11 }}>Today at 4:01 PM</Text>
             </RN.View>
-            <Text style={{ color: "#f23f43", fontWeight: "600" }}>
-              {deletedIndicatorText.trim() || "This message was deleted"}
-            </Text>
+            {["See you at 6", "See you at 7"].map((version) => (
+              <Text key={version} style={{ color: "#949ba4", textDecorationLine: "line-through" }}>{version}</Text>
+            ))}
+            <Text style={{ color: "#f2f3f5" }}>See you at 8 <Text style={{ color: "#949ba4" }}>(edited)</Text></Text>
           </RN.View>
         </RN.View>
-      </RN.View>
+      )}
+      {showDeletedMessages && (
+        <RN.View style={{ flexDirection: "row", backgroundColor: "#f23f431a" }}>
+          <RN.View style={{ width: 4, backgroundColor: "#f23f43" }} />
+          <RN.View style={{ flex: 1, minWidth: 0, flexDirection: "row", gap: 10, padding: 10 }}>
+            <RN.View style={{ width: 30, height: 30, borderRadius: 15, backgroundColor: "#eb459e", alignItems: "center", justifyContent: "center" }}>
+              <Text style={{ color: "#ffffff", fontWeight: "700" }}>S</Text>
+            </RN.View>
+            <RN.View style={{ flex: 1, minWidth: 0 }}>
+              <RN.View style={{ flexDirection: "row", gap: 8, alignItems: "baseline" }}>
+                <Text style={{ color: "#f2f3f5", fontWeight: "600" }}>Sam</Text>
+                <Text style={{ color: "#949ba4", fontSize: 11 }}>Today at 4:03 PM</Text>
+              </RN.View>
+              <Text style={{ color: "#f23f43", fontWeight: "600" }}>
+                {deletedIndicatorText.trim() || "This message was deleted"}
+              </Text>
+            </RN.View>
+          </RN.View>
+        </RN.View>
+      )}
+      {!showHistory && !showDeletedMessages && (
+        <RN.View style={{ padding: 14 }}>
+          <Text style={{ color: "#949ba4", textAlign: "center" }}>Both history previews are turned off.</Text>
+        </RN.View>
+      )}
     </RN.View>
   );
 }
@@ -630,6 +643,7 @@ export function DeletedMessagesSettings() {
         <TableRowGroup title="Preview">
           <DeletedMessagesPreview
             showHistory={storage.keepEditHistory !== false}
+            showDeletedMessages={Boolean(storage.keepDeletedMessages)}
             deletedIndicatorText={String(storage.deletedIndicatorText ?? "This message was deleted")}
           />
         </TableRowGroup>
@@ -638,11 +652,22 @@ export function DeletedMessagesSettings() {
           <TableSwitchRow
             label="Show edit history"
             subLabel="Keep up to 10 earlier versions of each observed message."
-            disabled={!enabled}
+            disabled={!enabled && !historyEnabled}
             value={storage.keepEditHistory !== false}
             onValueChange={(value: boolean) => {
               setEditHistoryEnabled(value);
               updateMessageHistorySettings({ keepEditHistory: value });
+              forceUpdate();
+            }}
+          />
+          <TableSwitchRow
+            label="Log Deleted Messages"
+            subLabel="Retain deleted messages in chat with the configured notice."
+            disabled={!historyEnabled}
+            value={Boolean(storage.keepDeletedMessages)}
+            onValueChange={(value: boolean) => {
+              storage.keepDeletedMessages = value;
+              updateMessageHistorySettings({ keepDeletedMessages: value });
               forceUpdate();
             }}
           />
@@ -744,28 +769,6 @@ export function DeletedMessagesSettings() {
             onValueChange={(value: boolean) => {
               storage.enableMessageHistory = value;
               setMessageHistoryFeatureEnabled(value && storage.enabled !== false);
-              forceUpdate();
-            }}
-          />
-          <TableSwitchRow
-            label="Log Deleted Messages"
-            subLabel="Retain deleted messages in chat with the configured notice."
-            disabled={!historyEnabled}
-            value={Boolean(storage.keepDeletedMessages)}
-            onValueChange={(value: boolean) => {
-              storage.keepDeletedMessages = value;
-              updateMessageHistorySettings({ keepDeletedMessages: value });
-              forceUpdate();
-            }}
-          />
-          <TableSwitchRow
-            label="Show edit history"
-            subLabel="Show up to 10 earlier versions in a temporary notice; edits continue through Discord normally."
-            disabled={!historyEnabled}
-            value={storage.keepEditHistory !== false}
-            onValueChange={(value: boolean) => {
-              setEditHistoryEnabled(value);
-              updateMessageHistorySettings({ keepEditHistory: value });
               forceUpdate();
             }}
           />
