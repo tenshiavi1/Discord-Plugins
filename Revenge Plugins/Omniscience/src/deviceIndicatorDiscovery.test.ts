@@ -44,6 +44,8 @@ test("handles circular component wrappers", () => {
 test("resolves DM recipients and nested profile user props", () => {
 	expect(resolveDeviceUserId({ channel: { recipientIds: ["dm-user"] } })).toBe("dm-user");
 	expect(resolveDeviceUserId({ channel: { recipients: [{ id: "recipient-user" }] } })).toBe("recipient-user");
+	expect(resolveDeviceUserId({ recipientId: "recipient-prop-user" })).toBe("recipient-prop-user");
+	expect(resolveDeviceUserId({ recipient: { id: "recipient-object-user" } })).toBe("recipient-object-user");
 	expect(resolveDeviceUserId({ channel: { recipients: ["one", "two"] } })).toBeUndefined();
 	const profileTree = { props: { children: { props: { user: { id: "profile-user" } } } } };
 	expect(findDeviceUserIdInTree(profileTree)).toBe("profile-user");

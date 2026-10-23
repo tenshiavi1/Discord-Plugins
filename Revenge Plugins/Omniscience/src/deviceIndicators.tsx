@@ -48,6 +48,7 @@ const patched = new Set<string>();
 const unpatches: (() => void)[] = [];
 const voiceRenderers = new WeakMap<(...args: any[]) => any, (...args: any[]) => any>();
 let retryUnsubscribe: (() => void) | undefined;
+let retryTimer: ReturnType<typeof setInterval> | undefined;
 
 function moduleExports(id: number) {
 	if (typeof ModuleRequire.__r !== "function") return null;
@@ -214,7 +215,37 @@ function placeProfileStatusBadge(tree: any, userId: string) {
 		}
 		return node;
 	}
-	return visit(tree, 0);
+	const result = visit(tree, 0);
+	if (added) return result;
+	function placeBesideName(node: any, depth: number): any {
+		if (!node || depth > 18 || typeof node !== "object" || !node.props) return node;
+		const children = node.props.children;
+		if (Array.isArray(children)) {
+			const title = children.find((child: any) => child?.props && (
+				child.type === RN.Text && typeof child.props.children === "string"
+				|| typeof child.props.variant === "string" && /(?:channel-title|heading|semibold)/.test(child.props.variant)
+			));
+			if (title) {
+				return React.cloneElement(node, {
+					children: children.map((child: any) => child === title
+						? React.createElement(
+							RN.View,
+							{ key: "omniscience-profile-device-title", style: { flexDirection: "row", alignItems: "center", gap: 6, flexShrink: 1 } },
+							child,
+							React.createElement(DeviceBadges, { userId }),
+						)
+						: placeBesideName(child, depth + 1)),
+				});
+			}
+			const next = children.map((child: any) => placeBesideName(child, depth + 1));
+			return next.some((child: any, index: number) => child !== children[index])
+				? React.cloneElement(node, { children: next })
+				: node;
+		}
+		const child = placeBesideName(children, depth + 1);
+		return child !== children ? React.cloneElement(node, { children: child }) : node;
+	}
+	return placeBesideName(result, 0);
 }
 
 function placeBadge(tree: any, props: any, placement: "dmHeader" | "lists" | "profiles") {
@@ -351,30 +382,57 @@ function patchVoiceMemberRows() {
 }
 
 function installPatches() {
-	let found = false;
-	found = patchNamedComponent(["PrivateChannelHeader", "PrivateChannelHeaderContent", "DMHeader", "DirectMessageHeader"], "dmHeader")
-		|| patchComponent(13107, "default", "dmHeader", ["PrivateChannelHeader", "PrivateChannelHeaderContent", "DMHeader", "DirectMessageHeader"])
-		|| found;
-	found = patchComponent(15962, "default", "lists", ["MessagesItemChannelContent"]) || found;
-	found = patchComponent(10602, "default", "lists", ["UserRow"]) || found;
-	found = patchComponent(9334, "MemberRowItem", "lists", ["MemberRowItem"]) || found;
-	found = patchNamedComponent(["UserProfileHeader", "UserProfileModalHeader", "ProfileHeader", "UserProfileCard"], "profiles")
-		|| patchComponent(10843, "DisplayName", "profiles", ["DisplayName"])
-		|| found;
-	found = patchVoiceMemberRows() || found;
-	found = patchAvatar(13920, "default", ["Status"]) || found;
-	found = patchAvatar(13920, "StatusWithTyping", ["StatusWithTyping"]) || found;
-	return found;
+	const dmHeaderFound = !options.dmHeader
+		|| patchNamedComponent(["PrivateChannelHeader", "PrivateChannelHeaderContent", "DMHeader", "DirectMessageHeader"], "dmHeader")
+		|| patchComponent(13107, "default", "dmHeader", ["PrivateChannelHeader", "PrivateChannelHeaderContent", "DMHeader", "DirectMessageHeader"]);
+	const profileFound = !options.profiles
+		|| patchNamedComponent(["UserProfileHeader", "UserProfileModalHeader", "ProfileHeader", "UserProfileCard"], "profiles")
+		|| patchComponent(10843, "DisplayName", "profiles", ["DisplayName"]);
+	if (options.lists) {
+		patchComponent(15962, "default", "lists", ["MessagesItemChannelContent"]);
+		patchComponent(10602, "default", "lists", ["UserRow"]);
+		patchComponent(9334, "MemberRowItem", "lists", ["MemberRowItem"]);
+		patchVoiceMemberRows();
+	}
+	if (options.hideMobileBadge) {
+		patchAvatar(13920, "default", ["Status"]);
+		patchAvatar(13920, "StatusWithTyping", ["StatusWithTyping"]);
+	}
+	return dmHeaderFound && profileFound;
+}
+
+function stopPatchRetry() {
+	if (retryTimer) clearInterval(retryTimer);
+	retryTimer = undefined;
 }
 
 function retryPatches() {
-	if (options.enabled) installPatches();
+	if (options.enabled && installPatches()) stopPatchRetry();
+}
+
+function ensurePatchRetry() {
+	if (!options.enabled || (!options.dmHeader && !options.profiles)) {
+		stopPatchRetry();
+		return;
+	}
+	if (installPatches()) {
+		stopPatchRetry();
+		return;
+	}
+	if (!retryTimer) retryTimer = setInterval(retryPatches, 5000);
 }
 
 function watchForPatches() {
 	if (retryUnsubscribe || typeof Dispatcher?.subscribe !== "function" || typeof Dispatcher?.unsubscribe !== "function") return;
 	const retry = () => retryPatches();
-	const events = ["CONNECTION_OPEN", "MESSAGE_CREATE", "LOAD_MESSAGES_SUCCESS", "LOAD_MESSAGES_AROUND_SUCCESS"];
+	const events = [
+		"CONNECTION_OPEN",
+		"CHANNEL_SELECT",
+		"USER_PROFILE_MODAL_OPEN",
+		"MESSAGE_CREATE",
+		"LOAD_MESSAGES_SUCCESS",
+		"LOAD_MESSAGES_AROUND_SUCCESS",
+	];
 	for (const event of events) Dispatcher.subscribe(event, retry);
 	retryUnsubscribe = () => {
 		for (const event of events) Dispatcher.unsubscribe(event, retry);
@@ -391,8 +449,10 @@ export function updateDeviceIndicatorOptions(next: Partial<DeviceIndicatorOption
 	storage.deviceIndicatorHideMobileBadge = options.hideMobileBadge;
 	if (options.enabled) {
 		getStores();
-		installPatches();
 		watchForPatches();
+		ensurePatchRetry();
+	} else {
+		stopPatchRetry();
 	}
 	try { messageStore?.emitChange?.(); } catch {}
 }
@@ -401,13 +461,14 @@ export function initializeDeviceIndicators(next: Partial<DeviceIndicatorOptions>
 	options = { ...options, ...next };
 	getStores();
 	if (options.enabled) {
-		installPatches();
 		watchForPatches();
+		ensurePatchRetry();
 	}
 }
 
 export function removeDeviceIndicatorPatches() {
 	options = { ...options, enabled: false };
+	stopPatchRetry();
 	for (const unpatch of unpatches.splice(0).reverse()) unpatch();
 	patched.clear();
 	retryUnsubscribe?.();

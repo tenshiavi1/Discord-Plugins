@@ -64,6 +64,8 @@ function userIdFromValue(value: unknown): string | undefined {
 export function resolveDeviceUserId(props: any, getChannel?: (channelId: string) => any): string | undefined {
 	const direct = userIdFromValue(props?.userId)
 		?? userIdFromValue(props?.user)
+		?? userIdFromValue(props?.recipientId)
+		?? userIdFromValue(props?.recipient)
 		?? userIdFromValue(props?.member?.userId)
 		?? userIdFromValue(props?.member?.user);
 	if (direct) return direct;
