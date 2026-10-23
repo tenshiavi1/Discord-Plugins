@@ -1,8 +1,9 @@
 import { React, ReactNative as RN } from "@vendetta/metro/common";
 import { storage } from "@vendetta/plugin";
 import { after, instead } from "@vendetta/patcher";
-import { getAssetIDByName } from "@vendetta/ui/assets";
-import { find, findByName, findByProps, findByStoreName } from "../../compat";
+import { find, findByProps, findByStoreName } from "../../compat";
+import platformIcons from "./deviceIndicatorIcons";
+import { resolveComponentModule } from "./deviceIndicatorDiscovery";
 
 export type DeviceIndicatorOptions = {
 	enabled: boolean;
@@ -23,20 +24,6 @@ const LABELS: Record<string, string> = {
 	web: "Web",
 	embedded: "Console",
 	vr: "VR",
-};
-const ASSETS: Record<string, string> = {
-	desktop: "LaptopPhoneIcon",
-	mobile: "MobilePhoneIcon",
-	web: "GlobeEarthIcon",
-	embedded: "GameControllerIcon",
-	vr: "VRHeadsetIcon",
-};
-const GLYPHS: Record<string, string> = {
-	desktop: "▱",
-	mobile: "▯",
-	web: "🌐",
-	embedded: "⌘",
-	vr: "◉",
 };
 const STATUS_LABELS: Record<string, string> = {
 	online: "Online",
@@ -73,14 +60,9 @@ function moduleExports(id: number) {
 
 function componentModule(id: number, key: string, names: string[]) {
 	const direct = moduleExports(id);
-	if (typeof direct?.[key] === "function") return direct;
-	for (const name of names) {
-		const candidate = findByName(name, false);
-		if (typeof candidate?.[key] === "function") return candidate;
-		if (key === "default" && typeof candidate === "function") return { default: candidate };
-		if (key === "default" && typeof candidate?.default === "function") return candidate;
-	}
-	return null;
+	const directModule = resolveComponentModule(direct, key, names);
+	if (directModule) return directModule;
+	return find((candidate: any) => resolveComponentModule(candidate, key, names) !== null) ?? null;
 }
 
 function getStores() {
@@ -135,10 +117,10 @@ function clientsFor(userId: string) {
 
 function DeviceGlyph({ platform, status }: { platform: string; status: string }) {
 	const color = COLORS[status] ?? "#949ba4";
-	const asset = getAssetIDByName(ASSETS[platform] ?? "");
-	return asset
-		? <RN.Image source={asset} style={{ width: 16, height: 16, tintColor: color }} />
-		: <RN.Text style={{ width: 16, textAlign: "center", color, fontSize: 14, fontWeight: "700" }}>{GLYPHS[platform] ?? "•"}</RN.Text>;
+	const uri = platformIcons[platform as keyof typeof platformIcons];
+	return uri
+		? <RN.Image source={{ uri, width: 16, height: 16 }} style={{ width: 16, height: 16, tintColor: color }} />
+		: null;
 }
 
 export function DeviceBadges({ userId, clients: sampleClients }: { userId?: string; clients?: Record<string, string> }) {
