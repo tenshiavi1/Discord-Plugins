@@ -1,6 +1,6 @@
 {
     "name": "God Console",
-    "description": "Mark channels as read, jump to chat history, resolve uncached mentions, and add files to your messages.",
+    "description": "Mark channels as read, jump to chat history, and resolve uncached user mentions.",
     "authors": [
         {
             "name": "tenshiavi"

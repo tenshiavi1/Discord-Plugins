@@ -26,15 +26,15 @@ test("shares one global wrapper and preserves the previous handler", () => {
 	const removeManager = installPluginCrashGuard("Tenshi's Plugins", managerStorage);
 	const wrapper = currentHandler;
 	const removePlugin = installPluginCrashGuard("God Console", pluginStorage, {
-		features: [{ storageKey: "addAttachmentsEnabled", patterns: [/addAttachments/i] }],
+		features: [{ storageKey: "validUserEnabled", patterns: [/validUser/i] }],
 	});
 
 	expect(currentHandler).toBe(wrapper);
-	currentHandler(new Error("God Console addAttachments failed"), true);
+	currentHandler(new Error("God Console validUser failed"), true);
 	expect(previousCalls).toBe(1);
 	expect((pluginStorage.lastCrash as { pluginName: string }).pluginName).toBe("God Console");
 	expect((managerStorage.lastCrash as { pluginName: string }).pluginName).toBe("God Console");
-	expect((pluginStorage.pendingCrashDisable as { storageKey: string }[])[0].storageKey).toBe("addAttachmentsEnabled");
+	expect((pluginStorage.pendingCrashDisable as { storageKey: string }[])[0].storageKey).toBe("validUserEnabled");
 
 	removeManager();
 	removePlugin();
@@ -87,8 +87,8 @@ test("retains unattributed fatal errors without disabling a plugin", () => {
 
 	const pluginStorage: Record<string, unknown> = {};
 	const remove = installPluginCrashGuard("God Console", pluginStorage, {
-		features: [{ storageKey: "addAttachmentsEnabled" }],
-		fallbackKeys: ["addAttachmentsEnabled"],
+		features: [{ storageKey: "validUserEnabled" }],
+		fallbackKeys: ["validUserEnabled"],
 	});
 	currentHandler(new Error("Unattributed runtime error"), true);
 

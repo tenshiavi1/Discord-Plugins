@@ -3,7 +3,6 @@ import Settings from "./settings";
 import { setReadAllEnabled } from "./readAll";
 import { setJumpToTopEnabled } from "./jumpToTop";
 import { setValidUserEnabled } from "./validUser";
-import { setAddAttachmentsEnabled } from "./addAttachments";
 import { installPluginCrashGuard } from "../../shared/crashGuard";
 import { registerPluginSettingsShortcut } from "../../shared/pluginSettings";
 
@@ -12,9 +11,8 @@ const registerCrashGuard = () => installPluginCrashGuard("God Console", storage,
 		{ storageKey: "readAllEnabled", patterns: [/read.?all|setReadAllEnabled|mark.*read/i] },
 		{ storageKey: "jumpToTopEnabled", patterns: [/jump.?to.?top|setJumpToTopEnabled/i] },
 		{ storageKey: "validUserEnabled", patterns: [/valid.?user|setValidUserEnabled|fetch.*user/i] },
-		{ storageKey: "addAttachmentsEnabled", patterns: [/add.?attachments|setAddAttachmentsEnabled|uploadAttachment/i] },
 	],
-	fallbackKeys: ["readAllEnabled", "jumpToTopEnabled", "validUserEnabled", "addAttachmentsEnabled"],
+	fallbackKeys: ["readAllEnabled", "jumpToTopEnabled", "validUserEnabled"],
 });
 let removeCrashGuard: (() => void) | undefined = registerCrashGuard();
 let unregisterSettingsShortcut: (() => void) | undefined;
@@ -23,7 +21,6 @@ function applySettings() {
 	setReadAllEnabled(Boolean(storage.readAllEnabled));
 	setJumpToTopEnabled(Boolean(storage.jumpToTopEnabled));
 	setValidUserEnabled(Boolean(storage.validUserEnabled));
-	setAddAttachmentsEnabled(Boolean(storage.addAttachmentsEnabled));
 }
 
 export default {
@@ -32,7 +29,7 @@ export default {
 		storage.readAllEnabled ??= true;
 		storage.jumpToTopEnabled ??= true;
 		storage.validUserEnabled ??= true;
-		storage.addAttachmentsEnabled ??= true;
+		delete storage.addAttachmentsEnabled;
 		storage.showInSettings ??= false;
 		unregisterSettingsShortcut = registerPluginSettingsShortcut({
 			id: "god-console",
@@ -49,7 +46,6 @@ export default {
 		setReadAllEnabled(false);
 		setJumpToTopEnabled(false);
 		setValidUserEnabled(false);
-		setAddAttachmentsEnabled(false);
 		unregisterSettingsShortcut?.();
 		unregisterSettingsShortcut = undefined;
 	},

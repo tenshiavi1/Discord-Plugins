@@ -61,9 +61,9 @@ const PLUGIN_SEARCH_TERMS: Record<string, string> = {
 	"Aura Control": "rich presence custom rpc activity application id application name connect disconnect update presence playing streaming listening watching competing display name state details urls twitch youtube party size maximum timestamp since connection startup local time custom start end large image small image image asset key hover text buttons button labels urls activity sharing",
 	"Ephemeral Entity": "anonymize anonymise upload uploads attachment file filename file name random randomized length consistent replacement name remove tracking parameters tracking url query strings send edit message silent leave leave group dm command silent typing typing status hide typing",
 	Omniscience: "keyword keywords phrase keyword tracking track monitor messages message create server servers guild group groups group dm direct message friends custom users ids ignore bots embeds mention mentions pings active account current account channel channels webhook webhooks local notifications tracking target exact match whole words case sensitive in sentence imports export json delete deleted messages message history edit history server info guild details server id owner member count online count roles boosts creation date vanity url description deleted edit logs ignore bot own messages ignored users timestamps cleanup actions",
-	"Tenshi's Plugins": "plugin manager install remove delete refetch fetch all restart search configure settings actions clear data crash logs developer mode developer settings copy id ids advanced discord appearance",
+	"Tenshi's Plugins": "plugin manager install remove delete refetch fetch all restart search configure settings profile button profile bar shortcut actions clear data crash logs developer mode developer settings copy id ids advanced discord appearance",
 	"Avatar Handler": "avatar handler multiple accounts alts account switcher switch accounts account manager native saved accounts discord mobile authenticator two factor authentication 2fa login confirmation",
-	"God Console": "readall slash command mark unread read all server channels direct messages jump to top mentions unknown user valid user resolve mentions add attachments addattachment message edit upload files",
+	"God Console": "readall slash command mark unread read all server channels direct messages jump to top mentions unknown user valid user resolve mentions",
 };
 
 function catalogEntry(name: string, description: string, directoryName = name): ManagedPlugin {
@@ -128,7 +128,7 @@ export const MANAGED_PLUGINS: ManagedPlugin[] = [
 	catalogEntry("Aura Control", "Create and manage a custom Discord Rich Presence in Revenge."),
 	catalogEntry("Avatar Handler", "Use Discord's native account switcher for accounts already saved on your device."),
 	catalogEntry("Ephemeral Entity", "Anonymize uploaded file names, remove tracking parameters from sent URLs, hide typing status, and leave group DMs silently."),
-	catalogEntry("God Console", "Mark channels as read, jump to chat history, resolve uncached mentions, and add files to your messages."),
+	catalogEntry("God Console", "Mark channels as read, jump to chat history, and resolve uncached user mentions."),
 	catalogEntry("Omniscience", "Track message keywords and active-account mentions, with optional channel or webhook alerts."),
 	catalogEntry("Tenshi's Plugins", "Manage Revenge plugins, keep Developer Mode enabled, and review crash diagnostics."),
 ];

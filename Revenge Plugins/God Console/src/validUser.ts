@@ -1,46 +1,57 @@
-import { React } from "@vendetta/metro/common";
-import { after } from "@vendetta/patcher";
-import { findByProps, findByPropsAll, findByStoreName } from "../../compat";
+import { FluxDispatcher } from "@vendetta/metro/common";
+import { findByProps, findByStoreName } from "../../compat";
+import { messageMentionIds } from "./validUserCore";
 
-const mentionPattern = /<@!?([0-9]{17,20})>/;
-const maxPendingUsers = 100;
+const messageEvents = [
+	"MESSAGE_CREATE",
+	"MESSAGE_UPDATE",
+	"LOAD_MESSAGES_SUCCESS",
+	"LOAD_MESSAGES_AROUND_SUCCESS",
+	"LOCAL_MESSAGES_LOADED",
+	"CHANNEL_SELECT",
+];
+
+type WaitingMessage = {
+	channelId: string;
+	messageId: string;
+	message: Record<string, any>;
+	userIds: string[];
+};
+
 const inFlightUsers = new Map<string, Promise<boolean>>();
 const retryAfter = new Map<string, number>();
+const retryTimers = new Map<string, ReturnType<typeof setTimeout>>();
+const unavailableUsers = new Set<string>();
+const waitingMessages = new Map<string, WaitingMessage>();
+const refreshingMessages = new Set<string>();
 let requestQueue: Promise<void> = Promise.resolve();
 let lastRequestAt = 0;
 let enabled = false;
-const unpatchMentions: (() => void)[] = [];
-let patchedMentionModules = new WeakSet<object>();
+let dispatcher: any;
+let userStore: any;
 let retryTimer: ReturnType<typeof setInterval> | undefined;
 
+function getDispatcher() {
+	const candidate = findByProps("dispatch", "subscribe", "unsubscribe") ?? FluxDispatcher;
+	return typeof candidate?.dispatch === "function"
+		&& typeof candidate?.subscribe === "function"
+		&& typeof candidate?.unsubscribe === "function"
+		? candidate
+		: undefined;
+}
+
+function getUserStore() {
+	userStore ??= findByStoreName("UserStore") ?? findByProps("getUser", "getCurrentUser");
+	return userStore;
+}
+
 function isCached(userId: string): boolean {
-	return Boolean(findByStoreName("UserStore")?.getUser?.(userId));
-}
-
-function extractMentionId(value: unknown, depth = 0, seen = new WeakSet<object>()): string | undefined {
-	if (depth > 8 || value == null) return undefined;
-	if (typeof value === "string") return value.match(mentionPattern)?.[1];
-	if (typeof value !== "object" || seen.has(value)) return undefined;
-	seen.add(value);
-	if (Array.isArray(value)) {
-		for (const child of value) {
-			const id = extractMentionId(child, depth + 1, seen);
-			if (id) return id;
-		}
-		return undefined;
+	try {
+		return Boolean(getUserStore()?.getUser?.(userId));
+	} catch (error) {
+		console.warn("[God Console] Could not check the user cache.", error);
+		return false;
 	}
-	const props = value as Record<string, unknown>;
-	for (const key of ["content", "children", "props", "data", "text"]) {
-		const id = extractMentionId(props[key], depth + 1, seen);
-		if (id) return id;
-	}
-	return undefined;
-}
-
-function getMentionUserId(props: any, fallback: unknown): string | undefined {
-	const directId = props?.data?.userId ?? props?.userId;
-	if (typeof directId === "string" && /^[0-9]{17,20}$/.test(directId)) return directId;
-	return extractMentionId(props) ?? extractMentionId(fallback);
 }
 
 function rememberFailure(userId: string, error?: any) {
@@ -53,10 +64,27 @@ function rememberFailure(userId: string, error?: any) {
 			: 5_000;
 		retryAfter.set(userId, Date.now() + delay);
 	} else if (status === 404 || code === 10013) {
-		retryAfter.set(userId, Date.now() + 15 * 60_000);
+		unavailableUsers.add(userId);
+		retryAfter.delete(userId);
+		for (const [key, entry] of waitingMessages) {
+			if (!entry.userIds.includes(userId)) continue;
+			entry.userIds = entry.userIds.filter((id) => id !== userId);
+			if (!entry.userIds.length) waitingMessages.delete(key);
+		}
+		refreshReadyMessages();
 	} else {
 		retryAfter.set(userId, Date.now() + 30_000);
 	}
+	if (status === 404 || code === 10013) return;
+	const previousTimer = retryTimers.get(userId);
+	if (previousTimer) clearTimeout(previousTimer);
+	const delay = Math.max(0, (retryAfter.get(userId) ?? Date.now()) - Date.now());
+	retryTimers.set(userId, setTimeout(() => {
+		retryTimers.delete(userId);
+		if (!enabled || isCached(userId)) return;
+		retryAfter.delete(userId);
+		void resolveUser(userId).then(refreshReadyMessages);
+	}, delay));
 }
 
 async function fetchAndDispatchUser(userId: string): Promise<boolean> {
@@ -73,7 +101,10 @@ async function fetchAndDispatchUser(userId: string): Promise<boolean> {
 	if (!enabled) return false;
 
 	const restApi = findByProps("get", "post", "del", "patch") ?? findByProps("get");
-	if (typeof restApi?.get !== "function") return false;
+	if (typeof restApi?.get !== "function") {
+		console.error("[God Console] Discord's user lookup API is unavailable.");
+		return false;
+	}
 	try {
 		const response = await restApi.get({ url: `/users/${userId}` });
 		const user = response?.body ?? response;
@@ -82,12 +113,14 @@ async function fetchAndDispatchUser(userId: string): Promise<boolean> {
 			if (enabled) rememberFailure(userId, response);
 			return false;
 		}
-		const dispatcher = findByProps("dispatch", "subscribe") ?? findByStoreName("Dispatcher");
-		if (typeof dispatcher?.dispatch !== "function") return false;
-		dispatcher.dispatch({ type: "USER_UPDATE", user });
-		dispatcher.dispatch({ type: "USER_PROFILE_FETCH_FAILURE", userId });
+		const activeDispatcher = getDispatcher();
+		if (typeof activeDispatcher?.dispatch !== "function") {
+			console.error("[God Console] Discord's dispatcher is unavailable; the resolved user cannot be cached.");
+			return false;
+		}
+		activeDispatcher.dispatch({ type: "USER_UPDATE", user });
 		retryAfter.delete(userId);
-		return true;
+		return isCached(userId);
 	} catch (error) {
 		rememberFailure(userId, error);
 		console.warn(`[God Console] Could not resolve mentioned user ${userId}.`, error);
@@ -99,7 +132,6 @@ function resolveUser(userId: string): Promise<boolean> {
 	if (!enabled || isCached(userId)) return Promise.resolve(isCached(userId));
 	const pending = inFlightUsers.get(userId);
 	if (pending) return pending;
-	if (inFlightUsers.size >= maxPendingUsers) return Promise.resolve(false);
 	if ((retryAfter.get(userId) ?? 0) > Date.now()) return Promise.resolve(false);
 
 	const request = requestQueue.then(async () => {
@@ -120,99 +152,126 @@ function resolveUser(userId: string): Promise<boolean> {
 	return request;
 }
 
-function MentionResolution({
-	userId,
-	mentionProps,
-	fallback,
-	UserMention,
-}: {
-	userId: string;
-	mentionProps: Record<string, any>;
-	fallback: any;
-	UserMention: any;
-}) {
-	const [resolved, setResolved] = React.useState(isCached(userId));
-	React.useEffect(() => {
-		let active = true;
-		if (isCached(userId)) {
-			setResolved(true);
-		} else {
-			void resolveUser(userId).then(() => {
-				if (active && enabled && isCached(userId)) setResolved(true);
-			});
-		}
-		return () => { active = false; };
-	}, [userId]);
-
-	if (!enabled || !resolved || !isCached(userId) || typeof UserMention !== "function") return fallback;
-	const data = mentionProps.data && typeof mentionProps.data === "object"
-		? mentionProps.data
-		: mentionProps;
-	const renderProps = mentionProps.props && typeof mentionProps.props === "object"
-		? mentionProps.props
-		: mentionProps;
-	return React.createElement(UserMention, {
-		className: mentionProps.className ?? "mention",
-		userId,
-		channelId: data.channelId ?? mentionProps.channelId,
-		inlinePreview: mentionProps.inlinePreview ?? renderProps.noStyleAndInteraction ?? renderProps.formatInline,
-		key: renderProps.key ?? mentionProps.key,
-	});
+function getMessageList(value: unknown): any[] {
+	if (Array.isArray(value)) return value;
+	const array = (value as { _array?: unknown[] } | null)?._array;
+	return Array.isArray(array) ? array : [];
 }
 
-function installMentionPatches(): number {
-	let installed = 0;
-	for (const exports of findByPropsAll("RoleMention", "UserMention")) {
-		const module = typeof exports?.RoleMention === "function" && typeof exports?.UserMention === "function"
-			? exports
-			: exports?.default;
-		if (!module || (typeof module !== "object" && typeof module !== "function") || patchedMentionModules.has(module)) continue;
-		if (typeof module.RoleMention !== "function" || typeof module.UserMention !== "function") continue;
-		patchedMentionModules.add(module);
-		try {
-			unpatchMentions.push(after("RoleMention", module, ([props]: any[], fallback: any) => {
-				if (!enabled) return fallback;
-				const userId = getMentionUserId(props, fallback);
-				if (!userId) return fallback;
-				return React.createElement(MentionResolution, {
-					key: `god-console-mention-${userId}`,
-					userId,
-					mentionProps: props,
-					fallback,
-					UserMention: module.UserMention,
-				});
-			}));
-			installed++;
-		} catch (error) {
-			patchedMentionModules.delete(module);
-			console.warn("[God Console] Could not patch a mention renderer.", error);
+function redrawMessage(entry: WaitingMessage) {
+	const key = `${entry.channelId}:${entry.messageId}`;
+	if (!dispatcher || refreshingMessages.has(key)) return;
+	const messageStore = findByStoreName("MessageStore") ?? findByProps("getMessage", "getMessages");
+	const current = messageStore?.getMessage?.(entry.channelId, entry.messageId) ?? entry.message;
+	if (!current || typeof current !== "object") return;
+	const channelId = current.channel_id ?? current.channelId ?? entry.channelId;
+	const content = typeof current.content === "string" ? current.content : "";
+	const temporary = { ...current, channel_id: channelId, content: `${content}\u200b` };
+	const restored = { ...current, channel_id: channelId, content };
+	refreshingMessages.add(key);
+	try {
+		dispatcher.dispatch({ type: "MESSAGE_UPDATE", message: temporary, otherPluginBypass: true });
+		setTimeout(() => {
+			try {
+				dispatcher?.dispatch({ type: "MESSAGE_UPDATE", message: restored, otherPluginBypass: true });
+			} catch (error) {
+				console.warn("[God Console] Could not refresh a resolved mention.", error);
+			} finally {
+				refreshingMessages.delete(key);
+			}
+		}, 120);
+	} catch (error) {
+		refreshingMessages.delete(key);
+		console.warn("[God Console] Could not refresh a resolved mention.", error);
+	}
+}
+
+function refreshReadyMessages() {
+	for (const [key, entry] of waitingMessages) {
+		if (!entry.userIds.every(isCached)) continue;
+		waitingMessages.delete(key);
+		redrawMessage(entry);
+	}
+}
+
+function processMessage(message: any, channelId?: unknown) {
+	const id = String(message?.id ?? "");
+	const messageChannel = String(message?.channel_id ?? message?.channelId ?? channelId ?? "");
+	if (!id || !messageChannel) return;
+	const key = `${messageChannel}:${id}`;
+	if (refreshingMessages.has(key)) return;
+	const userIds = [...messageMentionIds(message)];
+	if (!userIds.length) {
+		waitingMessages.delete(key);
+		return;
+	}
+	const unresolved = userIds.filter((userId) => !isCached(userId) && !unavailableUsers.has(userId));
+	if (!unresolved.length) {
+		waitingMessages.delete(key);
+		return;
+	}
+
+	waitingMessages.set(key, { channelId: messageChannel, messageId: id, message, userIds });
+	void Promise.all(unresolved.map(resolveUser)).then(refreshReadyMessages);
+}
+
+function handleMessageEvent(event: any) {
+	if (!enabled || !event) return;
+	if (event.type === "CHANNEL_SELECT") {
+		const channelId = event.channelId ?? event.channel_id
+			?? (findByStoreName("SelectedChannelStore") ?? findByProps("getChannelId"))?.getChannelId?.();
+		if (typeof channelId === "string") {
+			const messageStore = findByStoreName("MessageStore") ?? findByProps("getMessage", "getMessages");
+			for (const message of getMessageList(messageStore?.getMessages?.(channelId))) processMessage(message, channelId);
 		}
 	}
-	return installed;
+	const fallbackChannel = event.channelId ?? event.channel_id;
+	if (event.message) processMessage(event.message, fallbackChannel);
+	for (const message of getMessageList(event.messages)) processMessage(message, fallbackChannel);
+}
+
+function clearRuntimeState() {
+	waitingMessages.clear();
+	inFlightUsers.clear();
+	retryAfter.clear();
+	unavailableUsers.clear();
+	for (const timer of retryTimers.values()) clearTimeout(timer);
+	retryTimers.clear();
+	refreshingMessages.clear();
 }
 
 function stopMentionDiscovery() {
 	if (retryTimer) clearInterval(retryTimer);
 	retryTimer = undefined;
+	if (dispatcher) {
+		for (const event of messageEvents) dispatcher.unsubscribe(event, handleMessageEvent);
+		dispatcher.unsubscribe("LOGOUT", clearRuntimeState);
+	}
+	dispatcher = undefined;
 }
 
-function removeMentionPatches() {
+function installMentionListeners() {
+	if (!enabled) return false;
+	const candidate = getDispatcher();
+	if (!candidate) return false;
+	if (dispatcher === candidate) return true;
 	stopMentionDiscovery();
-	for (const unpatch of unpatchMentions.splice(0).reverse()) unpatch();
-	patchedMentionModules = new WeakSet<object>();
+	dispatcher = candidate;
+	for (const event of messageEvents) dispatcher.subscribe(event, handleMessageEvent);
+	dispatcher.subscribe("LOGOUT", clearRuntimeState);
+	handleMessageEvent({ type: "CHANNEL_SELECT" });
+	return true;
 }
 
 export function setValidUserEnabled(value: boolean) {
 	if (enabled === value) return;
 	enabled = value;
 	if (enabled) {
-		installMentionPatches();
-		retryTimer = setInterval(() => {
-			if (enabled) installMentionPatches();
-		}, 5000);
+		getUserStore();
+		installMentionListeners();
+		retryTimer = setInterval(installMentionListeners, 5000);
 		return;
 	}
-	removeMentionPatches();
-	inFlightUsers.clear();
-	retryAfter.clear();
+	stopMentionDiscovery();
+	clearRuntimeState();
 }

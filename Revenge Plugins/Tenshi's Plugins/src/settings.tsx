@@ -17,9 +17,8 @@ import { cancelScheduledAutoFetch, getAutoFetchProgress } from "./autoFetch";
 import { formatAutoFetchProgress } from "./autoFetchGate";
 import { getPendingManagerRestart } from "./restartState";
 import { formatActivityConsoleHeader, formatLatestError, summarizeActivityConsole, type ActivityConsoleAction, type ActivityConsolePhase } from "./activityConsole";
-import { PluginSettingsSection } from "../../shared/pluginSettings";
 
-const { TableRow, TableRowGroup } = findByProps("TableRow", "TableRowGroup");
+const { TableRow, TableRowGroup, TableSwitchRow } = findByProps("TableRow", "TableRowGroup", "TableSwitchRow");
 const showSimpleActionSheet = findByProps("showSimpleActionSheet")?.showSimpleActionSheet;
 const hideActionSheet = findByProps("openLazy", "hideActionSheet")?.hideActionSheet;
 
@@ -1023,7 +1022,14 @@ export default function Settings() {
 					/>
 				)}
 			</TableRowGroup>
-			<PluginSettingsSection id="tenshi-plugins" />
+			<TableRowGroup title="Profile Button">
+				<TableSwitchRow
+					label="Show in Profile"
+					subLabel="Add a button beside your profile controls to open Tenshi's Plugins."
+					value={storage.showInProfile !== false}
+					onValueChange={(value: boolean) => { storage.showInProfile = value; }}
+				/>
+			</TableRowGroup>
 		</RN.ScrollView>
 	);
 }
