@@ -3,14 +3,15 @@ import { FluxDispatcher } from "@vendetta/metro/common";
 import { storage } from "@vendetta/plugin";
 import { instead } from "@vendetta/patcher";
 import { showToast } from "../../shared/toast";
-import { recordMessageDelete, recordMessageUpdate } from "./chatLogger";
-import { canRetainDeletedMessage, isLegacyEditNotice, markDeletedMessage, mergeRetainedMessages, pruneRecentMessageLogs, removeLegacyEditNotices, shouldClearHistoryForNewSession, type RecentMessageLog } from "./messageHistoryPresentation";
+import { forgetDeletedMessage, recordMessageDelete, recordMessageUpdate } from "./chatLogger";
+import { appendEditHistoryVersion, canRetainDeletedMessage, hasEditedTimestamp, isEphemeralMessage, isLegacyEditNotice, markDeletedMessage, mergeRetainedMessages, MAX_EDIT_VERSIONS, removeLegacyEditNotices, shouldClearHistoryForNewSession, truncateEditVersion, type EditHistoryVersion } from "./messageHistoryPresentation";
 
 const channelMessages = findByProps("_channelMessages");
 const messageActions = findByProps("deleteMessage");
 const messageStore = findByProps("getMessage", "getMessages");
 const messageRecords = findByProps("createMessageRecord");
 const userStore = findByProps("getCurrentUser");
+const MAX_EDIT_HISTORY = 2000;
 const HISTORY_STORAGE_KEY = "omniscienceMessageHistory";
 const HISTORY_RUNTIME_KEY = "__omniscienceMessageHistoryRuntime";
 
@@ -38,35 +39,44 @@ type DeletedRecord = {
 	retained: MessageRecord;
 };
 
+type EditRecord = {
+	channelId: string;
+	messageId: string;
+	previous: EditHistoryVersion[];
+	currentContent?: string;
+};
+
 type MessageHistorySettings = {
 	enabled: boolean;
 	keepDeletedMessages: boolean;
+	keepEditHistory: boolean;
 };
 
 type HistoryRuntimeState = {
 	deletedMessages: Map<string, DeletedRecord>;
-	recentLogs: RecentMessageLog[];
+	editHistory: Map<string, EditRecord>;
 	sessionInitialized: boolean;
 };
 
 const globalHistoryRuntime = globalThis as typeof globalThis & { [HISTORY_RUNTIME_KEY]?: HistoryRuntimeState };
 const historyRuntime = globalHistoryRuntime[HISTORY_RUNTIME_KEY] ??= {
 	deletedMessages: new Map(),
-	recentLogs: [],
+	editHistory: new Map(),
 	sessionInitialized: false,
 };
-historyRuntime.recentLogs ??= [];
+historyRuntime.editHistory ??= new Map();
 const deletedMessages = historyRuntime.deletedMessages;
+const editHistory = historyRuntime.editHistory;
 const retainedViews = new Map<string, { original: unknown; revision: number; value: unknown }>();
 const legacyEditNoticeIds = new Set<string>();
 const unpatches: (() => void)[] = [];
-const recentProcessLogKeys = new Map<string, number>();
 let dispatcherPatchInstalled = false;
 let retainedRevision = 0;
 let restoredHistoryAccountId: string | undefined;
 let settings: MessageHistorySettings = {
 	enabled: true,
 	keepDeletedMessages: true,
+	keepEditHistory: true,
 };
 
 function getMessageKey(channelId: string, messageId: string) {
@@ -80,23 +90,7 @@ function getCurrentAccountId() {
 
 function getRetainedMessageLimit() {
 	const limit = Number(storage.messageLoggerLimit);
-	return [100, 500, 1000, 5000].includes(limit) ? limit : 500;
-}
-
-export function recordMessageProcess(log: Omit<RecentMessageLog, "timestamp">) {
-	const recent = pruneRecentMessageLogs(historyRuntime.recentLogs);
-	const timestamp = Date.now();
-	const dedupeKey = [log.operation, log.stage, log.result, log.detail, log.channelId ?? "", log.messageId ?? ""].join(":");
-	const previousTimestamp = recentProcessLogKeys.get(dedupeKey);
-	if (previousTimestamp !== undefined && timestamp - previousTimestamp < 1000) return;
-	recentProcessLogKeys.set(dedupeKey, timestamp);
-	while (recentProcessLogKeys.size > 2000) recentProcessLogKeys.delete(recentProcessLogKeys.keys().next().value!);
-	recent.push({ ...log, timestamp });
-	historyRuntime.recentLogs = recent;
-}
-
-export function getRecentMessageLogs() {
-	return pruneRecentMessageLogs(historyRuntime.recentLogs).sort((left, right) => right.timestamp - left.timestamp);
+	return [100, 512, 1000, 5000].includes(limit) ? limit : 512;
 }
 
 function prepareHistorySession() {
@@ -163,6 +157,7 @@ function serializeRetainedMessage(message: MessageRecord) {
 }
 
 function persistMessageHistory() {
+	storage.messageLoggerEditCount = editHistory.size;
 	if (!storage.messageLoggerKeepAfterRestart) return;
 	const accountId = getCurrentAccountId();
 	if (!accountId) return;
@@ -172,6 +167,14 @@ function persistMessageHistory() {
 			channelId,
 			message: serializeRetainedMessage(original),
 		})),
+		edits: settings.keepEditHistory
+			? [...editHistory.values()].map(({ channelId, messageId, previous, currentContent }) => ({
+				channelId,
+				messageId,
+				previous,
+				currentContent,
+			}))
+			: [],
 	};
 }
 
@@ -202,6 +205,29 @@ function restorePersistedMessageHistory() {
 			}
 		}
 	}
+	if (settings.keepEditHistory && Array.isArray(snapshot.edits)) {
+		for (const entry of snapshot.edits.slice(-MAX_EDIT_HISTORY)) {
+			const channelId = entry?.channelId;
+			const messageId = entry?.messageId ?? entry?.id;
+			const rawVersions = entry?.previous ?? entry?.versions;
+			if (typeof channelId !== "string" || typeof messageId !== "string" || !Array.isArray(rawVersions)) continue;
+			const previous = rawVersions
+				.filter((version: unknown): version is EditHistoryVersion =>
+					typeof version === "object" && version !== null && typeof (version as EditHistoryVersion).content === "string")
+				.slice(-MAX_EDIT_VERSIONS)
+				.map((version: EditHistoryVersion) => ({
+					content: truncateEditVersion(version.content),
+					...(typeof version.timestamp === "string" ? { timestamp: version.timestamp } : {}),
+				}));
+			const currentContent = typeof entry.currentContent === "string"
+				? entry.currentContent
+				: getStoredMessage(channelId, messageId)?.content;
+			const key = getMessageKey(channelId, messageId);
+			if (!previous.length || editHistory.has(key)) continue;
+			rememberMessage(editHistory, key, { channelId, messageId, previous, currentContent }, MAX_EDIT_HISTORY);
+			restored++;
+		}
+	}
 	if (restored) {
 		invalidateRetainedViews();
 		try { messageStore?.emitChange?.(); } catch {}
@@ -216,6 +242,7 @@ function invalidateRetainedViews() {
 }
 
 function getRetainedMessages(channelId: string) {
+	if (!settings.enabled || !settings.keepDeletedMessages) return [];
 	return [...deletedMessages.values()]
 		.filter((entry) => entry.channelId === channelId)
 		.map((entry) => entry.retained);
@@ -242,7 +269,9 @@ function installMessageStorePatches() {
 	}));
 	if (typeof messageStore.getMessage === "function") {
 		unpatches.push(instead("getMessage", messageStore, (args, original) => {
-			const retained = deletedMessages.get(getMessageKey(String(args[0] ?? ""), String(args[1] ?? "")))?.retained;
+			const retained = settings.enabled && settings.keepDeletedMessages
+				? deletedMessages.get(getMessageKey(String(args[0] ?? ""), String(args[1] ?? "")))?.retained
+				: undefined;
 			if (retained) return retained;
 			const message = original(...args);
 			if (isLegacyEditNotice(message)) {
@@ -265,24 +294,12 @@ function createRetainedMessageUpdate(channelId: string, messageId: string) {
 	const key = getMessageKey(channelId, messageId);
 	const existing = deletedMessages.get(key);
 	const original = existing?.original ?? getStoredMessage(channelId, messageId);
-	if (!original) {
-		recordMessageProcess({ operation: "delete", stage: "store-lookup", result: "skipped", detail: "message is not present in the message store", channelId, messageId });
-		return undefined;
-	}
-	if (!canRetainDeletedMessage(original)) {
-		const detail = original.state != null && original.state !== "SENT"
-			? `message state ${String(original.state)} is not retainable`
-			: (Number(original.flags) & 64) !== 0
-				? "ephemeral messages are not retainable"
-				: "message is not eligible for retention";
-		recordMessageProcess({ operation: "delete", stage: "retention-check", result: "skipped", detail, channelId, messageId });
-		return undefined;
-	}
+	if (!original) return undefined;
+	if (!canRetainDeletedMessage(original)) return undefined;
 	if (!existing) {
 		rememberMessage(deletedMessages, key, { channelId, original, retained: markDeletedMessage(original) }, getRetainedMessageLimit());
 		invalidateRetainedViews();
 	}
-	recordMessageProcess({ operation: "delete", stage: "retention-check", result: "success", detail: "message eligible; retained row prepared", channelId, messageId });
 	return {
 		type: "MESSAGE_UPDATE",
 		message: (existing ?? deletedMessages.get(key))!.retained,
@@ -290,34 +307,57 @@ function createRetainedMessageUpdate(channelId: string, messageId: string) {
 	};
 }
 
+function rememberEdit(event: any) {
+	const update = event?.message ?? event;
+	if (!settings.enabled || !settings.keepEditHistory || !hasEditedTimestamp(update) || isEphemeralMessage(update)) return;
+	const channelId = String(update.channel_id ?? update.channelId ?? event?.channel_id ?? event?.channelId ?? "");
+	const messageId = String(update.id ?? event?.id ?? "");
+	if (!channelId || !messageId) return;
+	const key = getMessageKey(channelId, messageId);
+	const original = getStoredMessage(channelId, messageId);
+	if (isEphemeralMessage(original)) return;
+	const content = typeof update.content === "string" ? update.content : undefined;
+	if (content === undefined) return;
+	const existing = editHistory.get(key);
+	const previousContent = existing?.currentContent ?? original?.content;
+	if (typeof previousContent !== "string" || previousContent === content) return;
+	const timestamp = original?.edited_timestamp instanceof Date
+		? original.edited_timestamp.toISOString()
+		: typeof original?.edited_timestamp === "string"
+			? original.edited_timestamp
+			: undefined;
+	const previous = appendEditHistoryVersion(existing?.previous ?? [], previousContent, content, timestamp);
+	if (!previous) return;
+	rememberMessage(editHistory, key, { channelId, messageId, previous, currentContent: content }, MAX_EDIT_HISTORY);
+	persistMessageHistory();
+}
+
 function notifyMessageStore() {
 	try { messageStore?.emitChange?.(); } catch {}
 }
 
 function installDeleteActionPatch() {
-	if (typeof messageActions?.deleteMessage !== "function") {
-		recordMessageProcess({ operation: "delete", stage: "delete-action-hook", result: "failure", detail: "Discord deleteMessage action was not found" });
-		return false;
-	}
+	if (typeof messageActions?.deleteMessage !== "function") return false;
 	unpatches.push(instead("deleteMessage", messageActions, (args, original) => {
 		const channelId = String(args[0] ?? "");
 		const messageId = String(args[1] ?? "");
 		if (!settings.enabled || !settings.keepDeletedMessages || !channelId || !messageId) return original(...args);
 		const key = getMessageKey(channelId, messageId);
 		if (deletedMessages.has(key)) {
-			recordMessageProcess({ operation: "delete", stage: "delete-action", result: "skipped", detail: "message is already retained; no server deletion requested", channelId, messageId });
+			deletedMessages.delete(key);
+			forgetDeletedMessage(channelId, messageId);
+			invalidateRetainedViews();
+			FluxDispatcher.dispatch({ type: "MESSAGE_DELETE", channelId, id: messageId, otherPluginBypass: true });
+			persistMessageHistory();
+			notifyMessageStore();
 			return Promise.resolve();
 		}
 		const originalMessage = getStoredMessage(channelId, messageId);
-		if (!canRetainDeletedMessage(originalMessage)) {
-			recordMessageProcess({ operation: "delete", stage: "delete-action", result: "skipped", detail: "message unavailable or not eligible before delete action", channelId, messageId });
-			return original(...args);
-		}
+		if (!canRetainDeletedMessage(originalMessage)) return original(...args);
 		const retained: DeletedRecord = { channelId, original: originalMessage, retained: markDeletedMessage(originalMessage) };
 		rememberMessage(deletedMessages, key, retained, getRetainedMessageLimit());
 		invalidateRetainedViews();
 		notifyMessageStore();
-		recordMessageProcess({ operation: "delete", stage: "delete-action", result: "success", detail: "message snapshot retained before native delete action", channelId, messageId });
 
 		const rollback = () => {
 			if (deletedMessages.get(key) !== retained) return;
@@ -325,12 +365,10 @@ function installDeleteActionPatch() {
 			invalidateRetainedViews();
 			notifyMessageStore();
 			persistMessageHistory();
-			recordMessageProcess({ operation: "delete", stage: "delete-action", result: "failure", detail: "native delete action failed; tentative retained row rolled back", channelId, messageId });
 		};
 		const complete = (value: any) => {
 			recordMessageDelete({ channelId, id: messageId });
 			persistMessageHistory();
-			recordMessageProcess({ operation: "delete", stage: "delete-action", result: "success", detail: "native delete action completed with retained row", channelId, messageId });
 			return value;
 		};
 		try {
@@ -342,7 +380,6 @@ function installDeleteActionPatch() {
 			throw error;
 		}
 	}));
-	recordMessageProcess({ operation: "delete", stage: "delete-action-hook", result: "success", detail: "Discord deleteMessage action patched" });
 	return true;
 }
 
@@ -364,48 +401,30 @@ function dispatchWithHistory(args: unknown[], original: (...args: any[]) => any)
 	if (event.otherPluginBypass) return original(...args);
 	if (event.type === "MESSAGE_UPDATE") {
 		recordMessageUpdate(event);
+		rememberEdit(event);
 		return original(...args);
 	}
 	if (event.type === "MESSAGE_DELETE" && (!settings.enabled || !settings.keepDeletedMessages)) {
-		recordMessageProcess({
-			operation: "delete",
-			stage: "intercept",
-			result: "skipped",
-			detail: !settings.enabled ? "Omniscience is disabled" : "deleted-message retention is disabled",
-			channelId: String(event.channelId ?? event.channel_id ?? "") || undefined,
-			messageId: String(event.id ?? "") || undefined,
-		});
 		recordMessageDelete(event);
 		return original(...args);
 	}
-	if (event.type === "MESSAGE_DELETE_BULK" && (!settings.enabled || !settings.keepDeletedMessages)) {
-		recordMessageProcess({
-			operation: "delete",
-			stage: "bulk-intercept",
-			result: "skipped",
-			detail: !settings.enabled ? "Omniscience is disabled" : "deleted-message retention is disabled",
-		});
-		return original(...args);
-	}
+	if (event.type === "MESSAGE_DELETE_BULK" && (!settings.enabled || !settings.keepDeletedMessages)) return original(...args);
 
 	if (event.type === "MESSAGE_DELETE" && settings.enabled && settings.keepDeletedMessages) {
 		const channelId = String(event.channelId ?? event.channel_id ?? "");
 		const messageId = String(event.id ?? "");
-		recordMessageProcess({ operation: "delete", stage: "intercept", result: "success", detail: "MESSAGE_DELETE received", channelId: channelId || undefined, messageId: messageId || undefined });
 		if (!channelId || !messageId) return original(...args);
 		recordMessageDelete({ ...event, channelId, id: messageId });
 		const update = createRetainedMessageUpdate(channelId, messageId);
 		if (!update) return original(...args);
 		try {
 			original(update);
-			recordMessageProcess({ operation: "delete", stage: "store-update", result: "success", detail: "retained MESSAGE_UPDATE dispatched", channelId, messageId });
 			persistMessageHistory();
 			return Promise.resolve();
 		} catch (error) {
 			deletedMessages.delete(getMessageKey(channelId, messageId));
 			invalidateRetainedViews();
 			persistMessageHistory();
-			recordMessageProcess({ operation: "delete", stage: "store-update", result: "failure", detail: "dispatcher threw while updating the retained row", channelId, messageId });
 			console.error("[Omniscience] Could not retain the deleted message in chat.", error);
 			return original(...args);
 		}
@@ -414,7 +433,6 @@ function dispatchWithHistory(args: unknown[], original: (...args: any[]) => any)
 	if (event.type === "MESSAGE_DELETE_BULK" && settings.enabled && settings.keepDeletedMessages && Array.isArray(event.ids)) {
 		const channelId = String(event.channelId ?? event.channel_id ?? "");
 		if (!channelId) return original(...args);
-		recordMessageProcess({ operation: "delete", stage: "bulk-intercept", result: "success", detail: `${event.ids.length} delete ID(s) received`, channelId });
 		const remaining: unknown[] = [];
 		for (const rawId of event.ids) {
 			const messageId = String(rawId ?? "");
@@ -430,13 +448,11 @@ function dispatchWithHistory(args: unknown[], original: (...args: any[]) => any)
 			recordMessageDelete({ channelId, id: messageId });
 			try {
 				original(update);
-				recordMessageProcess({ operation: "delete", stage: "store-update", result: "success", detail: "retained MESSAGE_UPDATE dispatched from bulk delete", channelId, messageId });
 				persistMessageHistory();
 			} catch (error) {
 				deletedMessages.delete(getMessageKey(channelId, messageId));
 				invalidateRetainedViews();
 				persistMessageHistory();
-				recordMessageProcess({ operation: "delete", stage: "store-update", result: "failure", detail: "dispatcher threw while updating the retained row", channelId, messageId });
 				console.error("[Omniscience] Could not retain a bulk-deleted message in chat.", error);
 				remaining.push(rawId);
 			}
@@ -450,10 +466,12 @@ function dispatchWithHistory(args: unknown[], original: (...args: any[]) => any)
 export function initializeMessageHistory(pluginSettings: {
 	enabled?: boolean;
 	keepDeletedMessages: boolean;
+	keepEditHistory: boolean;
 }): boolean {
 	settings = {
 		enabled: pluginSettings.enabled !== false,
 		keepDeletedMessages: pluginSettings.keepDeletedMessages,
+		keepEditHistory: pluginSettings.keepEditHistory,
 	};
 
 	if (typeof FluxDispatcher?.dispatch !== "function") {
@@ -473,10 +491,6 @@ export function initializeMessageHistory(pluginSettings: {
 			try {
 				return dispatchWithHistory(args, original);
 			} catch (error) {
-				const event = args[0] as Record<string, any> | undefined;
-				if (event?.type === "MESSAGE_DELETE" || event?.type === "MESSAGE_DELETE_BULK") {
-					recordMessageProcess({ operation: "delete", stage: "dispatcher", result: "failure", detail: "message delete handler threw before processing completed" });
-				}
 				console.error("[Omniscience] Could not update message history.", error);
 				return original(...args);
 			}
@@ -500,13 +514,15 @@ export function setMessageHistoryFeatureEnabled(enabled: boolean) {
 		storage.messageLoggerKeepAfterRestart &&
 		snapshot?.accountId === getCurrentAccountId(),
 	);
-	if (!enabled && !hasSavedHistory && !deletedMessages.size) return;
+	if (!enabled && !hasSavedHistory && !deletedMessages.size && !editHistory.size) return;
 	if (!initializeMessageHistory({
 		enabled,
 		keepDeletedMessages: storage.keepDeletedMessages !== false,
+		keepEditHistory: storage.keepEditHistory !== false,
 	})) {
 		removeMessageHistoryPatch();
 		storage.keepDeletedMessages = false;
+		storage.keepEditHistory = false;
 		showToast("Could not enable Omniscience message history. Check the console for details.");
 	}
 }
@@ -514,19 +530,26 @@ export function setMessageHistoryFeatureEnabled(enabled: boolean) {
 export function updateMessageHistorySettings(patch: Partial<MessageHistorySettings>) {
 	const previous = settings;
 	settings = { ...settings, ...patch };
-	if ((!previous.enabled && settings.enabled) || (!previous.keepDeletedMessages && settings.keepDeletedMessages)) {
+	if (previous.keepEditHistory && !settings.keepEditHistory) {
+		editHistory.clear();
+	}
+	if ((!previous.enabled && settings.enabled) || (!previous.keepDeletedMessages && settings.keepDeletedMessages) || (!previous.keepEditHistory && settings.keepEditHistory)) {
 		restoredHistoryAccountId = undefined;
 		restorePersistedMessageHistory();
 	}
 	persistMessageHistory();
+	if (previous.enabled !== settings.enabled || previous.keepDeletedMessages !== settings.keepDeletedMessages || previous.keepEditHistory !== settings.keepEditHistory) {
+		try { messageStore?.emitChange?.(); } catch {}
+	}
 }
 
 export function setMessageHistoryPersistenceEnabled(enabled: boolean) {
 	if (enabled) persistMessageHistory();
+	else delete storage[HISTORY_STORAGE_KEY];
 }
 
 export function setMessageHistoryLimit(limit: number) {
-	const validLimit = [100, 500, 1000, 5000].includes(limit) ? limit : 500;
+	const validLimit = [100, 512, 1000, 5000].includes(limit) ? limit : 512;
 	let changed = false;
 	while (deletedMessages.size > validLimit) {
 		deletedMessages.delete(deletedMessages.keys().next().value!);
@@ -540,7 +563,20 @@ export function setMessageHistoryLimit(limit: number) {
 }
 
 export function hasMessageHistory(): boolean {
-	return deletedMessages.size > 0;
+	return deletedMessages.size > 0 || editHistory.size > 0;
+}
+
+export function getMessageEditHistory(channelId: string, messageId: string): EditHistoryVersion[] {
+	return editHistory.get(getMessageKey(channelId, messageId))?.previous ?? [];
+}
+
+export function getMessageEditCount() {
+	return editHistory.size;
+}
+
+export function setEditHistoryEnabled(enabled: boolean) {
+	storage.keepEditHistory = enabled;
+	updateMessageHistorySettings({ keepEditHistory: enabled });
 }
 
 export function isRetainedDeletedMessage(channelId: string, messageId: string): boolean {
@@ -563,6 +599,7 @@ export function clearMessageHistory(removeDeletedMessagesFromChat = false) {
 		}
 	}
 	deletedMessages.clear();
+	editHistory.clear();
 	invalidateRetainedViews();
 	delete storage[HISTORY_STORAGE_KEY];
 }

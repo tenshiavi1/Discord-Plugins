@@ -1,4 +1,4 @@
-const SETTINGS_VERSION = 6;
+const SETTINGS_VERSION = 7;
 
 export function migrateOmniscienceSettings(storage: Record<string, unknown>) {
 	if (storage.omniscienceSettingsVersion === SETTINGS_VERSION) return;
@@ -9,24 +9,13 @@ export function migrateOmniscienceSettings(storage: Record<string, unknown>) {
 		storage.keepDeletedMessages ??= false;
 	}
 	delete storage.enableMessageHistory;
-	delete storage.keepEditHistory;
+	if (storage.keepEditHistory === undefined && storage.messageLoggerShowEditHistory !== undefined) {
+		storage.keepEditHistory = storage.messageLoggerShowEditHistory;
+	}
 	delete storage.messageLoggerShowEditHistory;
+	storage.keepEditHistory ??= true;
 	delete storage.messageLoggerEditCount;
-	for (const key of ["messageLoggerCache", "messageLoggerDeletedCache"]) {
-		if (!Array.isArray(storage[key])) continue;
-		storage[key] = (storage[key] as Record<string, unknown>[]).map((entry) => {
-			const cleaned = { ...entry };
-			delete cleaned.editHistory;
-			return cleaned;
-		});
-	}
-	const messageHistory = storage.omniscienceMessageHistory;
-	if (messageHistory && typeof messageHistory === "object" && !Array.isArray(messageHistory)) {
-		const cleaned: Record<string, unknown> = { ...messageHistory };
-		delete cleaned.edits;
-		storage.omniscienceMessageHistory = cleaned;
-	}
-	if (Number(storage.messageLoggerLimit) === 512) storage.messageLoggerLimit = 500;
+	if (Number(storage.messageLoggerLimit) === 500) storage.messageLoggerLimit = 512;
 	for (const key of [
 		"dmLoggerEnabled",
 		"dmLoggerSendToChannel",

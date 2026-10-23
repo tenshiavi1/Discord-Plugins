@@ -1,5 +1,41 @@
 import { expect, test } from "bun:test";
-import { canRetainDeletedMessage, getDeletedMessageHighlight, getMessageHighlightType, isLegacyEditNotice, markDeletedMessage, mergeRetainedMessages, pruneRecentMessageLogs, removeLegacyEditNotices, resolveMessageRowGenerator, shouldClearHistoryForNewSession, type RecentMessageLog } from "./messageHistoryPresentation";
+import { appendEditHistoryVersion, canRetainDeletedMessage, getDeletedMessageHighlight, getMessageHighlightType, hasEditedTimestamp, isEphemeralMessage, isLegacyEditNotice, markDeletedMessage, mergeRetainedMessages, prependEditHistory, removeLegacyEditNotices, resolveMessageRowGenerator, shouldClearHistoryForNewSession, truncateEditVersion } from "./messageHistoryPresentation";
+
+test("renders previous edits as plain native quote nodes", () => {
+	const current = [{ type: "text", content: "new text" }];
+	const result = prependEditHistory(current, [{ content: "old text" }, { content: "older text" }]) as any[];
+
+	expect(result).toHaveLength(2);
+	expect(result[0].type).toBe("blockQuote");
+	expect(result[0].content[0].content[0].content[0].content).toBe("old text");
+	expect(result[0].content[1].type).toBe("br");
+	expect(result[0].content[2].content[0].content[0].content).toBe("older text");
+	expect(result[1]).toBe(current[0]);
+});
+
+test("does not alter content without prior edits and caps old text", () => {
+	const content = [{ type: "text", content: "current" }];
+	expect(prependEditHistory(content, [])).toBe(content);
+	expect(truncateEditVersion("short text")).toBe("short text");
+	expect(truncateEditVersion("x".repeat(4_001))).toBe(`${"x".repeat(4_000)}\u2026`);
+});
+
+test("stores only changed prior values and retains the latest ten versions", () => {
+	const versions = Array.from({ length: 10 }, (_, index) => ({ content: `v${index}` }));
+	expect(appendEditHistoryVersion(versions, "same", "same")).toBeUndefined();
+	const next = appendEditHistoryVersion(versions, "v10", "current", "2026-10-23T00:00:00Z");
+	expect(next).toHaveLength(10);
+	expect(next?.[0].content).toBe("v1");
+	expect(next?.[9]).toEqual({ content: "v10", timestamp: "2026-10-23T00:00:00Z" });
+});
+
+test("identifies real edits and rejects ephemeral messages", () => {
+	expect(hasEditedTimestamp({ edited_timestamp: "2026-10-23T00:00:00Z" })).toBe(true);
+	expect(hasEditedTimestamp({ editedTimestamp: "2026-10-23T00:00:00Z" })).toBe(true);
+	expect(hasEditedTimestamp({ edited_timestamp: null })).toBe(false);
+	expect(isEphemeralMessage({ flags: 64 })).toBe(true);
+	expect(isEphemeralMessage({ flags: 0 })).toBe(false);
+});
 
 test("resolves a row generator from its default module export", () => {
 	class RowGenerator {
@@ -39,22 +75,6 @@ test("filters legacy edit notices from an immutable message collection", () => {
 
 	expect(result._array).toEqual([realMessage]);
 	expect(source._array).toEqual([realMessage, legacyNotice]);
-});
-
-test("shows only message logs younger than five minutes", () => {
-	const now = 1_000_000;
-	const log = (timestamp: number): RecentMessageLog => ({
-		timestamp,
-		operation: "delete",
-		stage: "retention-check",
-		result: "success",
-		detail: "message retained",
-		channelId: "channel-id",
-		messageId: String(timestamp),
-	});
-
-	expect(pruneRecentMessageLogs([log(now - 299_999), log(now - 300_000), log(now + 1)], now)).toEqual([log(now - 299_999)]);
-	expect(log(now)).not.toHaveProperty("content");
 });
 
 test("keeps deleted rows red when mention highlighting is disabled", () => {

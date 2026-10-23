@@ -11,12 +11,12 @@ import { removeMessageHistoryPatch, setMessageHistoryFeatureEnabled } from "./me
 import { removeMessageHighlightPatch, setMessageHighlightOptions } from "./messageHighlights";
 import { setServerInfoFeatureEnabled } from "./serverInfo";
 import { migrateOmniscienceSettings } from "./settingsMigration";
-import { registerMessageLogCommand } from "./messageLogCommand";
 
 const registerCrashGuard = () => installPluginCrashGuard("Omniscience", storage, {
   features: [
     { storageKey: "wordTrackerEnabled", patterns: [/onMessage|track.?message|keyword/i] },
     { storageKey: "keepDeletedMessages", patterns: [/MESSAGE_DELETE|deleted.?message/i] },
+    { storageKey: "keepEditHistory", patterns: [/MESSAGE_UPDATE|edit.?history/i] },
     { storageKey: "enableServerInfo", patterns: [/server.?info|ServerInfoSheet/i] },
     { storageKey: "enabled", patterns: [/installChatLogger|Omniscience.*settings/i] },
     { storageKey: "showInSettings", patterns: [/registerPluginSettingsShortcut|pluginSettings/i] },
@@ -63,6 +63,7 @@ const defaults = {
   ignoredUserIds: "",
   showInSettings: false,
   keepDeletedMessages: true,
+  keepEditHistory: true,
   messageHighlightEnabled: true,
   messageHighlightThickness: 2,
   messageHighlightPingColor: "default",
@@ -84,17 +85,16 @@ storage.keywords = [...new Set(storage.keywords.map((keyword: string) => keyword
 let unsubMessage: (() => void) | null = null;
 let unregisterSettingsShortcut: (() => void) | undefined;
 let removeChatLogger: (() => void) | undefined;
-let unregisterMessageLogCommand: (() => void) | undefined;
 
 export default {
   onLoad() {
     removeCrashGuard ??= registerCrashGuard();
     removeChatLogger = installChatLogger();
-    unregisterMessageLogCommand = registerMessageLogCommand();
-    setMessageHistoryFeatureEnabled(storage.enabled !== false && storage.keepDeletedMessages !== false);
+    setMessageHistoryFeatureEnabled(storage.enabled !== false && (storage.keepDeletedMessages !== false || storage.keepEditHistory !== false));
     setMessageHighlightOptions({
       enabled: storage.enabled !== false && storage.messageHighlightEnabled !== false,
 	  deletedEnabled: storage.enabled !== false && storage.keepDeletedMessages !== false,
+    historyEnabled: storage.enabled !== false && storage.keepEditHistory !== false,
       thickness: Number(storage.messageHighlightThickness) || 2,
       pingColor: String(storage.messageHighlightPingColor ?? "default"),
       deletedColor: String(storage.messageHighlightDeletedColor ?? "default"),
@@ -335,8 +335,6 @@ export default {
     removeCrashGuard = undefined;
     removeChatLogger?.();
     removeChatLogger = undefined;
-    unregisterMessageLogCommand?.();
-    unregisterMessageLogCommand = undefined;
     removeMessageHistoryPatch();
     removeMessageHighlightPatch();
     setServerInfoFeatureEnabled(false);

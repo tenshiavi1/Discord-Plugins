@@ -1,12 +1,46 @@
-export type RecentMessageLog = {
-	timestamp: number;
-	operation: "delete";
-	stage: string;
-	result: "success" | "skipped" | "failure";
-	detail: string;
-	channelId?: string;
-	messageId?: string;
-};
+export type EditHistoryVersion = { content: string; timestamp?: string };
+
+export const MAX_EDIT_VERSION_LENGTH = 4000;
+export const MAX_EDIT_VERSIONS = 10;
+
+export function hasEditedTimestamp(message: any) {
+	return Boolean(message?.edited_timestamp ?? message?.editedTimestamp);
+}
+
+export function isEphemeralMessage(message: any) {
+	return ((Number(message?.flags) || 0) & 64) !== 0;
+}
+
+export function truncateEditVersion(content: string) {
+	return content.length > MAX_EDIT_VERSION_LENGTH
+		? `${content.slice(0, MAX_EDIT_VERSION_LENGTH)}\u2026`
+		: content;
+}
+
+export function appendEditHistoryVersion(
+	versions: readonly EditHistoryVersion[],
+	previousContent: string,
+	currentContent: string,
+	timestamp?: string,
+) {
+	if (previousContent === currentContent) return undefined;
+	return [...versions, {
+		content: truncateEditVersion(previousContent),
+		...(timestamp ? { timestamp } : {}),
+	}].slice(-MAX_EDIT_VERSIONS);
+}
+
+export function prependEditHistory(content: unknown, versions: readonly EditHistoryVersion[]) {
+	if (!Array.isArray(content) || versions.length === 0) return content;
+	const lines = versions.flatMap((version, index) => [
+		...(index ? [{ type: "br" }] : []),
+		{
+			type: "subtext",
+			content: [{ type: "s", content: [{ type: "text", content: version.content || "(empty)" }] }],
+		},
+	]);
+	return [{ type: "blockQuote", content: lines }, ...content];
+}
 
 export function resolveMessageRowGenerator(module: any) {
 	const candidate = module?.default ?? module?.RowGenerator ?? module;
@@ -32,11 +66,6 @@ export function removeLegacyEditNotices<T>(collection: T): T {
 	const base = clone ? clone.call(source) : source;
 	if (typeof base.mutate !== "function") return collection;
 	return base.mutate((copy) => { copy._array = retained; }, true) as T;
-}
-
-export const RECENT_MESSAGE_LOG_WINDOW_MS = 5 * 60 * 1000;
-export function pruneRecentMessageLogs(logs: readonly RecentMessageLog[], now = Date.now()) {
-	return logs.filter((log) => now >= log.timestamp && now - log.timestamp < RECENT_MESSAGE_LOG_WINDOW_MS);
 }
 
 export function getDeletedMessageHighlight(enabled: boolean, color: string, thickness: number) {

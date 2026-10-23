@@ -1,13 +1,13 @@
 import { findByProps } from "../../compat";
 import { storage } from "@vendetta/plugin";
 import { toEmbedTimestamp } from "./logFormatting";
-import { canRetainDeletedMessage } from "./messageHistoryPresentation";
+import { canRetainDeletedMessage, isEphemeralMessage } from "./messageHistoryPresentation";
 
 const FluxDispatcher = findByProps("dispatch", "subscribe", "unsubscribe");
 const snowflakeUtils = findByProps("extractTimestamp");
 const MAX_CACHED_MESSAGES = 500;
 const MAX_DELETED_MESSAGES = 5000;
-const MESSAGE_LOG_LIMITS = [100, 500, 1000, MAX_DELETED_MESSAGES];
+const MESSAGE_LOG_LIMITS = [100, 512, 1000, MAX_DELETED_MESSAGES];
 const MESSAGE_HISTORY_CLEANUP_KEY = "__omniscienceMessageHistoryCleanup";
 const globalHistoryState = globalThis as typeof globalThis & {
   [MESSAGE_HISTORY_CLEANUP_KEY]?: () => void;
@@ -30,7 +30,7 @@ type DeletedMessage = CachedMessage & { deletedAt: string };
 
 for (const [key, value] of Object.entries({
   messageLoggerKeepAfterRestart: false,
-  messageLoggerLimit: 500,
+  messageLoggerLimit: 512,
   messageLoggerCache: [],
   messageLoggerDeletedCache: [],
 })) {
@@ -80,7 +80,7 @@ let deletedMessages = storage.messageLoggerKeepAfterRestart
 
 function getMessageLogLimit() {
   const configured = Number(storage.messageLoggerLimit);
-  return MESSAGE_LOG_LIMITS.includes(configured) ? configured : 500;
+  return MESSAGE_LOG_LIMITS.includes(configured) ? configured : 512;
 }
 
 function persistMessageHistory() {
@@ -133,7 +133,7 @@ export function setMessageLoggerKeepAfterRestart(enabled: boolean) {
 }
 
 export function setMessageLoggerLimit(limit: number) {
-  storage.messageLoggerLimit = MESSAGE_LOG_LIMITS.includes(limit) ? limit : 500;
+  storage.messageLoggerLimit = MESSAGE_LOG_LIMITS.includes(limit) ? limit : 512;
   deletedMessages = deletedMessages.slice(-getMessageLogLimit());
   persistMessageHistory();
 }
@@ -156,6 +156,13 @@ export function clearDeletedMessageHistory() {
   }
   cachedMessages = [];
   deletedMessages = [];
+  persistMessageHistory();
+}
+
+export function forgetDeletedMessage(channelId: string, messageId: string) {
+  deletedMessages = deletedMessages.filter(
+    (message) => message.channelId !== channelId || message.id !== messageId,
+  );
   persistMessageHistory();
 }
 
@@ -269,7 +276,7 @@ function makeCachedMessage(
 function onMessageCreate(event: any) {
   if (storage.enabled === false || event?.otherPluginBypass) return;
   const message = event?.message ?? event;
-  if (!message || typeof message.id !== "string") return;
+  if (!message || typeof message.id !== "string" || isEphemeralMessage(message)) return;
   const channelId = String(
     message.channel_id ??
       message.channelId ??
@@ -293,6 +300,7 @@ function onMessageUpdate(event: any) {
   const message = event?.message;
   if (
     !message?.edited_timestamp ||
+    isEphemeralMessage(message) ||
     (typeof message.content !== "string" &&
       !Array.isArray(message.attachments) &&
       !Array.isArray(message.embeds))
@@ -305,6 +313,7 @@ function onMessageUpdate(event: any) {
   if (!channelId || !messageId) return;
 
   const cached = findCachedMessage(channelId, messageId);
+  if (cached && isEphemeralMessage(cached)) return;
   const nextContent = getMessageContent(message, cached);
   const originalContent = cached
     ? [cached.content, ...cached.attachments, ...cached.embeds]

@@ -1,13 +1,14 @@
 import { ReactNative as RN } from "@vendetta/metro/common";
 import { after } from "@vendetta/patcher";
 import { find, findByProps } from "../../compat";
-import { isRetainedDeletedMessage, recordMessageProcess } from "./messageHistory";
-import { getDeletedMessageHighlight, getMessageHighlightType, resolveMessageRowGenerator } from "./messageHistoryPresentation";
+import { getMessageEditHistory, isRetainedDeletedMessage } from "./messageHistory";
+import { getDeletedMessageHighlight, getMessageHighlightType, isEphemeralMessage, prependEditHistory, resolveMessageRowGenerator } from "./messageHistoryPresentation";
 
 type HighlightColor = string;
 type HighlightOptions = {
 	enabled: boolean;
 	deletedEnabled: boolean;
+	historyEnabled: boolean;
 	thickness: number;
 	pingColor: HighlightColor;
 	deletedColor: HighlightColor;
@@ -32,6 +33,7 @@ const rememberedRows = new Map<string, { channelId: string; message: any }>();
 let options: HighlightOptions = {
 	enabled: false,
 	deletedEnabled: false,
+	historyEnabled: false,
 	thickness: 2,
 	pingColor: "default",
 	deletedColor: "default",
@@ -84,18 +86,16 @@ function highlightRow(args: any[], result: any) {
 	const channelId = String(source.channel_id ?? source.channelId ?? message.channel_id ?? message.channelId ?? "");
 	const messageId = String(source.id ?? message.id ?? "");
 	if (!channelId || !messageId) return result;
-	const next = result;
-	const isDeleted = isRetainedDeletedMessage(channelId, messageId) || Boolean(message.was_deleted);
-	if (isDeleted) {
-		recordMessageProcess({
-			operation: "delete",
-			stage: "row-render",
-			result: options.deletedEnabled ? "success" : "skipped",
-			detail: options.deletedEnabled ? "retained message row reached the renderer" : "deleted-row styling is disabled",
-			channelId,
-			messageId,
-		});
+	let next = result;
+	if (options.historyEnabled && !isEphemeralMessage(source) && !isEphemeralMessage(message)) {
+		const versions = getMessageEditHistory(channelId, messageId);
+		const content = prependEditHistory(message.content, versions);
+		if (content !== message.content) {
+			next = { ...next, message: { ...message, content } };
+			rememberRow(channelId, source);
+		}
 	}
+	const isDeleted = isRetainedDeletedMessage(channelId, messageId) || Boolean(message.was_deleted);
 	const highlightType = getMessageHighlightType(
 		options.deletedEnabled,
 		isDeleted,
@@ -154,7 +154,7 @@ function installRowPatch() {
 }
 
 function retryRowPatch() {
-	if (unpatch || !(options.enabled || options.deletedEnabled)) return;
+	if (unpatch || !(options.enabled || options.deletedEnabled || options.historyEnabled)) return;
 	if (installRowPatch()) {
 		for (const unsubscribe of retryUnsubscribers.splice(0)) unsubscribe();
 	}
@@ -191,8 +191,8 @@ export function setMessageHighlightOptions(next: Partial<HighlightOptions>) {
 		...next,
 		thickness: Math.max(1, Math.min(4, Math.floor(Number(next.thickness ?? options.thickness) || 1))),
 	};
-	if ((options.enabled || options.deletedEnabled) && !unpatch && !installRowPatch()) watchForRowGenerator();
-	if (!options.enabled && !options.deletedEnabled && unpatch) {
+	if ((options.enabled || options.deletedEnabled || options.historyEnabled) && !unpatch && !installRowPatch()) watchForRowGenerator();
+	if (!options.enabled && !options.deletedEnabled && !options.historyEnabled && unpatch) {
 		unpatch();
 		unpatch = undefined;
 	}
