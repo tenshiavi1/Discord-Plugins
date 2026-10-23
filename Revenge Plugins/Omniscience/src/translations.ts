@@ -293,7 +293,7 @@ function translateMenuTree(tree: any, props: any, message: any): any {
 				const isTranslated = wanted(String(message.id));
 				const row = React.cloneElement(template, {
 					key: MENU_ACTION_KEY,
-					label: isTranslated ? "Show original" : "Translate",
+					label: isTranslated ? "Show Original" : "Translate",
 					arrow: false,
 					variant: undefined,
 					onPress: () => {

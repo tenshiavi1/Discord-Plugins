@@ -146,14 +146,14 @@ function TranslationPreview({ enabled }: { enabled: boolean }) {
 			) : message}
 			{(watchedMenu || menuOpen) ? (
 				<RN.View style={{ marginHorizontal: 14, marginBottom: 10, padding: 8, borderRadius: 14, backgroundColor: "#232428" }}>
-					{["Reply", "Copy Text", done ? "Show original" : "Translate"].map((label) => (
+					{["Reply", "Copy Text", done ? "Show Original" : "Translate"].map((label) => (
 						<Press key={label} accessibilityRole="button" onPress={() => {
-							if (label === "Translate" || label === "Show original") {
+							if (label === "Translate" || label === "Show Original") {
 								setManualDone(label === "Translate");
 								setMenuOpen(false);
 							}
 						}} style={{ minHeight: 42, flexDirection: "row", alignItems: "center", gap: 12, paddingHorizontal: 10 }}>
-							<Icon name={label === "Translate" || label === "Show original" ? "LanguageIcon" : "ReplyIcon"} fallback={label === "Translate" ? "文" : "↶"} />
+							<Icon name={label === "Translate" || label === "Show Original" ? "LanguageIcon" : "ReplyIcon"} fallback={label === "Translate" ? "文" : "↶"} />
 							<Text style={{ color: "#f2f3f5", fontSize: 14 }}>{label}</Text>
 						</Press>
 					))}
@@ -243,7 +243,7 @@ export default function TranslateMessagesSettings() {
 			<Stack spacing={8}>
 				<TableRowGroup title="Translate Messages">
 					<TableSwitchRow
-						label="Enable translation"
+						label="Enable Translation"
 						subLabel="Translate messages in your language, with a hold-menu option for individual messages."
 						value={enabled}
 						onValueChange={(value: boolean) => update({ translateMessagesEnabled: value })}
@@ -260,20 +260,20 @@ export default function TranslateMessagesSettings() {
 				<TableRowGroup title="Preview">
 					<RN.View style={{ padding: 8 }}><TranslationPreview enabled={enabled} /></RN.View>
 				</TableRowGroup>
-				<TableRowGroup title="When to translate">
+				<TableRowGroup title="When to Translate">
 					<ChoiceRow selected={mode === "auto"} label="Automatically" description="Translate messages on screen that are in another language." onPress={() => choose("translateMessagesMode", "auto")} />
-					<ChoiceRow selected={mode === "manual"} label="Only when you ask" description="Hold a message and choose Translate. No other messages are sent." onPress={() => choose("translateMessagesMode", "manual")} />
+					<ChoiceRow selected={mode === "manual"} label="Only When You Ask" description="Hold a message and choose Translate. No other messages are sent." onPress={() => choose("translateMessagesMode", "manual")} />
 				</TableRowGroup>
-				<TableRowGroup title="Translate into">
-					<ChoiceRow selected={target === "discord"} label="Discord's language" description="Uses the language selected in Discord settings." onPress={() => choose("translateMessagesTarget", "discord")} />
-					<ChoiceRow selected={target === "phone"} label="Your phone's language" description="Uses the system language when available." onPress={() => choose("translateMessagesTarget", "phone")} />
+				<TableRowGroup title="Translate Into">
+					<ChoiceRow selected={target === "discord"} label="Discord's Language" description="Uses the language selected in Discord settings." onPress={() => choose("translateMessagesTarget", "discord")} />
+					<ChoiceRow selected={target === "phone"} label="Your Phone's Language" description="Uses the system language when available." onPress={() => choose("translateMessagesTarget", "phone")} />
 				</TableRowGroup>
 				<TableRowGroup title="Display">
-					<TableSwitchRow label="Show the original language" subLabel="Add a small language note below translated text." value={showLanguage} onValueChange={(value: boolean) => update({ translateMessagesShowLanguage: value })} />
-					<TableSwitchRow label="Show the original text" subLabel="Add the untranslated message below the translation." value={showOriginal} onValueChange={(value: boolean) => update({ translateMessagesShowOriginal: value })} />
+					<TableSwitchRow label="Show the Original Language" subLabel="Add a small language note below translated text." value={showLanguage} onValueChange={(value: boolean) => update({ translateMessagesShowLanguage: value })} />
+					<TableSwitchRow label="Show the Original Text" subLabel="Add the untranslated message below the translation." value={showOriginal} onValueChange={(value: boolean) => update({ translateMessagesShowOriginal: value })} />
 				</TableRowGroup>
 				<TableRowGroup title="Manage">
-					<TableRow label="Clear saved translations" subLabel={`${status.cacheSize} stored result${status.cacheSize === 1 ? "" : "s"} on this phone.`} trailing={<TableRow.Arrow />} disabled={!status.cacheSize} onPress={clear} />
+					<TableRow label="Clear Saved Translations" subLabel={`${status.cacheSize} stored result${status.cacheSize === 1 ? "" : "s"} on this phone.`} trailing={<TableRow.Arrow />} disabled={!status.cacheSize} onPress={clear} />
 				</TableRowGroup>
 				<RN.View style={{ paddingHorizontal: 12, paddingVertical: 6 }}>
 					<Text style={{ color: "#949ba4", fontSize: 12, lineHeight: 17 }}>

@@ -1443,7 +1443,7 @@ function MessageHighlightSettings({
   return (
     <TableRowGroup title="Message Highlights">
       <TableSwitchRow
-        label="Enable message highlights"
+        label="Enable Message Highlights"
         subLabel="Highlight replies and mentions, plus deleted messages retained in chat."
         disabled={storage.enabled === false}
         value={enabled}
@@ -1486,7 +1486,7 @@ function MessageHighlightSettings({
           />
         </RN.View>
         <HighlightColorPicker
-          title="Replies and mentions"
+          title="Replies and Mentions"
           value={pingValue}
           choices={HIGHLIGHT_PING_CHOICES}
           fallback="#f0b232"
@@ -1495,7 +1495,7 @@ function MessageHighlightSettings({
           onFallback={() => openHexFallback("messageHighlightPingColor")}
         />
         <HighlightColorPicker
-          title="Deleted messages"
+          title="Deleted Messages"
           value={deletedValue}
           choices={HIGHLIGHT_DELETED_CHOICES}
           fallback="#f23f43"
@@ -1536,7 +1536,7 @@ function MessageHighlightSettings({
         ) : null}
       </RN.View>
       <TableRow
-        label="Reset to defaults"
+        label="Reset to Defaults"
         subLabel="Use a 4 dp bar, yellow for replies and mentions, and red for deleted messages."
         trailing={
           <Text
@@ -1774,9 +1774,9 @@ export function DeletedMessagesSettings() {
           />
         </TableRowGroup>
 
-        <TableRowGroup title="Edited messages">
+        <TableRowGroup title="Edited Messages">
           <TableSwitchRow
-            label="Show edit history"
+            label="Show Edit History"
             subLabel="What a message said before it was edited, faded and crossed out above it. Up to 10 versions each."
             value={storage.keepEditHistory !== false}
             onValueChange={(value: boolean) => {
@@ -1793,7 +1793,7 @@ export function DeletedMessagesSettings() {
 
         <TableRowGroup title="Storage">
           <TableSwitchRow
-            label="Keep after restarting"
+            label="Keep After Restarting"
             subLabel="Deleted and edited messages survive closing Discord. Saved only on this phone, for this account."
             value={keepAfterRestart}
             onValueChange={(value: boolean) => {
@@ -1804,7 +1804,7 @@ export function DeletedMessagesSettings() {
           />
         </TableRowGroup>
 
-        <TableRowGroup title="Keep up to">
+        <TableRowGroup title="Retention Limit">
           <RN.View style={{ paddingHorizontal: 12, paddingVertical: 10 }}>
             <MessageLimitChoice
               value={limit}
@@ -1821,7 +1821,7 @@ export function DeletedMessagesSettings() {
         {hasStoredHistory && (
           <TableRowGroup title="Manage">
             <TableRow
-              label="Clear kept messages"
+              label="Clear Kept Messages"
               subLabel="Remove every deleted message and edit history kept from chat and this phone."
               trailing={<TableRow.Arrow />}
               onPress={confirmClear}
@@ -1864,7 +1864,7 @@ export default function Settings() {
             }}
           />
           <TableSwitchRow
-            label="Keep deleted messages"
+            label="Keep Deleted Messages"
             subLabel="Deleted messages stay in chat, outlined in red; edits show earlier text above the message."
             value={storage.keepDeletedMessages !== false}
             onValueChange={(value: boolean) => {
@@ -1879,7 +1879,7 @@ export default function Settings() {
             }}
           />
           <TableSwitchRow
-            label="Enable server info"
+            label="Enable Server Info"
             subLabel="Add a Server Info action to server icons in the server list."
             value={storage.enableServerInfo !== false}
             onValueChange={(value: boolean) => {
@@ -1905,21 +1905,21 @@ export default function Settings() {
             }
           />
           <TableRow
-            label="Device Indiciator"
+            label="Device Indicators"
             subLabel="Show which devices people are using next to their names."
             trailing={<TableRow.Arrow />}
             onPress={() =>
-              openSettingsPage(navigation, "Device Indiciator", DeviceIndicatorSettings)
+              openSettingsPage(navigation, "Device Indicators", DeviceIndicatorSettings)
             }
           />
           <TableRow
-            label="Deleted Messages"
+            label="Message History"
             subLabel="Edit history, storage, deleted-message retention, and highlight options."
             trailing={<TableRow.Arrow />}
             onPress={() =>
               openSettingsPage(
                 navigation,
-                "Deleted Messages",
+                "Message History",
                 DeletedMessagesSettings,
               )
             }

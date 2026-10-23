@@ -154,10 +154,10 @@ function DevicePreview({ enabled, options }: { enabled: boolean; options: Record
 				<PreviewSegment value={screen} options={SCREENS} onChange={setScreen} />
 				{enabled ? <Press accessibilityRole="button" accessibilityHint="Change Alex's devices" onPress={() => setDemo((value) => (value + 1) % DEMOS.length)} style={{ minHeight: 36, flexDirection: "row", alignItems: "center", gap: 6, paddingHorizontal: 10, borderRadius: 18, backgroundColor: "#4e505899" }}>
 					<Icon name="LaptopPhoneIcon" fallback="▯" />
-					<Text style={{ color: "#f2f3f5", fontSize: 12, fontWeight: "600" }}>Change devices</Text>
+					<Text style={{ color: "#f2f3f5", fontSize: 12, fontWeight: "600" }}>Change Devices</Text>
 				</Press> : null}
 			</RN.View>
-			<Text style={{ color: "#949ba4", fontSize: 12 }}>Alex is on: {Object.keys(clients).map((name) => `${name} (${clients[name]})`).join(", ")}</Text>
+			<Text style={{ color: "#949ba4", fontSize: 12 }}>Alex is using: {Object.keys(clients).map((name) => `${name[0].toUpperCase()}${name.slice(1)} (${clients[name][0].toUpperCase()}${clients[name].slice(1)})`).join(", ")}</Text>
 		</RN.View>
 	);
 }
@@ -187,9 +187,9 @@ export default function DeviceIndicatorSettings() {
 	return (
 		<ScrollView style={{ flex: 1 }} contentContainerStyle={{ padding: 10 }}>
 			<Stack spacing={8}>
-				<TableRowGroup title="Device Indiciator">
+				<TableRowGroup title="Device Indicators">
 					<TableSwitchRow
-						label="Enable device indicators"
+						label="Enable Device Indicators"
 						subLabel="Show which devices people are using next to their names."
 						value={enabled}
 						onValueChange={(value: boolean) => update({ deviceIndicatorsEnabled: value })}
@@ -198,13 +198,13 @@ export default function DeviceIndicatorSettings() {
 				<TableRowGroup title="Preview">
 					<RN.View style={{ padding: 8 }}><DevicePreview enabled={enabled} options={options} /></RN.View>
 				</TableRowGroup>
-				<TableRowGroup title="Show icons">
+				<TableRowGroup title="Show Icons">
 					<TableSwitchRow disabled={!enabled} label="In DMs" subLabel="Next to the name at the top of a direct message." value={options.dmHeader} onValueChange={(value: boolean) => update({ deviceIndicatorDmHeader: value })} />
-					<TableSwitchRow disabled={!enabled} label="In lists" subLabel="Member list, friends, DM list, and voice channels." value={options.lists} onValueChange={(value: boolean) => update({ deviceIndicatorLists: value })} />
-					<TableSwitchRow disabled={!enabled} label="On profiles" subLabel="Next to the name on a profile." value={options.profiles} onValueChange={(value: boolean) => update({ deviceIndicatorProfiles: value })} />
+					<TableSwitchRow disabled={!enabled} label="In Lists" subLabel="Show indicators in member and friend lists, DM lists, and voice channels." value={options.lists} onValueChange={(value: boolean) => update({ deviceIndicatorLists: value })} />
+					<TableSwitchRow disabled={!enabled} label="On Profiles" subLabel="Next to the name on a profile." value={options.profiles} onValueChange={(value: boolean) => update({ deviceIndicatorProfiles: value })} />
 				</TableRowGroup>
 				<TableRowGroup title="Avatars">
-					<TableSwitchRow disabled={!enabled} label="Hide the phone badge" subLabel="Use a plain status dot when the phone is the only active device." value={options.hideMobileBadge} onValueChange={(value: boolean) => update({ deviceIndicatorHideMobileBadge: value })} />
+					<TableSwitchRow disabled={!enabled} label="Hide the Phone Badge" subLabel="Use a plain status dot when the phone is the only active device." value={options.hideMobileBadge} onValueChange={(value: boolean) => update({ deviceIndicatorHideMobileBadge: value })} />
 				</TableRowGroup>
 				<RN.View style={{ paddingHorizontal: 12, paddingVertical: 6 }}><Text style={{ color: "#949ba4", fontSize: 12 }}>Device status is read from Discord's local presence and session stores.</Text></RN.View>
 			</Stack>

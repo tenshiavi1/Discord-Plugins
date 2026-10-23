@@ -3,6 +3,7 @@ import { clipboard, React, ReactNative as RN } from "@vendetta/metro/common";
 import { after } from "@vendetta/patcher";
 import { getAssetIDByName } from "@vendetta/ui/assets";
 import { showToast } from "../../shared/toast";
+import { countGroupedChannels } from "./serverInfoCounts";
 
 const guildStore = findByStoreName("GuildStore");
 const guildMemberStore = findByStoreName("GuildMemberStore");
@@ -102,7 +103,7 @@ function ServerInfoSheet({ guildId }: { guildId: string }) {
 		memberCountStore?.getOnlineCount?.(guildId);
 	const roleCount = guildRoleStore?.getSortedRoles?.(guildId)?.length;
 	const channels = guildChannelStore?.getChannels?.(guildId);
-	const channelCount = channels && typeof channels === "object" ? Object.keys(channels).length : undefined;
+	const channelCount = countGroupedChannels(channels);
 	const boostTier = guild?.premiumTier;
 	const boostCount = guild?.premiumSubscriptionCount;
 	const bannerColor = getBannerColor(guild);

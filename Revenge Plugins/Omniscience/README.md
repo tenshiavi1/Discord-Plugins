@@ -11,7 +11,7 @@ Omniscience tracks configured words in selected server channels, group DMs, and 
 - Include or exclude servers, channels, and users; choose whether to track embeds or ignore bots.
 - Configure whole-word, exact-match, case-sensitive, and in-sentence matching.
 - Optionally forward matches to a channel or webhook.
-- Open separate Word Tracker and Deleted Messages settings pages.
+- Open separate Word Tracker and Message History settings pages.
 - Show earlier message text after edits and retain deleted messages in chat.
 - Translate messages into Discord's or the phone's language, automatically or on request.
 - Show desktop, mobile, web, console, and VR indicators in DM headers, member/voice lists, and profiles; optionally hide the phone badge on avatars.

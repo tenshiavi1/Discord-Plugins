@@ -55,7 +55,7 @@ export default function Settings() {
 				</TableRowGroup>
 				<TableRowGroup title="Add Attachments">
 					<TableSwitchRow
-						label="Enable /addattachment"
+						label="Enable /addattachment Command"
 						subLabel="Add up to three files to your own message in the current channel."
 						value={Boolean(storage.addAttachmentsEnabled)}
 						onValueChange={(value: boolean) => {

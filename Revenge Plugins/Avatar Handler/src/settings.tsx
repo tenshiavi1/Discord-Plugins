@@ -108,9 +108,9 @@ export default function Settings() {
 						}}
 					/>
 					<TableRow
-						label={pendingAction === "login" ? "Opening Login..." : "Add an Account"}
+						label={pendingAction === "login" ? "Opening Login…" : "Add an Account"}
 						subLabel={pendingAction === "login"
-							? "Opening Discord's native login screen..."
+							? "Opening Discord's native login screen…"
 							: "Open Discord's native login screen. Discord handles passwords, 2FA challenges, and other verification."}
 						trailing={pendingAction === "login"
 							? <RN.ActivityIndicator size="small" />
@@ -119,9 +119,9 @@ export default function Settings() {
 						onPress={() => { void runAccountAction("login"); }}
 					/>
 					<TableRow
-						label={pendingAction === "manager" ? "Opening Account Manager..." : "Switch or Manage Accounts"}
+						label={pendingAction === "manager" ? "Opening Account Manager…" : "Switch or Manage Accounts"}
 						subLabel={pendingAction === "manager"
-							? "Opening Discord's native account manager..."
+							? "Opening Discord's native account manager…"
 							: "Open Discord's native account manager to switch to a saved account or manage your account list."}
 						trailing={pendingAction === "manager"
 							? <RN.ActivityIndicator size="small" />

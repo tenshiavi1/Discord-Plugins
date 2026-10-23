@@ -281,9 +281,9 @@ export default function Settings() {
 
 	const confirmFetchAll = () => {
 		showConfirmationAlert({
-			title: "Fetch all plugins?",
+			title: "Fetch All Plugins?",
 			content: "This refreshes the plugin list and checks installed plugins for updates. New plugins will appear with an Install button but will not be installed automatically. Installed plugins may briefly stop while updating.",
-			confirmText: "Fetch all",
+			confirmText: "Fetch All",
 			cancelText: "Cancel",
 			onConfirm: () => { void fetchAllPlugins(); },
 		});
@@ -292,7 +292,7 @@ export default function Settings() {
 	const confirmAutoFetch = () => {
 		const enable = storage.autoFetchEnabled !== true;
 		showConfirmationAlert({
-			title: enable ? "Enable automatic updates?" : "Disable automatic updates?",
+			title: enable ? "Enable Automatic Updates?" : "Disable Automatic Updates?",
 			content: enable
 				? "At startup, Tenshi's Plugins will check installed plugins for updates. It will not install plugins that are not already installed. Updated plugins may briefly stop and restart. This takes effect the next time Revenge starts."
 				: "Tenshi's Plugins will stop checking for updates at startup. You can still fetch all plugins from Manage.",
@@ -316,7 +316,7 @@ export default function Settings() {
 
 	const runBulkAction = async (action: BulkAction) => {
 		if (managerBusy) return;
-		const actionLabel = { install: "Install all", remove: "Remove all", clear: "Clear all" }[action];
+		const actionLabel = { install: "Install All", remove: "Remove All", clear: "Clear All" }[action];
 		const targets = catalog.filter((entry) => {
 			const installed = findInstalledPlugin(entry);
 			return action === "install" ? !installed : !!installed;
@@ -402,19 +402,19 @@ export default function Settings() {
 	const confirmBulkAction = (action: BulkAction) => {
 		const confirmation = {
 			install: {
-				title: "Install all plugins?",
+				title: "Install All Plugins?",
 				content: "This will install every plugin in the list that is not already installed. Existing installations will be left unchanged.",
-				confirmText: "Install all",
+				confirmText: "Install All",
 			},
 			remove: {
-				title: "Remove all plugins?",
+				title: "Remove All Plugins?",
 				content: "This will uninstall every installed plugin in the list, including Tenshi's Plugins. You may need to reopen settings after removing the manager.",
-				confirmText: "Remove all",
+				confirmText: "Remove All",
 			},
 			clear: {
-				title: "Clear all plugin data?",
+				title: "Clear All Plugin Data?",
 				content: "This permanently clears saved settings and data for every installed plugin in the list, including the last crash log. This cannot be undone, and enabled plugins may briefly stop and restart.",
-				confirmText: "Clear all",
+				confirmText: "Clear All",
 			},
 		}[action];
 		showConfirmationAlert({
@@ -434,13 +434,13 @@ export default function Settings() {
 		showSimpleActionSheet({
 			key: "ManagePlugins",
 			header: {
-				title: "Manage plugins",
+				title: "Manage Plugins",
 				subtitle: "Choose an action.",
 				onClose: hideActionSheet,
 			},
 			options: [
 				{
-					label: "Fetch all",
+					label: "Fetch All",
 					icon: getAssetIDByName("RetryIcon"),
 					onPress: () => {
 						hideActionSheet?.();
@@ -448,7 +448,7 @@ export default function Settings() {
 					},
 				},
 				{
-					label: "Install all",
+					label: "Install All",
 					icon: getAssetIDByName("DownloadIcon"),
 					onPress: () => {
 						hideActionSheet?.();
@@ -456,7 +456,7 @@ export default function Settings() {
 					},
 				},
 				{
-					label: "Remove all",
+					label: "Remove All",
 					icon: getAssetIDByName("TrashIcon"),
 					isDestructive: true,
 					onPress: () => {
@@ -465,7 +465,7 @@ export default function Settings() {
 					},
 				},
 				{
-					label: "Clear all",
+					label: "Clear All",
 					icon: getAssetIDByName("CopyIcon"),
 					isDestructive: true,
 					onPress: () => {
@@ -630,7 +630,7 @@ export default function Settings() {
 					},
 				},
 				{
-					label: installed.instance.update === false ? "Enable updates" : "Disable updates",
+					label: installed.instance.update === false ? "Enable Updates" : "Disable Updates",
 					icon: getAssetIDByName("DownloadIcon"),
 					onPress: () => {
 						installed.instance.update = installed.instance.update === false;
@@ -645,7 +645,7 @@ export default function Settings() {
 					},
 				},
 				{
-					label: "Clear data",
+					label: "Clear Data",
 					icon: getAssetIDByName("CopyIcon"),
 					isDestructive: true,
 					onPress: () => {
@@ -700,7 +700,7 @@ export default function Settings() {
 			>
 				<RN.View style={{ flexDirection: "row", alignItems: "center" }}>
 					<RN.TouchableOpacity
-						accessibilityLabel="Manage plugins"
+						accessibilityLabel="Manage Plugins"
 						accessibilityRole="button"
 						disabled={managerBusy}
 						onPress={showManageActions}
@@ -718,7 +718,7 @@ export default function Settings() {
 					</RN.TouchableOpacity>
 					<RN.View style={{ width: 8 }} />
 					<RN.TouchableOpacity
-						accessibilityLabel={autoFetchEnabled ? "Turn automatic updates off" : "Turn automatic updates on"}
+						accessibilityLabel={autoFetchEnabled ? "Turn Automatic Updates Off" : "Turn Automatic Updates On"}
 						accessibilityRole="button"
 						disabled={fetchingAll || Object.values(busy).some(Boolean)}
 						onPress={confirmAutoFetch}
@@ -734,12 +734,12 @@ export default function Settings() {
 						}}
 					>
 						<RN.Text style={{ color: "#ffffff", fontWeight: "600" }}>
-							{autoFetchEnabled ? "Auto off" : "Auto on"}
+							{autoFetchEnabled ? "Auto Off" : "Auto On"}
 						</RN.Text>
 					</RN.TouchableOpacity>
 					<RN.View style={{ width: 8 }} />
 					<RN.TouchableOpacity
-						accessibilityLabel="Restart Revenge and return to Tenshi's Plugins"
+						accessibilityLabel="Restart Revenge and Return to Tenshi's Plugins"
 						accessibilityRole="button"
 						disabled={managerBusy}
 						onPress={confirmRestart}
@@ -768,7 +768,7 @@ export default function Settings() {
 				}}
 			>
 				<StableTextInput
-					accessibilityLabel="Search plugins"
+					accessibilityLabel="Search Plugins"
 					placeholder="Search plugins by name or description"
 					value={searchQuery}
 					onChangeText={setSearchQuery}
@@ -778,7 +778,7 @@ export default function Settings() {
 				/>
 				{searchQuery.length > 0 && (
 					<RN.TouchableOpacity
-						accessibilityLabel="Clear plugin search"
+						accessibilityLabel="Clear Plugin Search"
 						accessibilityRole="button"
 						onPress={() => {
 							setSearchQuery("");
@@ -868,7 +868,7 @@ export default function Settings() {
 				)}
 				<RN.TouchableOpacity
 					accessibilityRole="button"
-					accessibilityLabel="Copy manager activity log"
+					accessibilityLabel="Copy Manager Activity Log"
 					disabled={activityLog.length === 0}
 					onPress={() => {
 						try {
@@ -888,10 +888,10 @@ export default function Settings() {
 						opacity: activityLog.length === 0 ? 0.55 : 1,
 					}}
 				>
-					<RN.Text style={{ color: "#f2f3f5", fontWeight: "600" }}>Copy activity log</RN.Text>
+					<RN.Text style={{ color: "#f2f3f5", fontWeight: "600" }}>Copy Activity Log</RN.Text>
 				</RN.TouchableOpacity>
 				<RN.TouchableOpacity
-					accessibilityLabel="Copy latest error log"
+					accessibilityLabel="Copy Latest Error Log"
 					accessibilityRole="button"
 					disabled={!lastCrash}
 					onPress={() => {
@@ -916,7 +916,7 @@ export default function Settings() {
 					}}
 				>
 					<RN.Text style={{ color: "#f2f3f5", fontWeight: "600" }}>
-						Copy latest error log
+						Copy Latest Error Log
 					</RN.Text>
 				</RN.TouchableOpacity>
 			</RN.View>
@@ -970,7 +970,7 @@ export default function Settings() {
 									<IconButton
 										assetNames={["WrenchIcon", "SettingsIcon", "ic_settings_24px"]}
 										fallback="🔧"
-										label={`Open ${entry.name} settings`}
+										label={`Open ${entry.name} Settings`}
 										disabled={!PluginSettings || managerBusy}
 										onPress={() => openPluginSettings(entry)}
 									/>
@@ -999,7 +999,7 @@ export default function Settings() {
 									}}
 								>
 									<RN.Text style={{ color: "#ffffff", fontWeight: "600" }}>
-										{isBusy ? "Working..." : installed ? "Delete" : "Install"}
+										{isBusy ? "Working…" : installed ? "Delete" : "Install"}
 									</RN.Text>
 								</RN.TouchableOpacity>
 							</RN.View>
@@ -1018,7 +1018,7 @@ export default function Settings() {
 				})}
 				{visiblePlugins.length === 0 && (
 					<TableRow
-						label="No plugins found"
+						label="No Plugins Found"
 						subLabel="Try a different plugin name or description."
 					/>
 				)}
