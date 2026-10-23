@@ -4,6 +4,7 @@ import { useProxy } from "@vendetta/storage";
 import { getAssetIDByName } from "@vendetta/ui/assets";
 import { findByProps } from "../../compat";
 import { showToast } from "../../shared/toast";
+import { SmoothPreviewSwap } from "./previewMotion";
 import {
 	clearTranslations,
 	getTranslationStatus,
@@ -120,9 +121,9 @@ function TranslationPreview({ enabled }: { enabled: boolean }) {
 		</RN.View>
 	) : <Text style={{ color: "#dbdee1", fontSize: 15, lineHeight: 21 }}>{originalText}</Text>;
 	const message = (
-		<PreviewMessage>
-			{messageBody}
-		</PreviewMessage>
+		<SmoothPreviewSwap revision={`${busy}:${done}:${showLanguage}:${showOriginal}`}>
+			<PreviewMessage>{messageBody}</PreviewMessage>
+		</SmoothPreviewSwap>
 	);
 	const frame = (
 		<RN.View style={{ overflow: "hidden", borderRadius: 12, borderWidth: 1, borderColor: "#ffffff14", backgroundColor: "#1a1a1e" }}>

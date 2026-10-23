@@ -12,6 +12,7 @@ import { removeMessageHighlightPatch, setMessageHighlightOptions } from "./messa
 import { setServerInfoFeatureEnabled } from "./serverInfo";
 import { migrateOmniscienceSettings } from "./settingsMigration";
 import { initializeTranslations, removeTranslationPatches } from "./translations";
+import { initializeDeviceIndicators, removeDeviceIndicatorPatches } from "./deviceIndicators";
 
 const registerCrashGuard = () => installPluginCrashGuard("Omniscience", storage, {
   features: [
@@ -19,6 +20,7 @@ const registerCrashGuard = () => installPluginCrashGuard("Omniscience", storage,
     { storageKey: "keepDeletedMessages", patterns: [/MESSAGE_DELETE|deleted.?message/i] },
     { storageKey: "keepEditHistory", patterns: [/MESSAGE_UPDATE|edit.?history/i] },
     { storageKey: "enableServerInfo", patterns: [/server.?info|ServerInfoSheet/i] },
+    { storageKey: "deviceIndicatorsEnabled", patterns: [/DeviceBadges|platformIndicators|deviceIndicator/i] },
     { storageKey: "enabled", patterns: [/installChatLogger|Omniscience.*settings/i] },
     { storageKey: "showInSettings", patterns: [/registerPluginSettingsShortcut|pluginSettings/i] },
   ],
@@ -75,6 +77,11 @@ const defaults = {
   translateMessagesTarget: "discord",
   translateMessagesShowLanguage: true,
   translateMessagesShowOriginal: false,
+  deviceIndicatorsEnabled: false,
+  deviceIndicatorDmHeader: true,
+  deviceIndicatorLists: true,
+  deviceIndicatorProfiles: true,
+  deviceIndicatorHideMobileBadge: true,
 };
 
 migrateOmniscienceSettings(storage);
@@ -112,6 +119,13 @@ export default {
       target: storage.translateMessagesTarget === "phone" ? "phone" : "discord",
       showLanguage: storage.translateMessagesShowLanguage !== false,
       showOriginal: storage.translateMessagesShowOriginal === true,
+    });
+    initializeDeviceIndicators({
+      enabled: storage.enabled !== false && storage.deviceIndicatorsEnabled === true,
+      dmHeader: storage.deviceIndicatorDmHeader !== false,
+      lists: storage.deviceIndicatorLists !== false,
+      profiles: storage.deviceIndicatorProfiles !== false,
+      hideMobileBadge: storage.deviceIndicatorHideMobileBadge !== false,
     });
   unregisterSettingsShortcut = registerPluginSettingsShortcut({
     id: "omniscience",
@@ -351,6 +365,7 @@ export default {
     removeMessageHistoryPatch();
     removeMessageHighlightPatch();
     removeTranslationPatches();
+    removeDeviceIndicatorPatches();
     setServerInfoFeatureEnabled(false);
     unsubMessage?.();
     unregisterSettingsShortcut?.();

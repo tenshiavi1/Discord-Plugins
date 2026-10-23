@@ -30,6 +30,8 @@ import { setServerInfoFeatureEnabled } from "./serverInfo";
 import { setMessageHighlightOptions } from "./messageHighlights";
 import TranslateMessagesSettings from "./translateSettings";
 import { updateTranslationSettings } from "./translations";
+import DeviceIndicatorSettings from "./deviceIndicatorSettings";
+import { updateDeviceIndicatorOptions } from "./deviceIndicators";
 
 const { ScrollView } = findByProps("ScrollView");
 const { TableRowGroup, TableRow, TableSwitchRow, Stack } = findByProps(
@@ -103,6 +105,16 @@ function syncTranslationOptions() {
     target: storage.translateMessagesTarget === "phone" ? "phone" : "discord",
     showLanguage: storage.translateMessagesShowLanguage !== false,
     showOriginal: storage.translateMessagesShowOriginal === true,
+  });
+}
+
+function syncDeviceIndicatorOptions() {
+  updateDeviceIndicatorOptions({
+    enabled: storage.enabled !== false && storage.deviceIndicatorsEnabled === true,
+    dmHeader: storage.deviceIndicatorDmHeader !== false,
+    lists: storage.deviceIndicatorLists !== false,
+    profiles: storage.deviceIndicatorProfiles !== false,
+    hideMobileBadge: storage.deviceIndicatorHideMobileBadge !== false,
   });
 }
 
@@ -1838,6 +1850,7 @@ export default function Settings() {
               storage.enabled = value;
               syncMessageHighlightOptions();
               syncTranslationOptions();
+              syncDeviceIndicatorOptions();
               if (!value) clearMessageLoggerCache();
               setMessageHistoryFeatureEnabled(
                 value &&
@@ -1889,6 +1902,14 @@ export default function Settings() {
             trailing={<TableRow.Arrow />}
             onPress={() =>
               openSettingsPage(navigation, "Translate Messages", TranslateMessagesSettings)
+            }
+          />
+          <TableRow
+            label="Device Indiciator"
+            subLabel="Show which devices people are using next to their names."
+            trailing={<TableRow.Arrow />}
+            onPress={() =>
+              openSettingsPage(navigation, "Device Indiciator", DeviceIndicatorSettings)
             }
           />
           <TableRow
