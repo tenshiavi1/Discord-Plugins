@@ -1,5 +1,5 @@
 import { expect, test } from "bun:test";
-import { findDeviceUserIdInTree, resolveComponentModule, resolveComponentTarget, resolveDeviceUserId, resolveNamedComponentModule } from "./deviceIndicatorDiscovery";
+import { findDeviceUserIdInTree, isDeviceAvatarNode, isDeviceStatusNode, resolveComponentModule, resolveComponentTarget, resolveDeviceUserId, resolveNamedComponentModule } from "./deviceIndicatorDiscovery";
 
 test("resolves the containing module for named and default component exports", () => {
 	function DisplayName() {}
@@ -47,4 +47,15 @@ test("resolves DM recipients and nested profile user props", () => {
 	expect(resolveDeviceUserId({ channel: { recipients: ["one", "two"] } })).toBeUndefined();
 	const profileTree = { props: { children: { props: { user: { id: "profile-user" } } } } };
 	expect(findDeviceUserIdInTree(profileTree)).toBe("profile-user");
+});
+
+test("identifies avatar status elements in profile trees", () => {
+	function Status() {}
+	function Unrelated() {}
+
+	expect(isDeviceStatusNode({ type: Status, props: { status: "online" } })).toBe(true);
+	expect(isDeviceStatusNode({ type: Unrelated, props: { isMobileOnline: false } })).toBe(true);
+	expect(isDeviceStatusNode({ type: Unrelated, props: {} })).toBe(false);
+	expect(isDeviceAvatarNode({ type: { displayName: "Avatar" }, props: { userId: "profile-user" } })).toBe(true);
+	expect(isDeviceAvatarNode({ type: Unrelated, props: { userId: "profile-user" } })).toBe(false);
 });

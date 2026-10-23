@@ -3,7 +3,7 @@ import { storage } from "@vendetta/plugin";
 import { after, instead } from "@vendetta/patcher";
 import { find, findByProps, findByStoreName } from "../../compat";
 import platformIcons from "./deviceIndicatorIcons";
-import { findDeviceUserIdInTree, resolveComponentModule, resolveComponentTarget, resolveDeviceUserId, resolveNamedComponentModule } from "./deviceIndicatorDiscovery";
+import { findDeviceUserIdInTree, isDeviceAvatarNode, isDeviceStatusNode, resolveComponentModule, resolveComponentTarget, resolveDeviceUserId, resolveNamedComponentModule } from "./deviceIndicatorDiscovery";
 
 export type DeviceIndicatorOptions = {
 	enabled: boolean;
@@ -115,15 +115,15 @@ function clientsFor(userId: string) {
 	return clients && typeof clients === "object" ? clients as Record<string, string> : {};
 }
 
-function DeviceGlyph({ platform, status }: { platform: string; status: string }) {
+function DeviceGlyph({ platform, status, size = 16 }: { platform: string; status: string; size?: number }) {
 	const color = COLORS[status] ?? "#949ba4";
 	const uri = platformIcons[platform as keyof typeof platformIcons];
 	return uri
-		? <RN.Image source={{ uri, width: 16, height: 16 }} style={{ width: 16, height: 16, tintColor: color }} />
+		? <RN.Image source={{ uri, width: size, height: size }} style={{ width: size, height: size, tintColor: color }} />
 		: null;
 }
 
-export function DeviceBadges({ userId, clients: sampleClients }: { userId?: string; clients?: Record<string, string> }) {
+export function DeviceBadges({ userId, clients: sampleClients, size = 16 }: { userId?: string; clients?: Record<string, string>; size?: number }) {
 	const [, forceUpdate] = React.useReducer((value: number) => value + 1, 0);
 	getStores();
 	React.useEffect(() => {
@@ -140,7 +140,7 @@ export function DeviceBadges({ userId, clients: sampleClients }: { userId?: stri
 		<RN.View style={{ flexDirection: "row", alignItems: "center", gap: 2 }}>
 			{devices.map((platform) => (
 				<RN.View key={platform} accessibilityRole="image" accessibilityLabel={`${LABELS[platform]}: ${STATUS_LABELS[clients[platform]] ?? clients[platform]}`}>
-					<DeviceGlyph platform={platform} status={clients[platform]} />
+					<DeviceGlyph platform={platform} status={clients[platform]} size={size} />
 				</RN.View>
 			))}
 		</RN.View>
@@ -151,9 +151,78 @@ function userIdFrom(props: any) {
 	return resolveDeviceUserId(props, (channelId) => channelStore?.getChannel?.(channelId));
 }
 
+function profileStatusOverlay(userId: string) {
+	return React.createElement(
+		RN.View,
+		{
+			key: "omniscience-profile-device-status",
+			pointerEvents: "none",
+			style: {
+				position: "absolute",
+				right: 0,
+				bottom: 0,
+				alignItems: "center",
+				justifyContent: "center",
+				padding: 2,
+				borderRadius: 10,
+				borderWidth: 2,
+				borderColor: "#313338",
+				backgroundColor: "#313338",
+				zIndex: 1,
+			},
+		},
+		React.createElement(DeviceBadges, { userId, size: 10 }),
+	);
+}
+
+function placeProfileStatusBadge(tree: any, userId: string) {
+	let added = false;
+	function visit(node: any, depth: number): any {
+		if (!node || depth > 18 || typeof node !== "object" || !node.props) return node;
+		if (!added && isDeviceAvatarNode(node) && userIdFrom(node.props) === userId) {
+			added = true;
+			return React.createElement(
+				RN.View,
+				{ style: { position: "relative", alignSelf: "flex-start" } },
+				node,
+				profileStatusOverlay(userId),
+			);
+		}
+		const children = node.props.children;
+		if (Array.isArray(children)) {
+			const next: any[] = [];
+			for (const child of children) {
+				next.push(visit(child, depth + 1));
+				if (!added && isDeviceStatusNode(child)) {
+					added = true;
+					next.push(profileStatusOverlay(userId));
+				}
+			}
+			return next.some((child: any, index: number) => child !== children[index])
+				? React.cloneElement(node, { children: next })
+				: node;
+		}
+		if (children && typeof children === "object") {
+			const child = visit(children, depth + 1);
+			if (!added && isDeviceStatusNode(children)) {
+				added = true;
+				return React.cloneElement(node, {
+					children: [child, profileStatusOverlay(userId)],
+				});
+			}
+			if (child !== children) return React.cloneElement(node, { children: child });
+		}
+		return node;
+	}
+	return visit(tree, 0);
+}
+
 function placeBadge(tree: any, props: any, placement: "dmHeader" | "lists" | "profiles") {
 	if (!options.enabled || !options[placement] || !React || !tree) return tree;
 	const userId = userIdFrom(props) ?? findDeviceUserIdInTree(tree, (channelId) => channelStore?.getChannel?.(channelId));
+	if (placement === "profiles") {
+		return userId ? placeProfileStatusBadge(tree, userId) : tree;
+	}
 	let added = false;
 	function visit(node: any, depth: number): any {
 		if (!node || depth > 18 || typeof node !== "object" || !node.props) return node;
@@ -187,7 +256,7 @@ function placeBadge(tree: any, props: any, placement: "dmHeader" | "lists" | "pr
 		return child !== children ? React.cloneElement(node, { children: child }) : node;
 	}
 	const result = visit(tree, 0);
-	if (!added && userId && (placement === "dmHeader" || placement === "profiles")) {
+	if (!added && userId && placement === "dmHeader") {
 		return React.createElement(
 			RN.View,
 			{ style: { flexDirection: "column", gap: 6, alignItems: "flex-start" } },
