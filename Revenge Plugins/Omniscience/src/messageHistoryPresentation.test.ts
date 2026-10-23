@@ -1,5 +1,5 @@
 import { expect, test } from "bun:test";
-import { canRetainDeletedMessage, markDeletedMessage, mergeRetainedMessages, prependEditHistory } from "./messageHistoryPresentation";
+import { canRetainDeletedMessage, markDeletedMessage, mergeRetainedMessages, prependEditHistory, truncateEditVersion } from "./messageHistoryPresentation";
 
 test("prepends plain struck-through versions to one rendered message", () => {
 	const current = [{ type: "text", content: "new text" }];
@@ -17,6 +17,13 @@ test("does not rewrite non-rendered or unchanged message content", () => {
 	const content = "raw message content";
 	expect(prependEditHistory(content, [{ content: "old text" }])).toBe(content);
 	expect(prependEditHistory([content], [])).toEqual([content]);
+});
+
+test("caps retained edit text at 4,000 characters with a truncation marker", () => {
+	const truncated = truncateEditVersion("x".repeat(4_001));
+	expect(truncated).toHaveLength(4_001);
+	expect(truncated.endsWith("\u2026")).toBe(true);
+	expect(truncateEditVersion("short text")).toBe("short text");
 });
 
 test("retains sent messages but rejects ephemeral and unsent messages", () => {

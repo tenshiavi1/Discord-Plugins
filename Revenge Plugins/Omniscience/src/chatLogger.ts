@@ -116,6 +116,17 @@ export function clearMessageLoggerCache() {
 	persistMessageHistory();
 }
 
+export function forgetDeletedMessage(channelId: string, messageId: string) {
+	deletedMessages = deletedMessages.filter((message) => message.channelId !== channelId || message.id !== messageId);
+	persistMessageHistory();
+}
+
+export function forgetChannelMessageHistory(channelId: string) {
+	cachedMessages = cachedMessages.filter((message) => message.channelId !== channelId);
+	deletedMessages = deletedMessages.filter((message) => message.channelId !== channelId);
+	persistMessageHistory();
+}
+
 export function setMessageLoggerKeepAfterRestart(enabled: boolean) {
 	storage.messageLoggerKeepAfterRestart = enabled;
 	persistMessageHistory();

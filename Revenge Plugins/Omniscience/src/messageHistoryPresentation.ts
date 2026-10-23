@@ -1,4 +1,11 @@
 export type EditHistoryVersion = { content: string };
+export const MAX_EDIT_VERSION_LENGTH = 4000;
+
+export function truncateEditVersion(content: string) {
+	return content.length > MAX_EDIT_VERSION_LENGTH
+		? `${content.slice(0, MAX_EDIT_VERSION_LENGTH)}\u2026`
+		: content;
+}
 
 export function prependEditHistory(content: unknown, versions: readonly EditHistoryVersion[]) {
 	if (!Array.isArray(content) || versions.length === 0) return content;

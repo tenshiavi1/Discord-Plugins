@@ -21,6 +21,8 @@ import {
   clearMessageHistory,
   hasMessageHistory,
   setMessageHistoryFeatureEnabled,
+  setMessageHistoryLimit,
+  setMessageHistoryPersistenceEnabled,
   updateMessageHistorySettings,
 } from "./messageHistory";
 import { setServerInfoFeatureEnabled } from "./serverInfo";
@@ -1688,7 +1690,7 @@ export function DeletedMessagesSettings() {
           text: "Clear",
           style: "destructive",
           onPress: () => {
-            clearMessageHistory();
+            clearMessageHistory(true);
             clearDeletedMessageHistory();
             showToast(
               "Cleared kept messages and edit history.",
@@ -1761,6 +1763,7 @@ export function DeletedMessagesSettings() {
             value={keepAfterRestart}
             onValueChange={(value: boolean) => {
               setMessageLoggerKeepAfterRestart(value);
+              setMessageHistoryPersistenceEnabled(value);
               forceUpdate();
             }}
           />
@@ -1773,6 +1776,7 @@ export function DeletedMessagesSettings() {
               disabled={!storage.keepDeletedMessages}
               onChange={(value: number) => {
                 setMessageLoggerLimit(value);
+                setMessageHistoryLimit(value);
                 forceUpdate();
               }}
             />
