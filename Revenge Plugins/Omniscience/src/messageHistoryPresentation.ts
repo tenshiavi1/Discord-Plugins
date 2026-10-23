@@ -9,6 +9,11 @@ export type RecentMessageLog = {
 	messageId?: string;
 };
 
+export function resolveMessageRowGenerator(module: any) {
+	const candidate = module?.default ?? module?.RowGenerator ?? module;
+	return typeof candidate?.prototype?.generate === "function" ? candidate : undefined;
+}
+
 export const RECENT_MESSAGE_LOG_WINDOW_MS = 5 * 60 * 1000;
 export const MAX_EDIT_VERSION_LENGTH = 4000;
 

@@ -1,8 +1,8 @@
 import { ReactNative as RN } from "@vendetta/metro/common";
 import { after } from "@vendetta/patcher";
-import { findByName, findByProps } from "../../compat";
+import { find, findByProps } from "../../compat";
 import { getMessageEditHistory, isRetainedDeletedMessage, recordMessageProcess } from "./messageHistory";
-import { getDeletedMessageHighlight, getMessageHighlightType, prependEditHistory } from "./messageHistoryPresentation";
+import { getDeletedMessageHighlight, getMessageHighlightType, prependEditHistory, resolveMessageRowGenerator } from "./messageHistoryPresentation";
 
 type HighlightColor = string;
 type HighlightOptions = {
@@ -26,7 +26,7 @@ const COLORS: Record<string, string> = {
 	red: "#f23f43",
 };
 const MAX_REMEMBERED_ROWS = 80;
-const FluxDispatcher = findByProps("dispatch");
+const FluxDispatcher = findByProps("dispatch", "subscribe", "unsubscribe");
 const messageStore = findByProps("getMessage", "getMessages");
 const UserStore = findByProps("getCurrentUser");
 const rememberedRows = new Map<string, { channelId: string; message: any }>();
@@ -39,6 +39,7 @@ let options: HighlightOptions = {
 	deletedColor: "default",
 };
 let unpatch: (() => void) | undefined;
+let retryUnsubscribers: (() => void)[] = [];
 
 function normalizeColor(value: string, fallback: string) {
 	const normalized = String(value ?? "").trim().toLowerCase();
@@ -143,16 +144,52 @@ function highlightRow(args: any[], result: any) {
 	};
 }
 
+function isRowGenerator(candidate: any) {
+	return typeof candidate?.prototype?.generate === "function";
+}
+
+function findRowGenerator() {
+	const metroRequire = (globalThis as typeof globalThis & { __r?: (id: number) => any }).__r;
+	if (typeof metroRequire === "function") {
+		try {
+			const generator = resolveMessageRowGenerator(metroRequire(7591));
+			if (generator) return generator;
+		} catch {}
+	}
+	const module = find((candidate: any) => {
+		const generator = resolveMessageRowGenerator(candidate);
+		if (!generator) return false;
+		const source = Function.prototype.toString.call(generator.prototype.generate);
+		return source.includes("rowType") && source.includes("message");
+	});
+	return resolveMessageRowGenerator(module);
+}
+
 function installRowPatch() {
-	const module = findByName("RowGenerator", false);
-	const RowGenerator = module?.default ?? module?.RowGenerator ?? module;
+	const RowGenerator = findRowGenerator();
 	if (!RowGenerator?.prototype || typeof RowGenerator.prototype.generate !== "function") {
-		recordMessageProcess({ operation: "edit", stage: "row-render-hook", result: "failure", detail: "Discord RowGenerator.generate was not found" });
-		console.warn("[Omniscience] Discord's message row generator was not found; message highlights are preview-only.");
-		return;
+		recordMessageProcess({ operation: "edit", stage: "row-render-hook", result: "failure", detail: "Discord's message row generator is not loaded" });
+		console.warn("[Omniscience] Discord's message row generator was not loaded; waiting for a message event to retry.");
+		return false;
 	}
 	unpatch = after("generate", RowGenerator.prototype, (args: any[], result: any) => highlightRow(args, result));
-	recordMessageProcess({ operation: "edit", stage: "row-render-hook", result: "success", detail: "RowGenerator.generate patched" });
+	recordMessageProcess({ operation: "edit", stage: "row-render-hook", result: "success", detail: "Discord message-row generator patched" });
+	return true;
+}
+
+function retryRowPatch() {
+	if (unpatch || !(options.enabled || options.deletedEnabled || options.historyEnabled)) return;
+	if (installRowPatch()) {
+		for (const unsubscribe of retryUnsubscribers.splice(0)) unsubscribe();
+	}
+}
+
+function watchForRowGenerator() {
+	if (retryUnsubscribers.length || typeof FluxDispatcher?.subscribe !== "function" || typeof FluxDispatcher?.unsubscribe !== "function") return;
+	for (const event of ["CONNECTION_OPEN", "MESSAGE_CREATE", "LOAD_MESSAGES_SUCCESS", "LOAD_MESSAGES_AROUND_SUCCESS", "LOCAL_MESSAGES_LOADED"]) {
+		FluxDispatcher.subscribe(event, retryRowPatch);
+		retryUnsubscribers.push(() => FluxDispatcher.unsubscribe(event, retryRowPatch));
+	}
 }
 
 function redrawRememberedRows() {
@@ -178,7 +215,7 @@ export function setMessageHighlightOptions(next: Partial<HighlightOptions>) {
 		...next,
 		thickness: Math.max(1, Math.min(4, Math.floor(Number(next.thickness ?? options.thickness) || 1))),
 	};
-	if ((options.enabled || options.deletedEnabled || options.historyEnabled) && !unpatch) installRowPatch();
+	if ((options.enabled || options.deletedEnabled || options.historyEnabled) && !unpatch && !installRowPatch()) watchForRowGenerator();
 	if (!options.enabled && !options.deletedEnabled && !options.historyEnabled && unpatch) {
 		unpatch();
 		unpatch = undefined;
@@ -189,5 +226,6 @@ export function setMessageHighlightOptions(next: Partial<HighlightOptions>) {
 export function removeMessageHighlightPatch() {
 	unpatch?.();
 	unpatch = undefined;
+	for (const unsubscribe of retryUnsubscribers.splice(0)) unsubscribe();
 	rememberedRows.clear();
 }

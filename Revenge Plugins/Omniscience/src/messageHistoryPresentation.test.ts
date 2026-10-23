@@ -1,5 +1,5 @@
 import { expect, test } from "bun:test";
-import { canRetainDeletedMessage, getDeletedMessageHighlight, getMessageHighlightType, hasEditedTimestamp, markDeletedMessage, mergeRetainedMessages, prependEditHistory, pruneRecentMessageLogs, shouldClearHistoryForNewSession, truncateEditVersion, type RecentMessageLog } from "./messageHistoryPresentation";
+import { canRetainDeletedMessage, getDeletedMessageHighlight, getMessageHighlightType, hasEditedTimestamp, markDeletedMessage, mergeRetainedMessages, prependEditHistory, pruneRecentMessageLogs, resolveMessageRowGenerator, shouldClearHistoryForNewSession, truncateEditVersion, type RecentMessageLog } from "./messageHistoryPresentation";
 
 test("prepends plain struck-through versions to one rendered message", () => {
 	const current = [{ type: "text", content: "new text" }];
@@ -30,6 +30,16 @@ test("recognizes snake_case and camelCase edit timestamps", () => {
 	expect(hasEditedTimestamp({ edited_timestamp: "2026-10-23T00:00:00Z" })).toBe(true);
 	expect(hasEditedTimestamp({ editedTimestamp: "2026-10-23T00:00:00Z" })).toBe(true);
 	expect(hasEditedTimestamp({ edited_timestamp: null })).toBe(false);
+});
+
+test("resolves a row generator from its default module export", () => {
+	class RowGenerator {
+		generate() {}
+	}
+	const module = { default: RowGenerator };
+
+	expect(resolveMessageRowGenerator(module)).toBe(RowGenerator);
+	expect(resolveMessageRowGenerator({ default: {} })).toBeUndefined();
 });
 
 test("shows only message logs younger than five minutes", () => {
