@@ -1,7 +1,7 @@
 import { ReactNative as RN } from "@vendetta/metro/common";
 import { after } from "@vendetta/patcher";
 import { findByName, findByProps } from "../../compat";
-import { getMessageEditHistory, isRetainedDeletedMessage } from "./messageHistory";
+import { getMessageEditHistory, isRetainedDeletedMessage, recordMessageProcess } from "./messageHistory";
 import { getDeletedMessageHighlight, getMessageHighlightType, prependEditHistory } from "./messageHistoryPresentation";
 
 type HighlightColor = string;
@@ -87,13 +87,36 @@ function highlightRow(args: any[], result: any) {
 	if (!channelId || !messageId) return result;
 	let next = result;
 	if (options.historyEnabled) {
-		const content = prependEditHistory(message.content, getMessageEditHistory(channelId, messageId));
+		const versions = getMessageEditHistory(channelId, messageId);
+		const content = prependEditHistory(message.content, versions);
 		if (content !== message.content) {
 			next = { ...next, message: { ...message, content } };
 			rememberRow(channelId, source);
 		}
+		if (versions.length) {
+			recordMessageProcess({
+				operation: "edit",
+				stage: "row-render",
+				result: content !== message.content ? "success" : "failure",
+				detail: content !== message.content
+					? `${versions.length} previous version(s) attached to the message row`
+					: "row content did not accept the history nodes",
+				channelId,
+				messageId,
+			});
+		}
 	}
 	const isDeleted = isRetainedDeletedMessage(channelId, messageId) || Boolean(message.was_deleted);
+	if (isDeleted) {
+		recordMessageProcess({
+			operation: "delete",
+			stage: "row-render",
+			result: options.deletedEnabled ? "success" : "skipped",
+			detail: options.deletedEnabled ? "retained message row reached the renderer" : "deleted-row styling is disabled",
+			channelId,
+			messageId,
+		});
+	}
 	const highlightType = getMessageHighlightType(
 		options.deletedEnabled,
 		isDeleted,
@@ -124,10 +147,12 @@ function installRowPatch() {
 	const module = findByName("RowGenerator", false);
 	const RowGenerator = module?.default ?? module?.RowGenerator ?? module;
 	if (!RowGenerator?.prototype || typeof RowGenerator.prototype.generate !== "function") {
+		recordMessageProcess({ operation: "edit", stage: "row-render-hook", result: "failure", detail: "Discord RowGenerator.generate was not found" });
 		console.warn("[Omniscience] Discord's message row generator was not found; message highlights are preview-only.");
 		return;
 	}
 	unpatch = after("generate", RowGenerator.prototype, (args: any[], result: any) => highlightRow(args, result));
+	recordMessageProcess({ operation: "edit", stage: "row-render-hook", result: "success", detail: "RowGenerator.generate patched" });
 }
 
 function redrawRememberedRows() {

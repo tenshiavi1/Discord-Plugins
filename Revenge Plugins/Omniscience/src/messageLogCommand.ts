@@ -6,32 +6,32 @@ import { getRecentMessageLogs } from "./messageHistory";
 function formatMessageLogs() {
 	return getRecentMessageLogs().map((log) => {
 		const time = new Date(log.timestamp).toLocaleTimeString();
-		const title = `[${time}] ${log.type.toUpperCase()} by ${log.author} in ${log.channelId}`;
-		if (log.type === "edited") {
-			return `${title}\nBefore: ${log.previousContent || "(empty)"}\nAfter: ${log.content || "(empty)"}`;
-		}
-		return `${title}\n${log.content || "(empty message)"}`;
+		const operation = log.operation.toUpperCase();
+		const detail = log.messageId
+			? `${log.detail} (channel ${log.channelId ?? "?"}, message ${log.messageId})`
+			: log.detail;
+		return `[${time}] ${operation} ${log.stage}: ${log.result}\n${detail}`;
 	}).join("\n\n");
 }
 
 export function registerMessageLogCommand() {
 	try {
 		return registerCommand({
-			name: "log message",
-			displayName: "Message Log",
-			description: "Show edits and deletions from the last five minutes.",
+			name: "message log",
+			displayName: "Message Handling Log",
+			description: "Show edit and delete handling steps from the last five minutes.",
 			options: [],
 			execute: () => {
 				const logs = formatMessageLogs();
 				if (!logs) {
-					showToast("No edited or deleted messages in the last five minutes.");
+					showToast("No edit/delete handling events in the last five minutes.");
 					return;
 				}
 				if (typeof RN.Alert?.alert !== "function") {
 					showToast("The private message-log view is unavailable on this client.");
 					return;
 				}
-				RN.Alert.alert("Recent message log · 5 minutes", logs, [{ text: "Close" }]);
+				RN.Alert.alert("Edit/delete process trace · 5 minutes", logs, [{ text: "Close" }]);
 			},
 		});
 	} catch (error) {

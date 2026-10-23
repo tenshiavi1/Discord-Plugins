@@ -1,12 +1,12 @@
 export type EditHistoryVersion = { content: string };
 export type RecentMessageLog = {
 	timestamp: number;
-	type: "edited" | "deleted";
-	channelId: string;
-	messageId: string;
-	author: string;
-	content: string;
-	previousContent?: string;
+	operation: "edit" | "delete";
+	stage: string;
+	result: "success" | "skipped" | "failure";
+	detail: string;
+	channelId?: string;
+	messageId?: string;
 };
 
 export const RECENT_MESSAGE_LOG_WINDOW_MS = 5 * 60 * 1000;

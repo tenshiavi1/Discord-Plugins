@@ -36,14 +36,16 @@ test("shows only message logs younger than five minutes", () => {
 	const now = 1_000_000;
 	const log = (timestamp: number): RecentMessageLog => ({
 		timestamp,
-		type: "edited",
-		channelId: "channel",
+		operation: "edit",
+		stage: "history-captured",
+		result: "success",
+		detail: "one previous version recorded",
+		channelId: "channel-id",
 		messageId: String(timestamp),
-		author: "user",
-		content: "new text",
 	});
 
 	expect(pruneRecentMessageLogs([log(now - 299_999), log(now - 300_000), log(now + 1)], now)).toEqual([log(now - 299_999)]);
+	expect(log(now)).not.toHaveProperty("content");
 });
 
 test("keeps deleted rows red when mention highlighting is disabled", () => {

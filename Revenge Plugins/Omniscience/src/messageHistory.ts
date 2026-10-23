@@ -71,6 +71,7 @@ const deletedMessages = historyRuntime.deletedMessages;
 const editHistory = historyRuntime.editHistory;
 const retainedViews = new Map<string, { original: unknown; revision: number; value: unknown }>();
 const unpatches: (() => void)[] = [];
+const recentProcessLogKeys = new Map<string, number>();
 let dispatcherPatchInstalled = false;
 let retainedRevision = 0;
 let restoredHistoryAccountId: string | undefined;
@@ -94,13 +95,15 @@ function getRetainedMessageLimit() {
 	return [100, 500, 1000, 5000].includes(limit) ? limit : 500;
 }
 
-function recordRecentMessageLog(log: RecentMessageLog) {
+export function recordMessageProcess(log: Omit<RecentMessageLog, "timestamp">) {
 	const recent = pruneRecentMessageLogs(historyRuntime.recentLogs);
-	recent.push({
-		...log,
-		content: truncateEditVersion(log.content),
-		...(log.previousContent === undefined ? {} : { previousContent: truncateEditVersion(log.previousContent) }),
-	});
+	const timestamp = Date.now();
+	const dedupeKey = [log.operation, log.stage, log.result, log.detail, log.channelId ?? "", log.messageId ?? ""].join(":");
+	const previousTimestamp = recentProcessLogKeys.get(dedupeKey);
+	if (previousTimestamp !== undefined && timestamp - previousTimestamp < 1000) return;
+	recentProcessLogKeys.set(dedupeKey, timestamp);
+	while (recentProcessLogKeys.size > 2000) recentProcessLogKeys.delete(recentProcessLogKeys.keys().next().value!);
+	recent.push({ ...log, timestamp });
 	historyRuntime.recentLogs = recent;
 }
 
@@ -288,11 +291,24 @@ function createRetainedMessageUpdate(channelId: string, messageId: string) {
 	const key = getMessageKey(channelId, messageId);
 	const existing = deletedMessages.get(key);
 	const original = existing?.original ?? getStoredMessage(channelId, messageId);
-	if (!canRetainDeletedMessage(original)) return undefined;
+	if (!original) {
+		recordMessageProcess({ operation: "delete", stage: "store-lookup", result: "skipped", detail: "message is not present in the message store", channelId, messageId });
+		return undefined;
+	}
+	if (!canRetainDeletedMessage(original)) {
+		const detail = original.state != null && original.state !== "SENT"
+			? `message state ${String(original.state)} is not retainable`
+			: (Number(original.flags) & 64) !== 0
+				? "ephemeral messages are not retainable"
+				: "message is not eligible for retention";
+		recordMessageProcess({ operation: "delete", stage: "retention-check", result: "skipped", detail, channelId, messageId });
+		return undefined;
+	}
 	if (!existing) {
 		rememberMessage(deletedMessages, key, { channelId, original, retained: markDeletedMessage(original) }, getRetainedMessageLimit());
 		invalidateRetainedViews();
 	}
+	recordMessageProcess({ operation: "delete", stage: "retention-check", result: "success", detail: "message eligible; retained row prepared", channelId, messageId });
 	return {
 		type: "MESSAGE_UPDATE",
 		message: (existing ?? deletedMessages.get(key))!.retained,
@@ -303,27 +319,50 @@ function createRetainedMessageUpdate(channelId: string, messageId: string) {
 function rememberEdit(event: any) {
 	const update = event?.message ?? event;
 	const content = typeof update?.content === "string" ? update.content : event?.content;
-	if (!settings.enabled || !settings.keepEditHistory || typeof content !== "string" || (!hasEditedTimestamp(update) && !hasEditedTimestamp(event))) return;
+	if (!hasEditedTimestamp(update) && !hasEditedTimestamp(event)) return;
 	const channelId = String(update.channel_id ?? update.channelId ?? event?.channel_id ?? event?.channelId ?? "");
 	const messageId = String(update.id ?? event?.id ?? "");
-	if (!channelId || !messageId) return;
+	const target = { channelId: channelId || undefined, messageId: messageId || undefined };
+	recordMessageProcess({ operation: "edit", stage: "capture-start", result: "success", detail: "edited MESSAGE_UPDATE received", ...target });
+	if (!settings.enabled) {
+		recordMessageProcess({ operation: "edit", stage: "capture", result: "skipped", detail: "Omniscience is disabled", ...target });
+		return;
+	}
+	if (!settings.keepEditHistory) {
+		recordMessageProcess({ operation: "edit", stage: "capture", result: "skipped", detail: "edit history is disabled", ...target });
+		return;
+	}
+	if (typeof content !== "string") {
+		recordMessageProcess({ operation: "edit", stage: "capture", result: "skipped", detail: "update has no string content", ...target });
+		return;
+	}
+	if (!channelId || !messageId) {
+		recordMessageProcess({ operation: "edit", stage: "capture", result: "failure", detail: "update is missing channel or message ID", ...target });
+		return;
+	}
 	const key = getMessageKey(channelId, messageId);
 	const record = editHistory.get(key);
 	const original = getStoredMessage(channelId, messageId);
 	const previousContent = record?.currentContent ?? original?.content;
-	if (typeof previousContent !== "string" || previousContent === content) return;
+	if (typeof previousContent !== "string") {
+		recordMessageProcess({ operation: "edit", stage: "capture", result: "skipped", detail: "previous message state is unavailable", ...target });
+		return;
+	}
+	if (previousContent === content) {
+		recordMessageProcess({ operation: "edit", stage: "capture", result: "skipped", detail: "content did not change", ...target });
+		return;
+	}
 	const next: EditRecord = record ?? { channelId, messageId, previous: [], currentContent: previousContent };
 	next.previous = [...next.previous, { content: truncateEditVersion(previousContent) }].slice(-MAX_EDIT_VERSIONS);
 	next.currentContent = content;
 	rememberMessage(editHistory, key, next, MAX_EDIT_HISTORY);
-	recordRecentMessageLog({
-		timestamp: Date.now(),
-		type: "edited",
+	recordMessageProcess({
+		operation: "edit",
+		stage: "history-captured",
+		result: "success",
+		detail: `${next.previous.length} previous version(s) recorded`,
 		channelId,
 		messageId,
-		author: typeof original?.author?.username === "string" ? original.author.username : "Unknown",
-		content,
-		previousContent,
 	});
 	persistMessageHistory();
 }
@@ -338,30 +377,46 @@ function dispatchWithHistory(args: unknown[], original: (...args: any[]) => any)
 		rememberEdit(event);
 		return original(...args);
 	}
+	if (event.type === "MESSAGE_DELETE" && (!settings.enabled || !settings.keepDeletedMessages)) {
+		recordMessageProcess({
+			operation: "delete",
+			stage: "intercept",
+			result: "skipped",
+			detail: !settings.enabled ? "Omniscience is disabled" : "deleted-message retention is disabled",
+			channelId: String(event.channelId ?? event.channel_id ?? "") || undefined,
+			messageId: String(event.id ?? "") || undefined,
+		});
+		recordMessageDelete(event);
+		return original(...args);
+	}
+	if (event.type === "MESSAGE_DELETE_BULK" && (!settings.enabled || !settings.keepDeletedMessages)) {
+		recordMessageProcess({
+			operation: "delete",
+			stage: "bulk-intercept",
+			result: "skipped",
+			detail: !settings.enabled ? "Omniscience is disabled" : "deleted-message retention is disabled",
+		});
+		return original(...args);
+	}
 
 	if (event.type === "MESSAGE_DELETE" && settings.enabled && settings.keepDeletedMessages) {
 		const channelId = String(event.channelId ?? event.channel_id ?? "");
 		const messageId = String(event.id ?? "");
+		recordMessageProcess({ operation: "delete", stage: "intercept", result: "success", detail: "MESSAGE_DELETE received", channelId: channelId || undefined, messageId: messageId || undefined });
 		if (!channelId || !messageId) return original(...args);
 		recordMessageDelete({ ...event, channelId, id: messageId });
 		const update = createRetainedMessageUpdate(channelId, messageId);
 		if (!update) return original(...args);
 		try {
 			original(update);
-			recordRecentMessageLog({
-				timestamp: Date.now(),
-				type: "deleted",
-				channelId,
-				messageId,
-				author: typeof update.message.author?.username === "string" ? update.message.author.username : "Unknown",
-				content: typeof update.message.content === "string" ? update.message.content : "",
-			});
+			recordMessageProcess({ operation: "delete", stage: "store-update", result: "success", detail: "retained MESSAGE_UPDATE dispatched", channelId, messageId });
 			persistMessageHistory();
 			return Promise.resolve();
 		} catch (error) {
 			deletedMessages.delete(getMessageKey(channelId, messageId));
 			invalidateRetainedViews();
 			persistMessageHistory();
+			recordMessageProcess({ operation: "delete", stage: "store-update", result: "failure", detail: "dispatcher threw while updating the retained row", channelId, messageId });
 			console.error("[Omniscience] Could not retain the deleted message in chat.", error);
 			return original(...args);
 		}
@@ -370,6 +425,7 @@ function dispatchWithHistory(args: unknown[], original: (...args: any[]) => any)
 	if (event.type === "MESSAGE_DELETE_BULK" && settings.enabled && settings.keepDeletedMessages && Array.isArray(event.ids)) {
 		const channelId = String(event.channelId ?? event.channel_id ?? "");
 		if (!channelId) return original(...args);
+		recordMessageProcess({ operation: "delete", stage: "bulk-intercept", result: "success", detail: `${event.ids.length} delete ID(s) received`, channelId });
 		const remaining: unknown[] = [];
 		for (const rawId of event.ids) {
 			const messageId = String(rawId ?? "");
@@ -385,19 +441,13 @@ function dispatchWithHistory(args: unknown[], original: (...args: any[]) => any)
 			recordMessageDelete({ channelId, id: messageId });
 			try {
 				original(update);
-				recordRecentMessageLog({
-					timestamp: Date.now(),
-					type: "deleted",
-					channelId,
-					messageId,
-					author: typeof update.message.author?.username === "string" ? update.message.author.username : "Unknown",
-					content: typeof update.message.content === "string" ? update.message.content : "",
-				});
+				recordMessageProcess({ operation: "delete", stage: "store-update", result: "success", detail: "retained MESSAGE_UPDATE dispatched from bulk delete", channelId, messageId });
 				persistMessageHistory();
 			} catch (error) {
 				deletedMessages.delete(getMessageKey(channelId, messageId));
 				invalidateRetainedViews();
 				persistMessageHistory();
+				recordMessageProcess({ operation: "delete", stage: "store-update", result: "failure", detail: "dispatcher threw while updating the retained row", channelId, messageId });
 				console.error("[Omniscience] Could not retain a bulk-deleted message in chat.", error);
 				remaining.push(rawId);
 			}
@@ -405,7 +455,6 @@ function dispatchWithHistory(args: unknown[], original: (...args: any[]) => any)
 		return remaining.length ? original({ ...event, ids: remaining }) : Promise.resolve();
 	}
 
-	if (event.type === "MESSAGE_DELETE") recordMessageDelete(event);
 	return original(...args);
 }
 
@@ -436,6 +485,12 @@ export function initializeMessageHistory(pluginSettings: {
 			try {
 				return dispatchWithHistory(args, original);
 			} catch (error) {
+				const event = args[0] as Record<string, any> | undefined;
+				if (event?.type === "MESSAGE_UPDATE") {
+					recordMessageProcess({ operation: "edit", stage: "dispatcher", result: "failure", detail: "message update handler threw before processing completed" });
+				} else if (event?.type === "MESSAGE_DELETE" || event?.type === "MESSAGE_DELETE_BULK") {
+					recordMessageProcess({ operation: "delete", stage: "dispatcher", result: "failure", detail: "message delete handler threw before processing completed" });
+				}
 				console.error("[Omniscience] Could not update message history.", error);
 				return original(...args);
 			}
