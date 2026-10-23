@@ -4,7 +4,7 @@ import { storage } from "@vendetta/plugin";
 import { instead } from "@vendetta/patcher";
 import { showToast } from "../../shared/toast";
 import { recordMessageDelete, recordMessageUpdate } from "./chatLogger";
-import { canRetainDeletedMessage, markDeletedMessage } from "./messageHistoryPresentation";
+import { canRetainDeletedMessage, markDeletedMessage, mergeRetainedMessages } from "./messageHistoryPresentation";
 
 const channelMessages = findByProps("_channelMessages");
 const messageStore = findByProps("getMessage", "getMessages");
@@ -32,6 +32,7 @@ type EditRecord = {
 type DeletedRecord = {
 	channelId: string;
 	original: MessageRecord;
+	retained: MessageRecord;
 };
 
 type MessageHistorySettings = {
@@ -42,8 +43,10 @@ type MessageHistorySettings = {
 
 const deletedMessages = new Map<string, DeletedRecord>();
 const editHistory = new Map<string, EditRecord>();
+const retainedViews = new Map<string, { original: unknown; revision: number; value: unknown }>();
 const unpatches: (() => void)[] = [];
 let dispatcherPatchInstalled = false;
+let retainedRevision = 0;
 let settings: MessageHistorySettings = {
 	enabled: true,
 	keepDeletedMessages: true,
@@ -70,14 +73,53 @@ function rememberMessage<T>(map: Map<string, T>, id: string, value: T) {
 	}
 }
 
+function invalidateRetainedViews() {
+	retainedRevision++;
+	retainedViews.clear();
+}
+
+function getRetainedMessages(channelId: string) {
+	return [...deletedMessages.values()]
+		.filter((entry) => entry.channelId === channelId)
+		.map((entry) => entry.retained);
+}
+
+function installMessageStorePatches() {
+	if (typeof messageStore?.getMessages !== "function") return false;
+	unpatches.push(instead("getMessages", messageStore, (args, original) => {
+		const result = original(...args);
+		const channelId = String(args[0] ?? "");
+		if (!channelId) return result;
+		const retained = getRetainedMessages(channelId);
+		if (!retained.length) return result;
+		const cached = retainedViews.get(channelId);
+		if (cached?.original === result && cached.revision === retainedRevision) return cached.value;
+		const value = mergeRetainedMessages(result, retained);
+		retainedViews.set(channelId, { original: result, revision: retainedRevision, value });
+		if (retainedViews.size > 16) retainedViews.delete(retainedViews.keys().next().value!);
+		return value;
+	}));
+	if (typeof messageStore.getMessage === "function") {
+		unpatches.push(instead("getMessage", messageStore, (args, original) => {
+			const retained = deletedMessages.get(getMessageKey(String(args[0] ?? ""), String(args[1] ?? "")))?.retained;
+			return retained ?? original(...args);
+		}));
+	}
+	return true;
+}
+
 function createRetainedMessageUpdate(channelId: string, messageId: string) {
 	const key = getMessageKey(channelId, messageId);
-	const original = deletedMessages.get(key)?.original ?? getStoredMessage(channelId, messageId);
+	const existing = deletedMessages.get(key);
+	const original = existing?.original ?? getStoredMessage(channelId, messageId);
 	if (!canRetainDeletedMessage(original)) return undefined;
-	if (!deletedMessages.has(key)) rememberMessage(deletedMessages, key, { channelId, original });
+	if (!existing) {
+		rememberMessage(deletedMessages, key, { channelId, original, retained: markDeletedMessage(original) });
+		invalidateRetainedViews();
+	}
 	return {
 		type: "MESSAGE_UPDATE",
-		message: markDeletedMessage(original),
+		message: (existing ?? deletedMessages.get(key))!.retained,
 		otherPluginBypass: true,
 	};
 }
@@ -170,6 +212,10 @@ export function initializeMessageHistory(pluginSettings: {
 	}
 
 	try {
+		if (!installMessageStorePatches()) {
+			console.warn("[Omniscience] Discord's message-list store was not found; deleted messages cannot be retained in chat.");
+			return false;
+		}
 		unpatches.push(instead("dispatch", FluxDispatcher, (args, original) => {
 			try {
 				return dispatchWithHistory(args, original);
@@ -237,6 +283,7 @@ export function clearMessageHistory(removeDeletedMessagesFromChat = false) {
 		}
 	}
 	deletedMessages.clear();
+	invalidateRetainedViews();
 	editHistory.clear();
 }
 

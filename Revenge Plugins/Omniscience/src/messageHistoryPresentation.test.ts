@@ -1,5 +1,5 @@
 import { expect, test } from "bun:test";
-import { canRetainDeletedMessage, markDeletedMessage, prependEditHistory } from "./messageHistoryPresentation";
+import { canRetainDeletedMessage, markDeletedMessage, mergeRetainedMessages, prependEditHistory } from "./messageHistoryPresentation";
 
 test("prepends plain struck-through versions to one rendered message", () => {
 	const current = [{ type: "text", content: "new text" }];
@@ -34,4 +34,40 @@ test("marks a copy as deleted without mutating the stored message", () => {
 	expect(retained.was_deleted).toBe(true);
 	expect(retained.content).toBe(original.content);
 	expect(original).not.toHaveProperty("was_deleted");
+});
+
+test("merges retained rows back into a message list in snowflake order", () => {
+	const current = [{ id: "20", content: "newer" }, { id: "10", content: "older" }];
+	const deleted = { id: "15", content: "retained", was_deleted: true };
+
+	expect(mergeRetainedMessages(current, [deleted])).toEqual([
+		{ id: "10", content: "older" },
+		deleted,
+		{ id: "20", content: "newer" },
+	]);
+});
+
+test("merges retained rows into immutable message collections without changing the source", () => {
+	const createCollection = (messages: { id: string; content: string }[]) => ({
+		_array: messages,
+		hasMoreBefore: false,
+		hasMoreAfter: false,
+		clone() {
+			return createCollection([...this._array]);
+		},
+		merge(additions: readonly { id: string; content: string }[]) {
+			return createCollection([...this._array, ...additions]);
+		},
+		mutate(callback: (copy: { _array: { id: string; content: string }[] }) => void) {
+			const copy = { _array: [...this._array] };
+			callback(copy);
+			return createCollection(copy._array);
+		},
+	});
+	const source = createCollection([{ id: "20", content: "newer" }, { id: "10", content: "older" }]);
+	const deleted = { id: "15", content: "retained" };
+	const result = mergeRetainedMessages(source, [deleted]) as ReturnType<typeof createCollection>;
+
+	expect(result._array.map((message) => message.id)).toEqual(["10", "15", "20"]);
+	expect(source._array.map((message) => message.id)).toEqual(["20", "10"]);
 });
