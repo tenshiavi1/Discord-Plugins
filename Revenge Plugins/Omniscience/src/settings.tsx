@@ -61,6 +61,7 @@ function getHighlightColor(value: unknown, choices: readonly HighlightChoice[], 
 function syncMessageHighlightOptions() {
   setMessageHighlightOptions({
     enabled: storage.enabled !== false && storage.messageHighlightEnabled !== false,
+	historyEnabled: storage.enabled !== false && storage.keepEditHistory !== false,
     thickness: Number(storage.messageHighlightThickness) || 2,
     pingColor: String(storage.messageHighlightPingColor ?? "default"),
     deletedColor: String(storage.messageHighlightDeletedColor ?? "default"),
@@ -936,7 +937,6 @@ function MessageHighlightSettings({ forceUpdate }: { forceUpdate: () => void }) 
               onChangeText={setHexDraft}
               onSubmitEditing={applyHex}
               returnKeyType="done"
-              autoCorrect={false}
               maxLength={7}
               style={{ ...inputStyle, flex: 1 }}
             />
@@ -1084,6 +1084,7 @@ export function DeletedMessagesSettings() {
               setMessageHistoryFeatureEnabled(
                 storage.enabled !== false && (storage.keepDeletedMessages !== false || value),
               );
+              syncMessageHighlightOptions();
               forceUpdate();
             }}
           />

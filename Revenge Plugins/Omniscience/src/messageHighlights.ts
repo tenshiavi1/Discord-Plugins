@@ -1,11 +1,13 @@
 import { ReactNative as RN } from "@vendetta/metro/common";
 import { after } from "@vendetta/patcher";
 import { findByName, findByProps } from "../../compat";
-import { isRetainedDeletedMessage } from "./messageHistory";
+import { getMessageEditHistory, isRetainedDeletedMessage } from "./messageHistory";
+import { prependEditHistory } from "./messageHistoryPresentation";
 
 type HighlightColor = string;
 type HighlightOptions = {
 	enabled: boolean;
+	historyEnabled: boolean;
 	thickness: number;
 	pingColor: HighlightColor;
 	deletedColor: HighlightColor;
@@ -28,6 +30,7 @@ const UserStore = findByProps("getCurrentUser");
 const rememberedRows = new Map<string, { channelId: string; message: any }>();
 let options: HighlightOptions = {
 	enabled: false,
+	historyEnabled: false,
 	thickness: 2,
 	pingColor: "default",
 	deletedColor: "default",
@@ -71,7 +74,7 @@ function rememberRow(channelId: string, message: any) {
 }
 
 function highlightRow(args: any[], result: any) {
-	if (!options.enabled || !result?.message) return result;
+	if (!result?.message) return result;
 	const row = args[0];
 	if (!row || row.rowType !== 1) return result;
 	const source = row.message ?? result.message;
@@ -79,18 +82,27 @@ function highlightRow(args: any[], result: any) {
 	const channelId = String(source.channel_id ?? source.channelId ?? message.channel_id ?? message.channelId ?? "");
 	const messageId = String(source.id ?? message.id ?? "");
 	if (!channelId || !messageId) return result;
+	let next = result;
+	if (options.historyEnabled) {
+		const content = prependEditHistory(message.content, getMessageEditHistory(channelId, messageId));
+		if (content !== message.content) {
+			next = { ...next, message: { ...message, content } };
+			rememberRow(channelId, source);
+		}
+	}
+	if (!options.enabled) return next;
 
 	const deleted = isRetainedDeletedMessage(channelId, messageId) || Boolean(message.was_deleted);
 	const mentioned = !deleted && isMentionForCurrentUser(source, message);
-	if (!deleted && !mentioned) return result;
+	if (!deleted && !mentioned) return next;
 
 	const color = normalizeColor(deleted ? options.deletedColor : options.pingColor, deleted ? "#f23f43" : "#f0b232");
 	const gutter = processedColor(color);
 	const background = processedColor(`${color}1a`);
-	if (gutter === undefined || background === undefined) return result;
+	if (gutter === undefined || background === undefined) return next;
 	rememberRow(channelId, source);
 	return {
-		...result,
+		...next,
 		backgroundHighlight: {
 			backgroundColor: background,
 			gutterColor: encodeGutter(gutter, options.thickness),
@@ -113,14 +125,14 @@ function redrawRememberedRows() {
 	for (const { channelId, message } of rememberedRows.values()) {
 		if (!message || typeof message.id !== "string") continue;
 		const content = typeof message.content === "string" ? message.content : "";
-		const update = { id: message.id, channel_id: channelId, otherPluginBypass: true } as Record<string, unknown>;
+		const update = { id: message.id, channel_id: channelId } as Record<string, unknown>;
 		if (Array.isArray(message.embeds) && message.embeds.length) update.embeds = message.embeds.slice();
 		if (Array.isArray(message.components) && message.components.length) update.components = message.components.slice();
 		if (content) {
-			FluxDispatcher.dispatch({ type: "MESSAGE_UPDATE", message: { ...update, content: `${content}\u200b` } });
-			setTimeout(() => FluxDispatcher.dispatch({ type: "MESSAGE_UPDATE", message: { ...update, content } }), 60);
+			FluxDispatcher.dispatch({ type: "MESSAGE_UPDATE", otherPluginBypass: true, message: { ...update, content: `${content}\u200b` } });
+			setTimeout(() => FluxDispatcher.dispatch({ type: "MESSAGE_UPDATE", otherPluginBypass: true, message: { ...update, content } }), 60);
 		} else {
-			FluxDispatcher.dispatch({ type: "MESSAGE_UPDATE", message: update });
+			FluxDispatcher.dispatch({ type: "MESSAGE_UPDATE", otherPluginBypass: true, message: update });
 		}
 	}
 }
@@ -131,8 +143,8 @@ export function setMessageHighlightOptions(next: Partial<HighlightOptions>) {
 		...next,
 		thickness: Math.max(1, Math.min(4, Math.floor(Number(next.thickness ?? options.thickness) || 1))),
 	};
-	if (options.enabled && !unpatch) installRowPatch();
-	if (!options.enabled && unpatch) {
+	if ((options.enabled || options.historyEnabled) && !unpatch) installRowPatch();
+	if (!options.enabled && !options.historyEnabled && unpatch) {
 		unpatch();
 		unpatch = undefined;
 	}

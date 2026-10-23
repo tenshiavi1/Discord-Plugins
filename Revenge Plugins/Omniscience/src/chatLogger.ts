@@ -1,6 +1,7 @@
 import { findByProps } from "../../compat";
 import { storage } from "@vendetta/plugin";
 import { toEmbedTimestamp } from "./logFormatting";
+import { canRetainDeletedMessage } from "./messageHistoryPresentation";
 
 const FluxDispatcher = findByProps("dispatch", "subscribe", "unsubscribe");
 const snowflakeUtils = findByProps("extractTimestamp");
@@ -21,6 +22,8 @@ type CachedMessage = {
 	embeds: string[];
 	editHistory: { content: string; timestamp: string }[];
 	timestamp: string;
+	flags?: number;
+	state?: string;
 };
 
 type DeletedMessage = CachedMessage & { deletedAt: string };
@@ -218,6 +221,8 @@ function makeCachedMessage(message: any, channelId: string, previous?: CachedMes
 		embeds: Array.isArray(message.embeds) ? getEmbedText(message) : previous?.embeds ?? [],
 		editHistory: previous?.editHistory ?? [],
 		timestamp: toEmbedTimestamp(date) ?? new Date().toISOString(),
+		flags: Number(message.flags) || 0,
+		...(typeof message.state === "string" ? { state: message.state } : {}),
 	};
 }
 
@@ -235,7 +240,7 @@ function onMessageCreate(event: any) {
 function onMessageUpdate(event: any) {
 	if (storage.enabled === false || (storage.keepDeletedMessages === false && storage.keepEditHistory === false) || event?.otherPluginBypass) return;
 	const message = event?.message;
-	if (typeof message?.content !== "string" && !Array.isArray(message?.attachments) && !Array.isArray(message?.embeds)) return;
+	if (!message?.edited_timestamp || (typeof message.content !== "string" && !Array.isArray(message.attachments) && !Array.isArray(message.embeds))) return;
 	const channelId = String(message?.channel_id ?? message?.channelId ?? event?.channelId ?? "");
 	const messageId = String(message?.id ?? event?.id ?? "");
 	if (!channelId || !messageId) return;
@@ -263,7 +268,7 @@ function onMessageDelete(event: any) {
 	const messageId = String(event?.id ?? "");
 	if (!channelId || !messageId) return;
 	const cached = findCachedMessage(channelId, messageId);
-	if (!cached) return;
+	if (!canRetainDeletedMessage(cached)) return;
 
 	const deletedEntry = { ...cached, deletedAt: new Date().toISOString() };
 	deletedMessages = [
