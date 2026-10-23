@@ -95,7 +95,7 @@ function highlightRow(args: any[], result: any) {
 			rememberRow(channelId, source);
 		}
 	}
-	const isDeleted = isRetainedDeletedMessage(channelId, messageId) || Boolean(message.was_deleted);
+	const isDeleted = isRetainedDeletedMessage(channelId, messageId);
 	const highlightType = getMessageHighlightType(
 		options.deletedEnabled,
 		isDeleted,
