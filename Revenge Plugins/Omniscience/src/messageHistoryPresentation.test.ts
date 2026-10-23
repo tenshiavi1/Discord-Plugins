@@ -109,6 +109,7 @@ test("clears unsaved history only at the start of a new app session", () => {
 
 test("retains sent messages but rejects ephemeral and unsent messages", () => {
 	expect(canRetainDeletedMessage({ flags: 0, state: "SENT" })).toBe(true);
+	expect(canRetainDeletedMessage({ flags: 0, state: "SENT", author: { id: "current-user" } })).toBe(true);
 	expect(canRetainDeletedMessage({ flags: 64, state: "SENT" })).toBe(false);
 	expect(canRetainDeletedMessage({ flags: 0, state: "FAILED" })).toBe(false);
 	expect(canRetainDeletedMessage(undefined)).toBe(false);

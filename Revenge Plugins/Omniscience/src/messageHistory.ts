@@ -7,6 +7,7 @@ import { recordMessageDelete, recordMessageUpdate } from "./chatLogger";
 import { canRetainDeletedMessage, hasEditedTimestamp, isLegacyEditNotice, markDeletedMessage, mergeRetainedMessages, pruneRecentMessageLogs, removeLegacyEditNotices, shouldClearHistoryForNewSession, truncateEditVersion, type RecentMessageLog } from "./messageHistoryPresentation";
 
 const channelMessages = findByProps("_channelMessages");
+const messageActions = findByProps("deleteMessage");
 const messageStore = findByProps("getMessage", "getMessages");
 const messageRecords = findByProps("createMessageRecord");
 const userStore = findByProps("getCurrentUser");
@@ -327,6 +328,62 @@ function createRetainedMessageUpdate(channelId: string, messageId: string) {
 	};
 }
 
+function notifyMessageStore() {
+	try { messageStore?.emitChange?.(); } catch {}
+}
+
+function installDeleteActionPatch() {
+	if (typeof messageActions?.deleteMessage !== "function") {
+		recordMessageProcess({ operation: "delete", stage: "delete-action-hook", result: "failure", detail: "Discord deleteMessage action was not found" });
+		return false;
+	}
+	unpatches.push(instead("deleteMessage", messageActions, (args, original) => {
+		const channelId = String(args[0] ?? "");
+		const messageId = String(args[1] ?? "");
+		if (!settings.enabled || !settings.keepDeletedMessages || !channelId || !messageId) return original(...args);
+		const key = getMessageKey(channelId, messageId);
+		if (deletedMessages.has(key)) {
+			recordMessageProcess({ operation: "delete", stage: "delete-action", result: "skipped", detail: "message is already retained; no server deletion requested", channelId, messageId });
+			return Promise.resolve();
+		}
+		const originalMessage = getStoredMessage(channelId, messageId);
+		if (!canRetainDeletedMessage(originalMessage)) {
+			recordMessageProcess({ operation: "delete", stage: "delete-action", result: "skipped", detail: "message unavailable or not eligible before delete action", channelId, messageId });
+			return original(...args);
+		}
+		const retained: DeletedRecord = { channelId, original: originalMessage, retained: markDeletedMessage(originalMessage) };
+		rememberMessage(deletedMessages, key, retained, getRetainedMessageLimit());
+		invalidateRetainedViews();
+		notifyMessageStore();
+		recordMessageProcess({ operation: "delete", stage: "delete-action", result: "success", detail: "message snapshot retained before native delete action", channelId, messageId });
+
+		const rollback = () => {
+			if (deletedMessages.get(key) !== retained) return;
+			deletedMessages.delete(key);
+			invalidateRetainedViews();
+			notifyMessageStore();
+			persistMessageHistory();
+			recordMessageProcess({ operation: "delete", stage: "delete-action", result: "failure", detail: "native delete action failed; tentative retained row rolled back", channelId, messageId });
+		};
+		const complete = (value: any) => {
+			recordMessageDelete({ channelId, id: messageId });
+			persistMessageHistory();
+			recordMessageProcess({ operation: "delete", stage: "delete-action", result: "success", detail: "native delete action completed with retained row", channelId, messageId });
+			return value;
+		};
+		try {
+			const result = original(...args);
+			if (result && typeof result.then === "function") return Promise.resolve(result).then(complete, (error) => { rollback(); throw error; });
+			return complete(result);
+		} catch (error) {
+			rollback();
+			throw error;
+		}
+	}));
+	recordMessageProcess({ operation: "delete", stage: "delete-action-hook", result: "success", detail: "Discord deleteMessage action patched" });
+	return true;
+}
+
 function rememberEdit(event: any) {
 	const update = event?.message ?? event;
 	const content = typeof update?.content === "string" ? update.content : event?.content;
@@ -503,6 +560,7 @@ export function initializeMessageHistory(pluginSettings: {
 			console.warn("[Omniscience] Discord's message-list store was not found; deleted messages cannot be retained in chat.");
 			return false;
 		}
+		installDeleteActionPatch();
 		prepareHistorySession();
 		restorePersistedMessageHistory();
 		unpatches.push(instead("dispatch", FluxDispatcher, (args, original) => {
