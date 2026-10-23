@@ -1,36 +1,5 @@
 import { expect, test } from "bun:test";
-import { canRetainDeletedMessage, getDeletedMessageHighlight, getMessageHighlightType, hasEditedTimestamp, isLegacyEditNotice, markDeletedMessage, mergeRetainedMessages, prependEditHistory, pruneRecentMessageLogs, removeLegacyEditNotices, resolveMessageRowGenerator, shouldClearHistoryForNewSession, truncateEditVersion, type RecentMessageLog } from "./messageHistoryPresentation";
-
-test("prepends plain struck-through versions to one rendered message", () => {
-	const current = [{ type: "text", content: "new text" }];
-	const result = prependEditHistory(current, [{ content: "old text" }, { content: "older text" }]) as any[];
-
-	expect(result).toHaveLength(2);
-	expect(result[0].type).toBe("blockQuote");
-	expect(result[0].content[0].content[0].content[0].content).toBe("old text");
-	expect(result[0].content[1].type).toBe("br");
-	expect(result[0].content[2].content[0].content[0].content).toBe("older text");
-	expect(result[1]).toBe(current[0]);
-});
-
-test("does not rewrite non-rendered or unchanged message content", () => {
-	const content = "raw message content";
-	expect(prependEditHistory(content, [{ content: "old text" }])).toBe(content);
-	expect(prependEditHistory([content], [])).toEqual([content]);
-});
-
-test("caps retained edit text at 4,000 characters with a truncation marker", () => {
-	const truncated = truncateEditVersion("x".repeat(4_001));
-	expect(truncated).toHaveLength(4_001);
-	expect(truncated.endsWith("\u2026")).toBe(true);
-	expect(truncateEditVersion("short text")).toBe("short text");
-});
-
-test("recognizes snake_case and camelCase edit timestamps", () => {
-	expect(hasEditedTimestamp({ edited_timestamp: "2026-10-23T00:00:00Z" })).toBe(true);
-	expect(hasEditedTimestamp({ editedTimestamp: "2026-10-23T00:00:00Z" })).toBe(true);
-	expect(hasEditedTimestamp({ edited_timestamp: null })).toBe(false);
-});
+import { canRetainDeletedMessage, getDeletedMessageHighlight, getMessageHighlightType, isLegacyEditNotice, markDeletedMessage, mergeRetainedMessages, pruneRecentMessageLogs, removeLegacyEditNotices, resolveMessageRowGenerator, shouldClearHistoryForNewSession, type RecentMessageLog } from "./messageHistoryPresentation";
 
 test("resolves a row generator from its default module export", () => {
 	class RowGenerator {
@@ -76,10 +45,10 @@ test("shows only message logs younger than five minutes", () => {
 	const now = 1_000_000;
 	const log = (timestamp: number): RecentMessageLog => ({
 		timestamp,
-		operation: "edit",
-		stage: "history-captured",
+		operation: "delete",
+		stage: "retention-check",
 		result: "success",
-		detail: "one previous version recorded",
+		detail: "message retained",
 		channelId: "channel-id",
 		messageId: String(timestamp),
 	});

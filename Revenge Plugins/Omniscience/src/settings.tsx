@@ -13,7 +13,6 @@ import { PluginSettingsSection } from "../../shared/pluginSettings";
 import {
   clearDeletedMessageHistory,
   clearMessageLoggerCache,
-  setEditHistoryEnabled,
   setMessageLoggerKeepAfterRestart,
   setMessageLoggerLimit,
 } from "./chatLogger";
@@ -85,9 +84,6 @@ function syncMessageHighlightOptions() {
       storage.enabled !== false && storage.messageHighlightEnabled !== false,
     deletedEnabled:
       storage.enabled !== false && storage.keepDeletedMessages !== false,
-    historyEnabled:
-      storage.enabled !== false &&
-      storage.keepEditHistory !== false,
     thickness: Number(storage.messageHighlightThickness) || 2,
     pingColor: String(storage.messageHighlightPingColor ?? "default"),
     deletedColor: String(storage.messageHighlightDeletedColor ?? "default"),
@@ -1431,7 +1427,6 @@ function MessageHighlightSettings({
       />
       <RN.View style={{ paddingHorizontal: 8, paddingBottom: 12 }}>
         <DeletedMessagesPreview
-          showHistory={false}
           showDeletedMessages
           highlightEnabled={!disabled}
           pingColor={pingColor}
@@ -1541,22 +1536,18 @@ function MessageHighlightSettings({
 }
 
 function DeletedMessagesPreview({
-  showHistory,
   showDeletedMessages,
   highlightEnabled,
   pingColor,
   deletedColor,
   thickness,
 }: {
-  showHistory: boolean;
   showDeletedMessages: boolean;
   highlightEnabled: boolean;
   pingColor: string;
   deletedColor: string;
   thickness: number;
 }) {
-  const reduceMotion = useReducedMotion();
-  const versions = ["See you at 6", "See you at 7"];
   return (
     <RN.View
       style={{
@@ -1572,37 +1563,8 @@ function DeletedMessagesPreview({
       <RN.View style={{ paddingVertical: 4 }}>
         <PreviewMessage name="Alex" color="#3ba55c" time="Today at 4:01 PM">
           <RN.View>
-            {showHistory ? (
-              <RN.View
-                style={{
-                  borderLeftWidth: 2,
-                  borderLeftColor: "#4e5058",
-                  paddingLeft: 8,
-                  marginBottom: 4,
-                }}
-              >
-                {versions.map((version, index) => (
-                <PreviewPopIn
-                  key={`${version}-${index}`}
-                  reduceMotion={reduceMotion}
-                >
-                  <Text
-                    style={{
-                      color: "#949ba4",
-                      fontSize: 13,
-                      lineHeight: 18,
-                      textDecorationLine: "line-through",
-                    }}
-                  >
-                    {version}
-                  </Text>
-                </PreviewPopIn>
-                ))}
-              </RN.View>
-            ) : null}
             <Text style={{ color: "#dbdee1", fontSize: 15, lineHeight: 20 }}>
               See you at 8
-              <Text style={{ color: "#949ba4", fontSize: 12 }}> (edited)</Text>
             </Text>
           </RN.View>
         </PreviewMessage>
@@ -1687,17 +1649,15 @@ export function DeletedMessagesSettings() {
   const keepAfterRestart = Boolean(storage.messageLoggerKeepAfterRestart);
   const limit = Number(storage.messageLoggerLimit) || 500;
   const deletedCount = Number(storage.messageLoggerDeletedCount) || 0;
-  const editCount = Number(storage.messageLoggerEditCount) || 0;
-  const hasStoredHistory =
-    deletedCount > 0 || editCount > 0 || hasMessageHistory();
+  const hasStoredHistory = deletedCount > 0 || hasMessageHistory();
   const summary = hasStoredHistory
-    ? `${deletedCount} deleted message${deletedCount === 1 ? "" : "s"} and ${editCount} edit${editCount === 1 ? "" : "s"} kept${keepAfterRestart ? ", saved on this phone." : " until Discord restarts."}`
+    ? `${deletedCount} deleted message${deletedCount === 1 ? "" : "s"} kept${keepAfterRestart ? ", saved on this phone." : " until Discord restarts."}`
     : "";
 
   const confirmClear = () => {
     RN.Alert.alert(
       "Clear saved history?",
-      "Every kept deleted message and edit history will be removed from chat and this phone. This cannot be undone.",
+      "Every kept deleted message will be removed from chat and this phone. This cannot be undone.",
       [
         { text: "Cancel", style: "cancel" },
         {
@@ -1707,7 +1667,7 @@ export function DeletedMessagesSettings() {
             clearMessageHistory(true);
             clearDeletedMessageHistory();
             showToast(
-              "Cleared kept messages and edit history.",
+              "Cleared kept deleted messages.",
               getAssetIDByName("Check"),
             );
             forceUpdate();
@@ -1732,7 +1692,6 @@ export function DeletedMessagesSettings() {
 
         <TableRowGroup title="Preview">
           <DeletedMessagesPreview
-            showHistory={storage.keepEditHistory !== false}
             showDeletedMessages={Boolean(storage.keepDeletedMessages)}
             highlightEnabled={
               storage.enabled !== false &&
@@ -1752,28 +1711,10 @@ export function DeletedMessagesSettings() {
           />
         </TableRowGroup>
 
-        <TableRowGroup title="Edited messages">
-          <TableSwitchRow
-            label="Show edit history"
-            subLabel="What a message said before it was edited, faded and crossed out above it. Up to 10 versions each."
-            value={storage.keepEditHistory !== false}
-            onValueChange={(value: boolean) => {
-              setEditHistoryEnabled(value);
-              updateMessageHistorySettings({ keepEditHistory: value });
-              setMessageHistoryFeatureEnabled(
-                storage.enabled !== false &&
-                  (storage.keepDeletedMessages !== false || value),
-              );
-              syncMessageHighlightOptions();
-              forceUpdate();
-            }}
-          />
-        </TableRowGroup>
-
         <TableRowGroup title="Storage">
           <TableSwitchRow
             label="Keep after restarting"
-            subLabel="Deleted and edited messages survive closing Discord. Saved only on this phone, for this account."
+            subLabel="Deleted messages survive closing Discord. Saved only on this phone, for this account."
             value={keepAfterRestart}
             onValueChange={(value: boolean) => {
               setMessageLoggerKeepAfterRestart(value);
@@ -1801,7 +1742,7 @@ export function DeletedMessagesSettings() {
           <TableRowGroup title="Manage">
             <TableRow
               label="Clear kept messages"
-              subLabel="Remove every deleted message and edit history kept from chat and this phone."
+              subLabel="Remove every deleted message kept from chat and this phone."
               trailing={<TableRow.Arrow />}
               onPress={confirmClear}
             />
@@ -1830,9 +1771,7 @@ export default function Settings() {
               syncMessageHighlightOptions();
               if (!value) clearMessageLoggerCache();
               setMessageHistoryFeatureEnabled(
-                value &&
-                  (storage.keepDeletedMessages !== false ||
-                    storage.keepEditHistory !== false),
+                value && storage.keepDeletedMessages !== false,
               );
               setServerInfoFeatureEnabled(
                 value && storage.enableServerInfo !== false,
@@ -1849,8 +1788,7 @@ export default function Settings() {
               updateMessageHistorySettings({ keepDeletedMessages: value });
               syncMessageHighlightOptions();
               setMessageHistoryFeatureEnabled(
-                storage.enabled !== false &&
-                  (value || storage.keepEditHistory !== false),
+                storage.enabled !== false && value,
               );
               forceUpdate();
             }}
@@ -1875,7 +1813,7 @@ export default function Settings() {
           />
           <TableRow
             label="Deleted Messages"
-            subLabel="Edit history, storage and retention options."
+            subLabel="Storage and deleted-message retention options."
             trailing={<TableRow.Arrow />}
             onPress={() =>
               openSettingsPage(

@@ -24,14 +24,14 @@ export function registerMessageLogCommand() {
 			execute: () => {
 				const logs = formatMessageLogs();
 				if (!logs) {
-					showToast("No edit/delete handling events in the last five minutes.");
+					showToast("No deletion handling events in the last five minutes.");
 					return;
 				}
 				if (typeof RN.Alert?.alert !== "function") {
 					showToast("The private message-log view is unavailable on this client.");
 					return;
 				}
-				RN.Alert.alert("Edit/delete process trace · 5 minutes", logs, [{ text: "Close" }]);
+				RN.Alert.alert("Deletion process trace · 5 minutes", logs, [{ text: "Close" }]);
 			},
 		});
 	} catch (error) {

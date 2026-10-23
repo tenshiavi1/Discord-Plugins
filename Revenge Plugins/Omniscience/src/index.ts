@@ -17,7 +17,6 @@ const registerCrashGuard = () => installPluginCrashGuard("Omniscience", storage,
   features: [
     { storageKey: "wordTrackerEnabled", patterns: [/onMessage|track.?message|keyword/i] },
     { storageKey: "keepDeletedMessages", patterns: [/MESSAGE_DELETE|deleted.?message/i] },
-    { storageKey: "keepEditHistory", patterns: [/MESSAGE_UPDATE|edit.?history/i] },
     { storageKey: "enableServerInfo", patterns: [/server.?info|ServerInfoSheet/i] },
     { storageKey: "enabled", patterns: [/installChatLogger|Omniscience.*settings/i] },
     { storageKey: "showInSettings", patterns: [/registerPluginSettingsShortcut|pluginSettings/i] },
@@ -64,7 +63,6 @@ const defaults = {
   ignoredUserIds: "",
   showInSettings: false,
   keepDeletedMessages: true,
-  keepEditHistory: true,
   messageHighlightEnabled: true,
   messageHighlightThickness: 2,
   messageHighlightPingColor: "default",
@@ -74,10 +72,6 @@ const defaults = {
 
 migrateOmniscienceSettings(storage);
 
-if (storage.keepEditHistory === undefined && storage.messageLoggerShowEditHistory !== undefined) {
-  storage.keepEditHistory = storage.messageLoggerShowEditHistory;
-  delete storage.messageLoggerShowEditHistory;
-}
 
 for (const [key, value] of Object.entries(defaults)) {
   if (storage[key] === undefined) storage[key] = value;
@@ -97,11 +91,10 @@ export default {
     removeCrashGuard ??= registerCrashGuard();
     removeChatLogger = installChatLogger();
     unregisterMessageLogCommand = registerMessageLogCommand();
-    setMessageHistoryFeatureEnabled(storage.enabled !== false && (storage.keepDeletedMessages !== false || storage.keepEditHistory !== false));
+    setMessageHistoryFeatureEnabled(storage.enabled !== false && storage.keepDeletedMessages !== false);
     setMessageHighlightOptions({
       enabled: storage.enabled !== false && storage.messageHighlightEnabled !== false,
 	  deletedEnabled: storage.enabled !== false && storage.keepDeletedMessages !== false,
-    historyEnabled: storage.enabled !== false && storage.keepEditHistory !== false,
       thickness: Number(storage.messageHighlightThickness) || 2,
       pingColor: String(storage.messageHighlightPingColor ?? "default"),
       deletedColor: String(storage.messageHighlightDeletedColor ?? "default"),

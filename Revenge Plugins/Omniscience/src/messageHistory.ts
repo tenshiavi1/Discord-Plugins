@@ -4,15 +4,13 @@ import { storage } from "@vendetta/plugin";
 import { instead } from "@vendetta/patcher";
 import { showToast } from "../../shared/toast";
 import { recordMessageDelete, recordMessageUpdate } from "./chatLogger";
-import { canRetainDeletedMessage, hasEditedTimestamp, isLegacyEditNotice, markDeletedMessage, mergeRetainedMessages, pruneRecentMessageLogs, removeLegacyEditNotices, shouldClearHistoryForNewSession, truncateEditVersion, type RecentMessageLog } from "./messageHistoryPresentation";
+import { canRetainDeletedMessage, isLegacyEditNotice, markDeletedMessage, mergeRetainedMessages, pruneRecentMessageLogs, removeLegacyEditNotices, shouldClearHistoryForNewSession, type RecentMessageLog } from "./messageHistoryPresentation";
 
 const channelMessages = findByProps("_channelMessages");
 const messageActions = findByProps("deleteMessage");
 const messageStore = findByProps("getMessage", "getMessages");
 const messageRecords = findByProps("createMessageRecord");
 const userStore = findByProps("getCurrentUser");
-const MAX_EDIT_HISTORY = 2000;
-const MAX_EDIT_VERSIONS = 10;
 const HISTORY_STORAGE_KEY = "omniscienceMessageHistory";
 const HISTORY_RUNTIME_KEY = "__omniscienceMessageHistoryRuntime";
 
@@ -34,13 +32,6 @@ type MessageRecord = {
 	[key: string]: unknown;
 };
 
-type EditRecord = {
-	channelId: string;
-	messageId: string;
-	previous: { content: string }[];
-	currentContent: string;
-};
-
 type DeletedRecord = {
 	channelId: string;
 	original: MessageRecord;
@@ -50,12 +41,10 @@ type DeletedRecord = {
 type MessageHistorySettings = {
 	enabled: boolean;
 	keepDeletedMessages: boolean;
-	keepEditHistory: boolean;
 };
 
 type HistoryRuntimeState = {
 	deletedMessages: Map<string, DeletedRecord>;
-	editHistory: Map<string, EditRecord>;
 	recentLogs: RecentMessageLog[];
 	sessionInitialized: boolean;
 };
@@ -63,13 +52,11 @@ type HistoryRuntimeState = {
 const globalHistoryRuntime = globalThis as typeof globalThis & { [HISTORY_RUNTIME_KEY]?: HistoryRuntimeState };
 const historyRuntime = globalHistoryRuntime[HISTORY_RUNTIME_KEY] ??= {
 	deletedMessages: new Map(),
-	editHistory: new Map(),
 	recentLogs: [],
 	sessionInitialized: false,
 };
 historyRuntime.recentLogs ??= [];
 const deletedMessages = historyRuntime.deletedMessages;
-const editHistory = historyRuntime.editHistory;
 const retainedViews = new Map<string, { original: unknown; revision: number; value: unknown }>();
 const legacyEditNoticeIds = new Set<string>();
 const unpatches: (() => void)[] = [];
@@ -80,7 +67,6 @@ let restoredHistoryAccountId: string | undefined;
 let settings: MessageHistorySettings = {
 	enabled: true,
 	keepDeletedMessages: true,
-	keepEditHistory: true,
 };
 
 function getMessageKey(channelId: string, messageId: string) {
@@ -186,12 +172,6 @@ function persistMessageHistory() {
 			channelId,
 			message: serializeRetainedMessage(original),
 		})),
-		edits: [...editHistory.values()].map(({ channelId, messageId, previous: versions, currentContent }) => ({
-				channelId,
-				messageId,
-				versions,
-				currentContent,
-			})),
 	};
 }
 
@@ -222,29 +202,11 @@ function restorePersistedMessageHistory() {
 			}
 		}
 	}
-	if (Array.isArray(snapshot.edits)) {
-		for (const entry of snapshot.edits.slice(-MAX_EDIT_HISTORY)) {
-			if (!entry || typeof entry.channelId !== "string" || typeof entry.messageId !== "string" || !Array.isArray(entry.versions)) continue;
-			const previous = entry.versions
-				.filter((version: unknown): version is { content: string } => typeof version === "object" && version !== null && typeof (version as { content?: unknown }).content === "string")
-				.slice(-MAX_EDIT_VERSIONS)
-				.map((version: { content: string }) => ({ content: truncateEditVersion(version.content) }));
-			if (!previous.length || typeof entry.currentContent !== "string") continue;
-			const key = getMessageKey(entry.channelId, entry.messageId);
-			if (editHistory.has(key)) continue;
-			rememberMessage(editHistory, key, {
-				channelId: entry.channelId,
-				messageId: entry.messageId,
-				previous,
-				currentContent: entry.currentContent,
-			}, MAX_EDIT_HISTORY);
-			restored++;
-		}
-	}
 	if (restored) {
 		invalidateRetainedViews();
 		try { messageStore?.emitChange?.(); } catch {}
 	}
+	persistMessageHistory();
 	return restored > 0;
 }
 
@@ -384,57 +346,6 @@ function installDeleteActionPatch() {
 	return true;
 }
 
-function rememberEdit(event: any) {
-	const update = event?.message ?? event;
-	const content = typeof update?.content === "string" ? update.content : event?.content;
-	if (!hasEditedTimestamp(update) && !hasEditedTimestamp(event)) return;
-	const channelId = String(update.channel_id ?? update.channelId ?? event?.channel_id ?? event?.channelId ?? "");
-	const messageId = String(update.id ?? event?.id ?? "");
-	const target = { channelId: channelId || undefined, messageId: messageId || undefined };
-	recordMessageProcess({ operation: "edit", stage: "capture-start", result: "success", detail: "edited MESSAGE_UPDATE received", ...target });
-	if (!settings.enabled) {
-		recordMessageProcess({ operation: "edit", stage: "capture", result: "skipped", detail: "Omniscience is disabled", ...target });
-		return;
-	}
-	if (!settings.keepEditHistory) {
-		recordMessageProcess({ operation: "edit", stage: "capture", result: "skipped", detail: "edit history is disabled", ...target });
-		return;
-	}
-	if (typeof content !== "string") {
-		recordMessageProcess({ operation: "edit", stage: "capture", result: "skipped", detail: "update has no string content", ...target });
-		return;
-	}
-	if (!channelId || !messageId) {
-		recordMessageProcess({ operation: "edit", stage: "capture", result: "failure", detail: "update is missing channel or message ID", ...target });
-		return;
-	}
-	const key = getMessageKey(channelId, messageId);
-	const record = editHistory.get(key);
-	const original = getStoredMessage(channelId, messageId);
-	const previousContent = record?.currentContent ?? original?.content;
-	if (typeof previousContent !== "string") {
-		recordMessageProcess({ operation: "edit", stage: "capture", result: "skipped", detail: "previous message state is unavailable", ...target });
-		return;
-	}
-	if (previousContent === content) {
-		recordMessageProcess({ operation: "edit", stage: "capture", result: "skipped", detail: "content did not change", ...target });
-		return;
-	}
-	const next: EditRecord = record ?? { channelId, messageId, previous: [], currentContent: previousContent };
-	next.previous = [...next.previous, { content: truncateEditVersion(previousContent) }].slice(-MAX_EDIT_VERSIONS);
-	next.currentContent = content;
-	rememberMessage(editHistory, key, next, MAX_EDIT_HISTORY);
-	recordMessageProcess({
-		operation: "edit",
-		stage: "history-captured",
-		result: "success",
-		detail: `${next.previous.length} previous version(s) recorded`,
-		channelId,
-		messageId,
-	});
-	persistMessageHistory();
-}
-
 function dispatchWithHistory(args: unknown[], original: (...args: any[]) => any) {
 	const event = args[0] as Record<string, any> | undefined;
 	if (!event || typeof event.type !== "string") return original(...args);
@@ -442,20 +353,17 @@ function dispatchWithHistory(args: unknown[], original: (...args: any[]) => any)
 	if (event.type === "MESSAGE_CREATE" && isLegacyEditNotice(event.message ?? event)) {
 		const notice = event.message ?? event;
 		if (typeof notice.id === "string") legacyEditNoticeIds.add(notice.id);
-		recordMessageProcess({ operation: "edit", stage: "legacy-notice", result: "skipped", detail: "suppressed synthetic notice from an older plugin build", messageId: typeof notice.id === "string" ? notice.id : undefined });
 		return Promise.resolve();
 	}
 	if (event.type === "MESSAGE_EDIT_FAILED_AUTOMOD") {
 		const noticeId = String(event.messageData?.message?.messageId ?? "");
 		if (noticeId && legacyEditNoticeIds.delete(noticeId)) {
-			recordMessageProcess({ operation: "edit", stage: "legacy-notice", result: "skipped", detail: "suppressed synthetic Automod notice from an older plugin build", messageId: noticeId });
 			return Promise.resolve();
 		}
 	}
 	if (event.otherPluginBypass) return original(...args);
 	if (event.type === "MESSAGE_UPDATE") {
 		recordMessageUpdate(event);
-		rememberEdit(event);
 		return original(...args);
 	}
 	if (event.type === "MESSAGE_DELETE" && (!settings.enabled || !settings.keepDeletedMessages)) {
@@ -542,12 +450,10 @@ function dispatchWithHistory(args: unknown[], original: (...args: any[]) => any)
 export function initializeMessageHistory(pluginSettings: {
 	enabled?: boolean;
 	keepDeletedMessages: boolean;
-	keepEditHistory: boolean;
 }): boolean {
 	settings = {
 		enabled: pluginSettings.enabled !== false,
 		keepDeletedMessages: pluginSettings.keepDeletedMessages,
-		keepEditHistory: pluginSettings.keepEditHistory,
 	};
 
 	if (typeof FluxDispatcher?.dispatch !== "function") {
@@ -568,9 +474,7 @@ export function initializeMessageHistory(pluginSettings: {
 				return dispatchWithHistory(args, original);
 			} catch (error) {
 				const event = args[0] as Record<string, any> | undefined;
-				if (event?.type === "MESSAGE_UPDATE") {
-					recordMessageProcess({ operation: "edit", stage: "dispatcher", result: "failure", detail: "message update handler threw before processing completed" });
-				} else if (event?.type === "MESSAGE_DELETE" || event?.type === "MESSAGE_DELETE_BULK") {
+				if (event?.type === "MESSAGE_DELETE" || event?.type === "MESSAGE_DELETE_BULK") {
 					recordMessageProcess({ operation: "delete", stage: "dispatcher", result: "failure", detail: "message delete handler threw before processing completed" });
 				}
 				console.error("[Omniscience] Could not update message history.", error);
@@ -596,15 +500,13 @@ export function setMessageHistoryFeatureEnabled(enabled: boolean) {
 		storage.messageLoggerKeepAfterRestart &&
 		snapshot?.accountId === getCurrentAccountId(),
 	);
-	if (!enabled && !hasSavedHistory && !deletedMessages.size && !editHistory.size) return;
+	if (!enabled && !hasSavedHistory && !deletedMessages.size) return;
 	if (!initializeMessageHistory({
 		enabled,
 		keepDeletedMessages: storage.keepDeletedMessages !== false,
-		keepEditHistory: storage.keepEditHistory !== false,
 	})) {
 		removeMessageHistoryPatch();
 		storage.keepDeletedMessages = false;
-		storage.keepEditHistory = false;
 		showToast("Could not enable Omniscience message history. Check the console for details.");
 	}
 }
@@ -612,11 +514,7 @@ export function setMessageHistoryFeatureEnabled(enabled: boolean) {
 export function updateMessageHistorySettings(patch: Partial<MessageHistorySettings>) {
 	const previous = settings;
 	settings = { ...settings, ...patch };
-	if (
-		(!previous.enabled && settings.enabled) ||
-		(!previous.keepDeletedMessages && settings.keepDeletedMessages) ||
-		(!previous.keepEditHistory && settings.keepEditHistory)
-	) {
+	if ((!previous.enabled && settings.enabled) || (!previous.keepDeletedMessages && settings.keepDeletedMessages)) {
 		restoredHistoryAccountId = undefined;
 		restorePersistedMessageHistory();
 	}
@@ -641,12 +539,8 @@ export function setMessageHistoryLimit(limit: number) {
 	}
 }
 
-export function getMessageEditHistory(channelId: string, messageId: string): { content: string }[] {
-	return editHistory.get(getMessageKey(channelId, messageId))?.previous ?? [];
-}
-
 export function hasMessageHistory(): boolean {
-	return deletedMessages.size > 0 || editHistory.size > 0;
+	return deletedMessages.size > 0;
 }
 
 export function isRetainedDeletedMessage(channelId: string, messageId: string): boolean {
@@ -670,7 +564,6 @@ export function clearMessageHistory(removeDeletedMessagesFromChat = false) {
 	}
 	deletedMessages.clear();
 	invalidateRetainedViews();
-	editHistory.clear();
 	delete storage[HISTORY_STORAGE_KEY];
 }
 

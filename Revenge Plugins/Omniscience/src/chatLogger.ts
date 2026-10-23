@@ -7,7 +7,6 @@ const FluxDispatcher = findByProps("dispatch", "subscribe", "unsubscribe");
 const snowflakeUtils = findByProps("extractTimestamp");
 const MAX_CACHED_MESSAGES = 500;
 const MAX_DELETED_MESSAGES = 5000;
-const MAX_EDIT_VERSIONS = 10;
 const MESSAGE_LOG_LIMITS = [100, 500, 1000, MAX_DELETED_MESSAGES];
 const MESSAGE_HISTORY_CLEANUP_KEY = "__omniscienceMessageHistoryCleanup";
 const globalHistoryState = globalThis as typeof globalThis & {
@@ -22,7 +21,6 @@ type CachedMessage = {
   content: string;
   attachments: string[];
   embeds: string[];
-  editHistory: { content: string; timestamp: string }[];
   timestamp: string;
   flags?: number;
   state?: string;
@@ -51,12 +49,7 @@ function readMessageCache(value: unknown): CachedMessage[] {
         typeof (entry as CachedMessage).content === "string" &&
         Array.isArray((entry as CachedMessage).attachments),
     )
-    .map((entry) => ({
-      ...entry,
-      editHistory: Array.isArray(entry.editHistory)
-        ? entry.editHistory.slice(-MAX_EDIT_VERSIONS)
-        : [],
-    }))
+    .map((entry) => ({ ...entry }))
     .slice(-MAX_CACHED_MESSAGES);
 }
 
@@ -73,12 +66,7 @@ function readDeletedCache(value: unknown): DeletedMessage[] {
         typeof (entry as DeletedMessage).deletedAt === "string" &&
         Array.isArray((entry as DeletedMessage).attachments),
     )
-    .map((entry) => ({
-      ...entry,
-      editHistory: Array.isArray(entry.editHistory)
-        ? entry.editHistory.slice(-MAX_EDIT_VERSIONS)
-        : [],
-    }));
+    .map((entry) => ({ ...entry }));
 }
 
 let cachedMessages = storage.messageLoggerKeepAfterRestart
@@ -100,13 +88,6 @@ function persistMessageHistory() {
   storage.messageLoggerCache = keepAfterRestart ? cachedMessages : [];
   storage.messageLoggerDeletedCache = keepAfterRestart ? deletedMessages : [];
   storage.messageLoggerDeletedCount = deletedMessages.length;
-  const history = new Map<string, CachedMessage>();
-  for (const message of [...cachedMessages, ...deletedMessages])
-    history.set(getMessageKey(message.channelId, message.id), message);
-  storage.messageLoggerEditCount = [...history.values()].reduce(
-    (total, message) => total + message.editHistory.length,
-    0,
-  );
 }
 
 persistMessageHistory();
@@ -149,21 +130,6 @@ export function clearMessageLoggerCache() {
 export function setMessageLoggerKeepAfterRestart(enabled: boolean) {
   storage.messageLoggerKeepAfterRestart = enabled;
   persistMessageHistory();
-}
-
-export function setEditHistoryEnabled(enabled: boolean) {
-  storage.keepEditHistory = enabled;
-  if (!enabled) {
-    cachedMessages = cachedMessages.map((message) => ({
-      ...message,
-      editHistory: [],
-    }));
-    deletedMessages = deletedMessages.map((message) => ({
-      ...message,
-      editHistory: [],
-    }));
-    persistMessageHistory();
-  }
 }
 
 export function setMessageLoggerLimit(limit: number) {
@@ -294,7 +260,6 @@ function makeCachedMessage(
     embeds: Array.isArray(message.embeds)
       ? getEmbedText(message)
       : (previous?.embeds ?? []),
-    editHistory: previous?.editHistory ?? [],
     timestamp: toEmbedTimestamp(date) ?? new Date().toISOString(),
     flags: Number(message.flags) || 0,
     ...(typeof message.state === "string" ? { state: message.state } : {}),
@@ -314,19 +279,14 @@ function onMessageCreate(event: any) {
   );
   if (!channelId) return;
 
-  if (
-    storage.keepDeletedMessages === false &&
-    storage.keepEditHistory === false
-  )
-    return;
+  if (storage.keepDeletedMessages === false) return;
   rememberMessage(makeCachedMessage(message, channelId));
 }
 
 function onMessageUpdate(event: any) {
   if (
     storage.enabled === false ||
-    (storage.keepDeletedMessages === false &&
-      storage.keepEditHistory === false) ||
+    storage.keepDeletedMessages === false ||
     event?.otherPluginBypass
   )
     return;
@@ -352,20 +312,7 @@ function onMessageUpdate(event: any) {
         .join("\n")
     : "";
   if (cached && nextContent !== originalContent) {
-    const editHistory =
-      storage.keepEditHistory !== false
-        ? [
-            ...cached.editHistory,
-            {
-              content: originalContent || "(no text)",
-              timestamp: cached.timestamp,
-            },
-          ].slice(-MAX_EDIT_VERSIONS)
-        : [];
-    rememberMessage({
-      ...makeCachedMessage(message, channelId, cached),
-      editHistory,
-    });
+    rememberMessage(makeCachedMessage(message, channelId, cached));
     return;
   }
   rememberMessage(makeCachedMessage(message, channelId, cached));
