@@ -4,7 +4,7 @@ import { storage } from "@vendetta/plugin";
 import { instead } from "@vendetta/patcher";
 import { showToast } from "../../shared/toast";
 import { forgetDeletedMessage, recordMessageDelete, recordMessageUpdate } from "./chatLogger";
-import { appendEditHistoryVersion, canRetainDeletedMessage, hasEditedTimestamp, isEphemeralMessage, isLegacyEditNotice, markDeletedMessage, mergeRetainedMessages, MAX_EDIT_VERSIONS, removeLegacyEditNotices, shouldClearHistoryForNewSession, truncateEditVersion, type EditHistoryVersion } from "./messageHistoryPresentation";
+import { appendEditHistoryVersion, canRetainDeletedMessage, hasEditedTimestamp, isEphemeralMessage, isLegacyEditNotice, markDeletedMessage, mergeRetainedMessages, MAX_EDIT_VERSIONS, removeEditedDeletedMessage, removeLegacyEditNotices, shouldClearHistoryForNewSession, truncateEditVersion, type EditHistoryVersion } from "./messageHistoryPresentation";
 
 const channelMessages = findByProps("_channelMessages");
 const messageActions = findByProps("deleteMessage");
@@ -309,18 +309,29 @@ function createRetainedMessageUpdate(channelId: string, messageId: string) {
 
 function rememberEdit(event: any) {
 	const update = event?.message ?? event;
-	if (!settings.enabled || !settings.keepEditHistory || !hasEditedTimestamp(update) || isEphemeralMessage(update)) return;
 	const channelId = String(update.channel_id ?? update.channelId ?? event?.channel_id ?? event?.channelId ?? "");
 	const messageId = String(update.id ?? event?.id ?? "");
 	if (!channelId || !messageId) return;
-	const key = getMessageKey(channelId, messageId);
-	const original = getStoredMessage(channelId, messageId);
-	if (isEphemeralMessage(original)) return;
 	const content = typeof update.content === "string" ? update.content : undefined;
 	if (content === undefined) return;
+	const key = getMessageKey(channelId, messageId);
+	const deleted = removeEditedDeletedMessage(deletedMessages, key, content);
+	if (deleted) {
+		forgetDeletedMessage(channelId, messageId);
+		invalidateRetainedViews();
+	}
+	if (!settings.enabled || !settings.keepEditHistory || !hasEditedTimestamp(update) || isEphemeralMessage(update)) {
+		if (deleted) persistMessageHistory();
+		return;
+	}
+	const original = deleted?.original ?? getStoredMessage(channelId, messageId);
+	if (isEphemeralMessage(original)) return;
 	const existing = editHistory.get(key);
 	const previousContent = existing?.currentContent ?? original?.content;
-	if (typeof previousContent !== "string" || previousContent === content) return;
+	if (typeof previousContent !== "string" || previousContent === content) {
+		if (deleted) persistMessageHistory();
+		return;
+	}
 	const timestamp = original?.edited_timestamp instanceof Date
 		? original.edited_timestamp.toISOString()
 		: typeof original?.edited_timestamp === "string"

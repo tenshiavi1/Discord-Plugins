@@ -3,7 +3,7 @@ import { storage } from "@vendetta/plugin";
 import { after, instead } from "@vendetta/patcher";
 import { find, findByProps, findByStoreName } from "../../compat";
 import platformIcons from "./deviceIndicatorIcons";
-import { resolveComponentModule, resolveComponentTarget } from "./deviceIndicatorDiscovery";
+import { findDeviceUserIdInTree, resolveComponentModule, resolveComponentTarget, resolveDeviceUserId, resolveNamedComponentModule } from "./deviceIndicatorDiscovery";
 
 export type DeviceIndicatorOptions = {
 	enabled: boolean;
@@ -148,13 +148,12 @@ export function DeviceBadges({ userId, clients: sampleClients }: { userId?: stri
 }
 
 function userIdFrom(props: any) {
-	const channel = props?.channel ?? (props?.channelId ? channelStore?.getChannel?.(props.channelId) : null);
-	return props?.user?.id ?? props?.userId ?? (channel?.type === 1 && channel?.recipients?.length === 1 ? channel.recipients[0] : undefined);
+	return resolveDeviceUserId(props, (channelId) => channelStore?.getChannel?.(channelId));
 }
 
 function placeBadge(tree: any, props: any, placement: "dmHeader" | "lists" | "profiles") {
 	if (!options.enabled || !options[placement] || !React || !tree) return tree;
-	const userId = userIdFrom(props);
+	const userId = userIdFrom(props) ?? findDeviceUserIdInTree(tree, (channelId) => channelStore?.getChannel?.(channelId));
 	let added = false;
 	function visit(node: any, depth: number): any {
 		if (!node || depth > 18 || typeof node !== "object" || !node.props) return node;
@@ -187,7 +186,16 @@ function placeBadge(tree: any, props: any, placement: "dmHeader" | "lists" | "pr
 		const child = visit(children, depth + 1);
 		return child !== children ? React.cloneElement(node, { children: child }) : node;
 	}
-	return visit(tree, 0);
+	const result = visit(tree, 0);
+	if (!added && userId && (placement === "dmHeader" || placement === "profiles")) {
+		return React.createElement(
+			RN.View,
+			{ style: { flexDirection: "column", gap: 6, alignItems: "flex-start" } },
+			result,
+			React.createElement(DeviceBadges, { userId }),
+		);
+	}
+	return result;
 }
 
 function patchComponent(moduleId: number, key: string, placement: "dmHeader" | "lists" | "profiles", names: string[] = []) {
@@ -200,18 +208,24 @@ function patchComponent(moduleId: number, key: string, placement: "dmHeader" | "
 	patched.add(patchKey);
 	unpatches.push(after(component.key, component.target, (args: any[], result: any) => {
 		const props = args[0] ?? {};
-		if (placement === "profiles") {
-			const userId = userIdFrom(props);
-			if (!options.enabled || !options.profiles || !userId || !result) return result;
-			return React.createElement(
-				RN.View,
-				{ style: { flexDirection: "row", flexWrap: "wrap", gap: 6, alignItems: "center" } },
-				result,
-				React.createElement(DeviceBadges, { userId }),
-			);
-		}
 		return placeBadge(result, props, placement);
 	}));
+	return true;
+}
+
+function patchNamedComponent(names: string[], placement: "dmHeader" | "profiles") {
+	const module = find((candidate: any) => resolveNamedComponentModule(candidate, names) !== null);
+	if (!module) return false;
+	const component = resolveNamedComponentModule(module, names);
+	if (!component) return false;
+	const target = resolveComponentTarget(component.module, component.key);
+	if (!target) return false;
+	const patchKey = `named:${placement}:${component.key}:${names[0]}`;
+	if (patched.has(patchKey)) return true;
+	patched.add(patchKey);
+	unpatches.push(after(target.key, target.target, (args: any[], result: any) =>
+		placeBadge(result, args[0] ?? {}, placement),
+	));
 	return true;
 }
 
@@ -269,11 +283,15 @@ function patchVoiceMemberRows() {
 
 function installPatches() {
 	let found = false;
-	found = patchComponent(13107, "default", "dmHeader", ["PrivateChannelHeader"]) || found;
+	found = patchNamedComponent(["PrivateChannelHeader", "PrivateChannelHeaderContent", "DMHeader", "DirectMessageHeader"], "dmHeader")
+		|| patchComponent(13107, "default", "dmHeader", ["PrivateChannelHeader", "PrivateChannelHeaderContent", "DMHeader", "DirectMessageHeader"])
+		|| found;
 	found = patchComponent(15962, "default", "lists", ["MessagesItemChannelContent"]) || found;
 	found = patchComponent(10602, "default", "lists", ["UserRow"]) || found;
 	found = patchComponent(9334, "MemberRowItem", "lists", ["MemberRowItem"]) || found;
-	found = patchComponent(10843, "DisplayName", "profiles", ["DisplayName"]) || found;
+	found = patchNamedComponent(["UserProfileHeader", "UserProfileModalHeader", "ProfileHeader", "UserProfileCard"], "profiles")
+		|| patchComponent(10843, "DisplayName", "profiles", ["DisplayName"])
+		|| found;
 	found = patchVoiceMemberRows() || found;
 	found = patchAvatar(13920, "default", ["Status"]) || found;
 	found = patchAvatar(13920, "StatusWithTyping", ["StatusWithTyping"]) || found;

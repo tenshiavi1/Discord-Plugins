@@ -1,5 +1,5 @@
 import { expect, test } from "bun:test";
-import { appendEditHistoryVersion, canRetainDeletedMessage, getDeletedMessageHighlight, getMessageHighlightType, hasEditedTimestamp, isEphemeralMessage, isLegacyEditNotice, markDeletedMessage, mergeRetainedMessages, prependEditHistory, removeLegacyEditNotices, resolveMessageRowGenerator, shouldClearHistoryForNewSession, truncateEditVersion } from "./messageHistoryPresentation";
+import { appendEditHistoryVersion, canRetainDeletedMessage, getDeletedMessageHighlight, getMessageHighlightType, hasEditedTimestamp, isEphemeralMessage, isLegacyEditNotice, markDeletedMessage, mergeRetainedMessages, prependEditHistory, removeEditedDeletedMessage, removeLegacyEditNotices, resolveMessageRowGenerator, shouldClearHistoryForNewSession, truncateEditVersion } from "./messageHistoryPresentation";
 
 test("renders previous edits as plain native quote nodes", () => {
 	const current = [{ type: "text", content: "new text" }];
@@ -88,6 +88,16 @@ test("keeps deleted rows red when mention highlighting is disabled", () => {
 		color: "#00a8fc",
 		thickness: 3,
 	});
+});
+
+test("removes stale retained-delete rows when the message is edited", () => {
+	const key = "channel:message";
+	const deleted = { original: { content: "old text" }, retained: { was_deleted: true } };
+	const retained = new Map([[key, deleted]]);
+
+	expect(removeEditedDeletedMessage(retained, key, "new text")).toBe(deleted);
+	expect(retained.has(key)).toBe(false);
+	expect(removeEditedDeletedMessage(new Map([[key, deleted]]), key, "old text")).toBeUndefined();
 });
 
 test("clears unsaved history only at the start of a new app session", () => {

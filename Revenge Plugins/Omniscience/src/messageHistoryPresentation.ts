@@ -51,6 +51,17 @@ export function isLegacyEditNotice(message: any) {
 	return typeof message?.omniscienceOriginalMessageId === "string";
 }
 
+export function removeEditedDeletedMessage<T extends { original?: { content?: unknown } }>(
+	messages: Map<string, T>,
+	key: string,
+	editedContent: string,
+) {
+	const deleted = messages.get(key);
+	if (!deleted || typeof deleted.original?.content !== "string" || deleted.original.content === editedContent) return undefined;
+	messages.delete(key);
+	return deleted;
+}
+
 export function removeLegacyEditNotices<T>(collection: T): T {
 	if (!collection) return collection;
 	if (Array.isArray(collection)) return collection.filter((message) => !isLegacyEditNotice(message)) as T;
