@@ -28,6 +28,8 @@ import {
 } from "./messageHistory";
 import { setServerInfoFeatureEnabled } from "./serverInfo";
 import { setMessageHighlightOptions } from "./messageHighlights";
+import TranslateMessagesSettings from "./translateSettings";
+import { updateTranslationSettings } from "./translations";
 
 const { ScrollView } = findByProps("ScrollView");
 const { TableRowGroup, TableRow, TableSwitchRow, Stack } = findByProps(
@@ -91,6 +93,16 @@ function syncMessageHighlightOptions() {
     thickness: Number(storage.messageHighlightThickness) || 2,
     pingColor: String(storage.messageHighlightPingColor ?? "default"),
     deletedColor: String(storage.messageHighlightDeletedColor ?? "default"),
+  });
+}
+
+function syncTranslationOptions() {
+  updateTranslationSettings({
+    enabled: storage.enabled !== false && storage.translateMessagesEnabled === true,
+    mode: storage.translateMessagesMode === "manual" ? "manual" : "auto",
+    target: storage.translateMessagesTarget === "phone" ? "phone" : "discord",
+    showLanguage: storage.translateMessagesShowLanguage !== false,
+    showOriginal: storage.translateMessagesShowOriginal === true,
   });
 }
 
@@ -1825,6 +1837,7 @@ export default function Settings() {
             onValueChange={(value: boolean) => {
               storage.enabled = value;
               syncMessageHighlightOptions();
+              syncTranslationOptions();
               if (!value) clearMessageLoggerCache();
               setMessageHistoryFeatureEnabled(
                 value &&
@@ -1868,6 +1881,14 @@ export default function Settings() {
             trailing={<TableRow.Arrow />}
             onPress={() =>
               openSettingsPage(navigation, "Word Tracker", WordTrackerSettings)
+            }
+          />
+          <TableRow
+            label="Translate Messages"
+            subLabel="Translate messages automatically or when you choose."
+            trailing={<TableRow.Arrow />}
+            onPress={() =>
+              openSettingsPage(navigation, "Translate Messages", TranslateMessagesSettings)
             }
           />
           <TableRow

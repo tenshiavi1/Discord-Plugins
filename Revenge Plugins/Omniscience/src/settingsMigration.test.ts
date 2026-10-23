@@ -16,7 +16,7 @@ test("defaults new installations to enabled Word Tracker and plugin", () => {
 	expect(storage.enabled).toBe(true);
 });
 
-test("migrates disabled legacy message history to both Venus-style switches", () => {
+test("migrates disabled legacy message history to Omniscience switches", () => {
 	const storage: Record<string, unknown> = {
 		enabled: true,
 		enableMessageHistory: false,

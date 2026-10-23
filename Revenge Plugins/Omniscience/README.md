@@ -13,13 +13,14 @@ Omniscience tracks configured words in selected server channels, group DMs, and 
 - Optionally forward matches to a channel or webhook.
 - Open separate Word Tracker and Deleted Messages settings pages.
 - Show earlier message text after edits and retain deleted messages in chat.
+- Translate messages into Discord's or the phone's language, automatically or on request.
 - Keep deleted messages and edit history after restarting Discord, choose the retention limit, and clear retained history from settings.
 - Preview and customize highlights for replies, mentions, and deleted messages.
 - Add a Server Info action to server icons for client-visible details such as owner, member counts, roles, channels, boosts, and creation date.
 
 Mention tracking uses incoming message events delivered to the active Discord client and the current account's user ID. It does not monitor saved but inactive accounts or run background polling.
 
-Word Tracker notifications are disabled by default and run only while the plugin is active. In-chat edit and deletion history is kept locally; when enabled, it can be saved on this phone across restarts. Ephemeral messages are excluded. Deletion timestamps reflect when the client receives the delete event.
+Word Tracker notifications are disabled by default and run only while the plugin is active. Translation is disabled by default; when enabled, selected message text is sent to Google Translate without Discord credentials. Mentions, links, code, and emoji are excluded. In-chat edit and deletion history is kept locally; when enabled, it can be saved on this phone across restarts. Ephemeral messages are excluded. Deletion timestamps reflect when the client receives the delete event.
 
 ## Privacy
 

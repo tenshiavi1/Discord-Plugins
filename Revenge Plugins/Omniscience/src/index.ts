@@ -11,6 +11,7 @@ import { removeMessageHistoryPatch, setMessageHistoryFeatureEnabled } from "./me
 import { removeMessageHighlightPatch, setMessageHighlightOptions } from "./messageHighlights";
 import { setServerInfoFeatureEnabled } from "./serverInfo";
 import { migrateOmniscienceSettings } from "./settingsMigration";
+import { initializeTranslations, removeTranslationPatches } from "./translations";
 
 const registerCrashGuard = () => installPluginCrashGuard("Omniscience", storage, {
   features: [
@@ -69,6 +70,11 @@ const defaults = {
   messageHighlightPingColor: "default",
   messageHighlightDeletedColor: "default",
   enableServerInfo: true,
+  translateMessagesEnabled: false,
+  translateMessagesMode: "auto",
+  translateMessagesTarget: "discord",
+  translateMessagesShowLanguage: true,
+  translateMessagesShowOriginal: false,
 };
 
 migrateOmniscienceSettings(storage);
@@ -100,6 +106,13 @@ export default {
       deletedColor: String(storage.messageHighlightDeletedColor ?? "default"),
     });
     setServerInfoFeatureEnabled(storage.enabled !== false && storage.enableServerInfo !== false);
+    initializeTranslations({
+      enabled: storage.enabled !== false && storage.translateMessagesEnabled === true,
+      mode: storage.translateMessagesMode === "manual" ? "manual" : "auto",
+      target: storage.translateMessagesTarget === "phone" ? "phone" : "discord",
+      showLanguage: storage.translateMessagesShowLanguage !== false,
+      showOriginal: storage.translateMessagesShowOriginal === true,
+    });
   unregisterSettingsShortcut = registerPluginSettingsShortcut({
     id: "omniscience",
     title: "Omniscience",
@@ -337,6 +350,7 @@ export default {
     removeChatLogger = undefined;
     removeMessageHistoryPatch();
     removeMessageHighlightPatch();
+    removeTranslationPatches();
     setServerInfoFeatureEnabled(false);
     unsubMessage?.();
     unregisterSettingsShortcut?.();
