@@ -2,7 +2,7 @@ import { ReactNative as RN } from "@vendetta/metro/common";
 import { after } from "@vendetta/patcher";
 import { findByName, findByProps } from "../../compat";
 import { getMessageEditHistory, isRetainedDeletedMessage } from "./messageHistory";
-import { getDeletedMessageHighlight, prependEditHistory } from "./messageHistoryPresentation";
+import { getDeletedMessageHighlight, getMessageHighlightType, prependEditHistory } from "./messageHistoryPresentation";
 
 type HighlightColor = string;
 type HighlightOptions = {
@@ -92,11 +92,15 @@ function highlightRow(args: any[], result: any) {
 			rememberRow(channelId, source);
 		}
 	}
-	if (!options.enabled) return next;
-
-	const deleted = options.deletedEnabled && (isRetainedDeletedMessage(channelId, messageId) || Boolean(message.was_deleted));
-	const mentioned = options.enabled && !deleted && isMentionForCurrentUser(source, message);
-	if (!deleted && !mentioned) return next;
+	const isDeleted = isRetainedDeletedMessage(channelId, messageId) || Boolean(message.was_deleted);
+	const highlightType = getMessageHighlightType(
+		options.deletedEnabled,
+		isDeleted,
+		options.enabled,
+		options.enabled && isMentionForCurrentUser(source, message),
+	);
+	if (!highlightType) return next;
+	const deleted = highlightType === "deleted";
 
 	const deletedHighlight = deleted
 		? getDeletedMessageHighlight(options.enabled, normalizeColor(options.deletedColor, "#f23f43"), options.thickness)

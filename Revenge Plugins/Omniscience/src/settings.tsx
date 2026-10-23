@@ -86,7 +86,9 @@ function syncMessageHighlightOptions() {
     deletedEnabled:
       storage.enabled !== false && storage.keepDeletedMessages !== false,
     historyEnabled:
-      storage.enabled !== false && storage.keepEditHistory !== false,
+      storage.enabled !== false &&
+      storage.keepDeletedMessages !== false &&
+      storage.keepEditHistory !== false,
     thickness: Number(storage.messageHighlightThickness) || 2,
     pingColor: String(storage.messageHighlightPingColor ?? "default"),
     deletedColor: String(storage.messageHighlightDeletedColor ?? "default"),

@@ -14,6 +14,17 @@ export function getDeletedMessageHighlight(enabled: boolean, color: string, thic
 	};
 }
 
+export function getMessageHighlightType(
+	deletedEnabled: boolean,
+	deleted: boolean,
+	highlightsEnabled: boolean,
+	mentioned: boolean,
+) {
+	if (deletedEnabled && deleted) return "deleted";
+	if (highlightsEnabled && mentioned) return "mention";
+	return undefined;
+}
+
 export function prependEditHistory(content: unknown, versions: readonly EditHistoryVersion[]) {
 	if (!Array.isArray(content) || versions.length === 0) return content;
 	const lines = versions.flatMap((version, index) => [

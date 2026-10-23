@@ -373,7 +373,7 @@ function createRetainedMessageUpdate(channelId: string, messageId: string) {
 }
 
 function rememberEdit(update: any) {
-	if (!settings.enabled || !settings.keepEditHistory || typeof update?.content !== "string" || !update.edited_timestamp) return;
+	if (!settings.enabled || !settings.keepDeletedMessages || !settings.keepEditHistory || typeof update?.content !== "string" || !update.edited_timestamp) return;
 	const channelId = String(update.channel_id ?? update.channelId ?? "");
 	const messageId = String(update.id ?? "");
 	if (!channelId || !messageId) return;
@@ -521,6 +521,7 @@ export function updateMessageHistorySettings(patch: Partial<MessageHistorySettin
 	}
 	if (!settings.keepDeletedMessages && previous.keepDeletedMessages) {
 		clearRetainedRowsFromChat();
+		editHistory.clear();
 	}
 	if (!settings.keepEditHistory) editHistory.clear();
 	if (
