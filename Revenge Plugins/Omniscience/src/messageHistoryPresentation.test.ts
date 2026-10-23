@@ -1,5 +1,5 @@
 import { expect, test } from "bun:test";
-import { canRetainDeletedMessage, getDeletedMessageHighlight, getMessageHighlightType, hasEditedTimestamp, markDeletedMessage, mergeRetainedMessages, prependEditHistory, shouldClearHistoryForNewSession, truncateEditVersion } from "./messageHistoryPresentation";
+import { canRetainDeletedMessage, getDeletedMessageHighlight, getMessageHighlightType, hasEditedTimestamp, markDeletedMessage, mergeRetainedMessages, prependEditHistory, pruneRecentMessageLogs, shouldClearHistoryForNewSession, truncateEditVersion, type RecentMessageLog } from "./messageHistoryPresentation";
 
 test("prepends plain struck-through versions to one rendered message", () => {
 	const current = [{ type: "text", content: "new text" }];
@@ -30,6 +30,20 @@ test("recognizes snake_case and camelCase edit timestamps", () => {
 	expect(hasEditedTimestamp({ edited_timestamp: "2026-10-23T00:00:00Z" })).toBe(true);
 	expect(hasEditedTimestamp({ editedTimestamp: "2026-10-23T00:00:00Z" })).toBe(true);
 	expect(hasEditedTimestamp({ edited_timestamp: null })).toBe(false);
+});
+
+test("shows only message logs younger than five minutes", () => {
+	const now = 1_000_000;
+	const log = (timestamp: number): RecentMessageLog => ({
+		timestamp,
+		type: "edited",
+		channelId: "channel",
+		messageId: String(timestamp),
+		author: "user",
+		content: "new text",
+	});
+
+	expect(pruneRecentMessageLogs([log(now - 299_999), log(now - 300_000), log(now + 1)], now)).toEqual([log(now - 299_999)]);
 });
 
 test("keeps deleted rows red when mention highlighting is disabled", () => {

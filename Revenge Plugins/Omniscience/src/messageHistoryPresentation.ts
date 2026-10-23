@@ -1,5 +1,20 @@
 export type EditHistoryVersion = { content: string };
+export type RecentMessageLog = {
+	timestamp: number;
+	type: "edited" | "deleted";
+	channelId: string;
+	messageId: string;
+	author: string;
+	content: string;
+	previousContent?: string;
+};
+
+export const RECENT_MESSAGE_LOG_WINDOW_MS = 5 * 60 * 1000;
 export const MAX_EDIT_VERSION_LENGTH = 4000;
+
+export function pruneRecentMessageLogs(logs: readonly RecentMessageLog[], now = Date.now()) {
+	return logs.filter((log) => now >= log.timestamp && now - log.timestamp < RECENT_MESSAGE_LOG_WINDOW_MS);
+}
 
 export function hasEditedTimestamp(message: any) {
 	return Boolean(message?.edited_timestamp ?? message?.editedTimestamp);

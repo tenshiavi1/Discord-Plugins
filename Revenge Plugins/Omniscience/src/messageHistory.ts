@@ -4,7 +4,7 @@ import { storage } from "@vendetta/plugin";
 import { instead } from "@vendetta/patcher";
 import { showToast } from "../../shared/toast";
 import { recordMessageDelete, recordMessageUpdate } from "./chatLogger";
-import { canRetainDeletedMessage, hasEditedTimestamp, markDeletedMessage, mergeRetainedMessages, shouldClearHistoryForNewSession, truncateEditVersion } from "./messageHistoryPresentation";
+import { canRetainDeletedMessage, hasEditedTimestamp, markDeletedMessage, mergeRetainedMessages, pruneRecentMessageLogs, shouldClearHistoryForNewSession, truncateEditVersion, type RecentMessageLog } from "./messageHistoryPresentation";
 
 const channelMessages = findByProps("_channelMessages");
 const messageStore = findByProps("getMessage", "getMessages");
@@ -55,6 +55,7 @@ type MessageHistorySettings = {
 type HistoryRuntimeState = {
 	deletedMessages: Map<string, DeletedRecord>;
 	editHistory: Map<string, EditRecord>;
+	recentLogs: RecentMessageLog[];
 	sessionInitialized: boolean;
 };
 
@@ -62,8 +63,10 @@ const globalHistoryRuntime = globalThis as typeof globalThis & { [HISTORY_RUNTIM
 const historyRuntime = globalHistoryRuntime[HISTORY_RUNTIME_KEY] ??= {
 	deletedMessages: new Map(),
 	editHistory: new Map(),
+	recentLogs: [],
 	sessionInitialized: false,
 };
+historyRuntime.recentLogs ??= [];
 const deletedMessages = historyRuntime.deletedMessages;
 const editHistory = historyRuntime.editHistory;
 const retainedViews = new Map<string, { original: unknown; revision: number; value: unknown }>();
@@ -89,6 +92,20 @@ function getCurrentAccountId() {
 function getRetainedMessageLimit() {
 	const limit = Number(storage.messageLoggerLimit);
 	return [100, 500, 1000, 5000].includes(limit) ? limit : 500;
+}
+
+function recordRecentMessageLog(log: RecentMessageLog) {
+	const recent = pruneRecentMessageLogs(historyRuntime.recentLogs);
+	recent.push({
+		...log,
+		content: truncateEditVersion(log.content),
+		...(log.previousContent === undefined ? {} : { previousContent: truncateEditVersion(log.previousContent) }),
+	});
+	historyRuntime.recentLogs = recent;
+}
+
+export function getRecentMessageLogs() {
+	return pruneRecentMessageLogs(historyRuntime.recentLogs).sort((left, right) => right.timestamp - left.timestamp);
 }
 
 function prepareHistorySession() {
@@ -299,6 +316,15 @@ function rememberEdit(event: any) {
 	next.previous = [...next.previous, { content: truncateEditVersion(previousContent) }].slice(-MAX_EDIT_VERSIONS);
 	next.currentContent = content;
 	rememberMessage(editHistory, key, next, MAX_EDIT_HISTORY);
+	recordRecentMessageLog({
+		timestamp: Date.now(),
+		type: "edited",
+		channelId,
+		messageId,
+		author: typeof original?.author?.username === "string" ? original.author.username : "Unknown",
+		content,
+		previousContent,
+	});
 	persistMessageHistory();
 }
 
@@ -322,6 +348,14 @@ function dispatchWithHistory(args: unknown[], original: (...args: any[]) => any)
 		if (!update) return original(...args);
 		try {
 			original(update);
+			recordRecentMessageLog({
+				timestamp: Date.now(),
+				type: "deleted",
+				channelId,
+				messageId,
+				author: typeof update.message.author?.username === "string" ? update.message.author.username : "Unknown",
+				content: typeof update.message.content === "string" ? update.message.content : "",
+			});
 			persistMessageHistory();
 			return Promise.resolve();
 		} catch (error) {
@@ -351,6 +385,14 @@ function dispatchWithHistory(args: unknown[], original: (...args: any[]) => any)
 			recordMessageDelete({ channelId, id: messageId });
 			try {
 				original(update);
+				recordRecentMessageLog({
+					timestamp: Date.now(),
+					type: "deleted",
+					channelId,
+					messageId,
+					author: typeof update.message.author?.username === "string" ? update.message.author.username : "Unknown",
+					content: typeof update.message.content === "string" ? update.message.content : "",
+				});
 				persistMessageHistory();
 			} catch (error) {
 				deletedMessages.delete(getMessageKey(channelId, messageId));
