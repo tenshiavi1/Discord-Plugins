@@ -8,6 +8,7 @@ import { registerPluginSettingsShortcut } from "../../shared/pluginSettings";
 import { clearMessageLoggerCache, installChatLogger } from "./chatLogger";
 import { linkedEmbedField, parseChannelId, parseDiscordWebhookUrl, toDiscordTimestamp, toEmbedTimestamp, underlineFirstMatch } from "./logFormatting";
 import { removeMessageHistoryPatch, setMessageHistoryFeatureEnabled } from "./messageHistory";
+import { removeMessageHighlightPatch, setMessageHighlightOptions } from "./messageHighlights";
 import { setServerInfoFeatureEnabled } from "./serverInfo";
 import { migrateOmniscienceSettings } from "./settingsMigration";
 
@@ -63,6 +64,10 @@ const defaults = {
   showInSettings: false,
   keepDeletedMessages: true,
   keepEditHistory: true,
+  messageHighlightEnabled: true,
+  messageHighlightThickness: 2,
+  messageHighlightPingColor: "default",
+  messageHighlightDeletedColor: "default",
   enableServerInfo: true,
 };
 
@@ -90,6 +95,12 @@ export default {
     removeCrashGuard ??= registerCrashGuard();
     removeChatLogger = installChatLogger();
     setMessageHistoryFeatureEnabled(storage.enabled !== false && (storage.keepDeletedMessages !== false || storage.keepEditHistory !== false));
+    setMessageHighlightOptions({
+      enabled: storage.enabled !== false && storage.messageHighlightEnabled !== false,
+      thickness: Number(storage.messageHighlightThickness) || 2,
+      pingColor: String(storage.messageHighlightPingColor ?? "default"),
+      deletedColor: String(storage.messageHighlightDeletedColor ?? "default"),
+    });
     setServerInfoFeatureEnabled(storage.enabled !== false && storage.enableServerInfo !== false);
   unregisterSettingsShortcut = registerPluginSettingsShortcut({
     id: "omniscience",
@@ -327,6 +338,7 @@ export default {
     removeChatLogger?.();
     removeChatLogger = undefined;
     removeMessageHistoryPatch();
+    removeMessageHighlightPatch();
     setServerInfoFeatureEnabled(false);
     unsubMessage?.();
     unregisterSettingsShortcut?.();

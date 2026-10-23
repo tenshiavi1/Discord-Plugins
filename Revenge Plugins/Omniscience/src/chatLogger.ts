@@ -7,7 +7,7 @@ const snowflakeUtils = findByProps("extractTimestamp");
 const MAX_CACHED_MESSAGES = 500;
 const MAX_DELETED_MESSAGES = 5000;
 const MAX_EDIT_VERSIONS = 10;
-const MESSAGE_LOG_LIMITS = [100, 512, 1000, MAX_DELETED_MESSAGES];
+const MESSAGE_LOG_LIMITS = [100, 500, 1000, MAX_DELETED_MESSAGES];
 const MESSAGE_HISTORY_CLEANUP_KEY = "__omniscienceMessageHistoryCleanup";
 const globalHistoryState = globalThis as typeof globalThis & { [MESSAGE_HISTORY_CLEANUP_KEY]?: () => void };
 
@@ -27,7 +27,7 @@ type DeletedMessage = CachedMessage & { deletedAt: string };
 
 for (const [key, value] of Object.entries({
 	messageLoggerKeepAfterRestart: false,
-	messageLoggerLimit: 512,
+	messageLoggerLimit: 500,
 	messageLoggerCache: [],
 	messageLoggerDeletedCache: [],
 })) {
@@ -68,7 +68,7 @@ let deletedMessages = storage.messageLoggerKeepAfterRestart
 
 function getMessageLogLimit() {
 	const configured = Number(storage.messageLoggerLimit);
-	return MESSAGE_LOG_LIMITS.includes(configured) ? configured : 512;
+	return MESSAGE_LOG_LIMITS.includes(configured) ? configured : 500;
 }
 
 function persistMessageHistory() {
@@ -128,7 +128,7 @@ export function setEditHistoryEnabled(enabled: boolean) {
 }
 
 export function setMessageLoggerLimit(limit: number) {
-	storage.messageLoggerLimit = MESSAGE_LOG_LIMITS.includes(limit) ? limit : 512;
+	storage.messageLoggerLimit = MESSAGE_LOG_LIMITS.includes(limit) ? limit : 500;
 	deletedMessages = deletedMessages.slice(-getMessageLogLimit());
 	persistMessageHistory();
 }

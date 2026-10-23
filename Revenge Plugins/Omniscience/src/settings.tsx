@@ -1,6 +1,6 @@
 import { NavigationNative, React, ReactNative as RN } from "@vendetta/metro/common";
 import { storage } from "@vendetta/plugin";
-import { findByProps } from "../../compat";
+import { findByName, findByProps } from "../../compat";
 import { showToast } from "../../shared/toast";
 import { useProxy } from "@vendetta/storage";
 import { getAssetIDByName } from "@vendetta/ui/assets";
@@ -20,6 +20,7 @@ import {
   updateMessageHistorySettings,
 } from "./messageHistory";
 import { setServerInfoFeatureEnabled } from "./serverInfo";
+import { setMessageHighlightOptions } from "./messageHighlights";
 
 const { ScrollView } = findByProps("ScrollView");
 const { TableRowGroup, TableRow, TableSwitchRow, Stack } = findByProps(
@@ -37,7 +38,59 @@ const inputStyle = {
   paddingHorizontal: 12,
   paddingVertical: 10,
 };
-const MESSAGE_LOG_LIMITS = [100, 512, 1000, 5000];
+const MESSAGE_LOG_LIMITS = [100, 500, 1000, 5000];
+const HIGHLIGHT_THICKNESSES = [1, 2, 3, 4];
+const HIGHLIGHT_PING_CHOICES = [
+  ["default", "Yellow", "#f0b232"], ["blurple", "Blurple", "#5865f2"], ["cyan", "Cyan", "#00a8fc"],
+  ["green", "Green", "#23a55a"], ["pink", "Pink", "#eb459e"], ["purple", "Purple", "#9b59b6"],
+] as const;
+const HIGHLIGHT_DELETED_CHOICES = [
+  ["default", "Red", "#f23f43"], ["orange", "Orange", "#e67e22"], ["yellow", "Yellow", "#f0b232"],
+  ["pink", "Pink", "#eb459e"], ["purple", "Purple", "#9b59b6"], ["cyan", "Cyan", "#00a8fc"],
+] as const;
+
+type HighlightChoice = readonly [string, string, string];
+type HighlightColorSetting = "messageHighlightPingColor" | "messageHighlightDeletedColor";
+
+function getHighlightColor(value: unknown, choices: readonly HighlightChoice[], fallback: string) {
+  const normalized = typeof value === "string" ? value.trim().toLowerCase() : "";
+  if (/^#[0-9a-f]{6}$/.test(normalized)) return normalized;
+  return choices.find(([key]) => key === normalized)?.[2] ?? fallback;
+}
+
+function syncMessageHighlightOptions() {
+  setMessageHighlightOptions({
+    enabled: storage.enabled !== false && storage.messageHighlightEnabled !== false,
+    thickness: Number(storage.messageHighlightThickness) || 2,
+    pingColor: String(storage.messageHighlightPingColor ?? "default"),
+    deletedColor: String(storage.messageHighlightDeletedColor ?? "default"),
+  });
+}
+
+function showHighlightColorPicker(currentColor: string, choices: readonly HighlightChoice[], onSelect: (color: string) => void) {
+  const module = findByName("showCustomColorPickerActionSheet", false);
+  const showPicker = module?.default ?? module?.showCustomColorPickerActionSheet ?? module;
+  if (typeof showPicker !== "function") return false;
+
+  try {
+    showPicker({
+      color: parseInt(currentColor.slice(1), 16),
+      suggestedColors: choices.map(([, , color]) => parseInt(color.slice(1), 16)),
+      onSelect: (value: unknown) => {
+        const color = typeof value === "number"
+          ? `#${(Math.trunc(value) & 0xffffff).toString(16).padStart(6, "0")}`
+          : typeof value === "string" && /^#[0-9a-f]{6}$/i.test(value)
+            ? value.toLowerCase()
+            : undefined;
+        if (color) onSelect(color);
+      },
+    });
+    return true;
+  } catch (error) {
+    console.warn("[Omniscience] Discord's color picker could not be opened.", error);
+    return false;
+  }
+}
 
 export function WordTrackerSettings() {
   useProxy(storage);
@@ -649,12 +702,288 @@ function MessageLimitChoice({ value, disabled, onChange }: {
   );
 }
 
+function HighlightThicknessChoice({ value, disabled, onChange }: {
+  value: number;
+  disabled: boolean;
+  onChange: (value: number) => void;
+}) {
+  const reduceMotion = useReducedMotion();
+  const [width, setWidth] = React.useState(0);
+  const selectedIndex = Math.max(0, HIGHLIGHT_THICKNESSES.indexOf(value));
+  const selection = React.useRef<any>(null);
+  if (!selection.current && RN.Animated?.Value) selection.current = new RN.Animated.Value(selectedIndex);
+
+  React.useEffect(() => {
+    if (!selection.current) return;
+    if (reduceMotion || typeof RN.Animated?.spring !== "function") {
+      selection.current.setValue(selectedIndex);
+      return;
+    }
+    const animation = RN.Animated.spring(selection.current, {
+      toValue: selectedIndex,
+      speed: 20,
+      bounciness: 8,
+      useNativeDriver: false,
+    });
+    animation.start();
+    return () => animation.stop();
+  }, [selectedIndex, reduceMotion]);
+
+  const segmentWidth = width / HIGHLIGHT_THICKNESSES.length;
+  const indicatorStyle = selection.current
+    ? { transform: [{ translateX: selection.current.interpolate({ inputRange: [0, HIGHLIGHT_THICKNESSES.length - 1], outputRange: [0, Math.max(0, width - segmentWidth)] }) }] }
+    : { left: selectedIndex * segmentWidth };
+
+  return (
+    <RN.View
+      onLayout={(event: any) => setWidth(event.nativeEvent.layout.width)}
+      style={{ position: "relative", flexDirection: "row", padding: 3, borderRadius: 16, backgroundColor: "#1e1f22", opacity: disabled ? 0.5 : 1 }}
+    >
+      <RN.Animated.View pointerEvents="none" style={[{ position: "absolute", top: 3, bottom: 3, width: segmentWidth, borderRadius: 13, backgroundColor: "#4e5058" }, indicatorStyle]} />
+      {HIGHLIGHT_THICKNESSES.map((thickness) => (
+        <RN.TouchableOpacity
+          key={thickness}
+          accessibilityRole="button"
+          accessibilityState={{ selected: thickness === value, disabled }}
+          disabled={disabled}
+          onPress={() => onChange(thickness)}
+          style={{ flex: 1, minHeight: 36, alignItems: "center", justifyContent: "center" }}
+        >
+          <Text style={{ color: thickness === value ? "#ffffff" : "#b5bac1", fontSize: 12, fontWeight: "600" }}>{thickness * 2} dp</Text>
+        </RN.TouchableOpacity>
+      ))}
+    </RN.View>
+  );
+}
+
+function HighlightColorPicker({
+  title,
+  value,
+  choices,
+  fallback,
+  disabled,
+  onChange,
+  onFallback,
+}: {
+  title: string;
+  value: string;
+  choices: readonly HighlightChoice[];
+  fallback: string;
+  disabled: boolean;
+  onChange: (value: string) => void;
+  onFallback: () => void;
+}) {
+  const color = getHighlightColor(value, choices, fallback);
+  const selected = choices.find(([key]) => key === value);
+  const custom = /^#[0-9a-f]{6}$/i.test(value);
+  const currentName = selected?.[1] ?? (custom ? color.toUpperCase() : fallback.toUpperCase());
+  const eyeDropper = getAssetIDByName("EyeDropperIcon");
+
+  const swatch = (key: string, label: string, hex: string | undefined, isSelected: boolean, onPress: () => void, isCustom = false) => (
+    <RN.TouchableOpacity
+      key={key}
+      accessibilityRole="radio"
+      accessibilityLabel={label}
+      accessibilityState={{ selected: isSelected, disabled }}
+      disabled={disabled}
+      onPress={onPress}
+      style={{ width: 38, height: 38, borderRadius: 19, borderWidth: 2, borderColor: isSelected ? "#f2f3f5" : "transparent", alignItems: "center", justifyContent: "center", opacity: disabled ? 0.45 : 1 }}
+    >
+      <RN.View style={{ width: 28, height: 28, borderRadius: 14, alignItems: "center", justifyContent: "center", backgroundColor: hex ?? "transparent", borderWidth: hex ? 0 : 1, borderStyle: "dashed", borderColor: "#949ba4" }}>
+        {isSelected
+          ? <RN.View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: "#ffffff", borderWidth: 1, borderColor: "#1e1f22" }} />
+          : isCustom && eyeDropper
+            ? <RN.Image source={eyeDropper} style={{ width: 14, height: 14, tintColor: "#b5bac1" }} />
+            : isCustom ? <Text style={{ color: "#b5bac1", fontSize: 16 }}>+</Text> : null}
+      </RN.View>
+    </RN.TouchableOpacity>
+  );
+
+  return (
+    <RN.View style={{ gap: 8 }}>
+      <RN.View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
+        <Text numberOfLines={1} style={{ flex: 1, minWidth: 0, color: "#f2f3f5", fontSize: 14, fontWeight: "600" }}>{title}</Text>
+        <RN.View style={{ width: 10, height: 10, borderRadius: 5, backgroundColor: color }} />
+        <Text numberOfLines={1} style={{ maxWidth: 110, color: "#949ba4", fontSize: 12 }}>{currentName}</Text>
+      </RN.View>
+      <RN.View accessibilityRole="radiogroup" style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between" }}>
+        {choices.map(([key, label, hex]) => swatch(key, label, hex, value === key, () => onChange(key)))}
+        {swatch("custom", "Any color", custom ? color : undefined, custom, () => {
+          if (!showHighlightColorPicker(color, choices, onChange)) onFallback();
+        }, true)}
+      </RN.View>
+    </RN.View>
+  );
+}
+
+function HighlightGlow({ color, thickness }: { color: string; thickness: number }) {
+  const reduceMotion = useReducedMotion();
+  const opacity = React.useRef<any>(null);
+  const firstRender = React.useRef(true);
+  if (!opacity.current && RN.Animated?.Value) opacity.current = new RN.Animated.Value(0);
+
+  React.useEffect(() => {
+    const value = opacity.current;
+    if (!value) return;
+    if (firstRender.current) {
+      firstRender.current = false;
+      return;
+    }
+    if (reduceMotion || typeof RN.Animated?.timing !== "function") {
+      value.setValue(0);
+      return;
+    }
+    value.setValue(0.5);
+    const animation = RN.Animated.timing(value, { toValue: 0, duration: 700, useNativeDriver: true });
+    animation.start();
+    return () => animation.stop();
+  }, [color, thickness, reduceMotion]);
+
+  if (!opacity.current || !RN.Animated?.View) return null;
+  return <RN.Animated.View pointerEvents="none" style={{ position: "absolute", left: 0, right: 0, top: 0, bottom: 0, backgroundColor: `${color}55`, opacity: opacity.current }} />;
+}
+
+function MessageHighlightSettings({ forceUpdate }: { forceUpdate: () => void }) {
+  const [hexDraft, setHexDraft] = React.useState("");
+  const [hexTarget, setHexTarget] = React.useState<HighlightColorSetting | "">("");
+  const enabled = storage.messageHighlightEnabled !== false;
+  const disabled = !enabled || storage.enabled === false;
+  const thickness = Number(storage.messageHighlightThickness) || 2;
+  const pingValue = String(storage.messageHighlightPingColor ?? "default");
+  const deletedValue = String(storage.messageHighlightDeletedColor ?? "default");
+  const pingColor = getHighlightColor(pingValue, HIGHLIGHT_PING_CHOICES, "#f0b232");
+  const deletedColor = getHighlightColor(deletedValue, HIGHLIGHT_DELETED_CHOICES, "#f23f43");
+  const cleanHex = hexDraft.trim();
+  const validHex = /^#?[0-9a-f]{6}$/i.test(cleanHex);
+  const changed = thickness !== 2 || pingValue !== "default" || deletedValue !== "default";
+
+  const updateColor = (setting: HighlightColorSetting, value: string) => {
+    storage[setting] = value;
+    syncMessageHighlightOptions();
+    forceUpdate();
+  };
+  const openHexFallback = (setting: HighlightColorSetting) => {
+    const value = String(storage[setting] ?? "default");
+    setHexTarget(setting);
+    setHexDraft(/^#[0-9a-f]{6}$/i.test(value) ? value : "");
+  };
+  const applyHex = () => {
+    if (!hexTarget || !validHex || disabled) return;
+    updateColor(hexTarget, (cleanHex.startsWith("#") ? cleanHex : `#${cleanHex}`).toLowerCase());
+    setHexTarget("");
+    setHexDraft("");
+  };
+
+  return (
+    <TableRowGroup title="Message Highlights">
+      <TableSwitchRow
+        label="Enable message highlights"
+        subLabel="Highlight replies and mentions, plus deleted messages retained in chat."
+        disabled={storage.enabled === false}
+        value={enabled}
+        onValueChange={(value: boolean) => {
+          storage.messageHighlightEnabled = value;
+          syncMessageHighlightOptions();
+          forceUpdate();
+        }}
+      />
+      <RN.View style={{ paddingHorizontal: 8, paddingBottom: 12 }}>
+        <DeletedMessagesPreview
+          showHistory={false}
+          showDeletedMessages
+          highlightEnabled={!disabled}
+          pingColor={pingColor}
+          deletedColor={deletedColor}
+          thickness={thickness}
+        />
+      </RN.View>
+      <RN.View style={{ gap: 14, paddingHorizontal: 12, paddingVertical: 12, borderTopWidth: 1, borderTopColor: "#ffffff14" }}>
+        <RN.View style={{ gap: 8 }}>
+          <Text style={{ color: "#f2f3f5", fontSize: 14, fontWeight: "600" }}>Left bar width</Text>
+          <HighlightThicknessChoice
+            value={thickness}
+            disabled={disabled}
+            onChange={(value) => {
+              storage.messageHighlightThickness = value;
+              syncMessageHighlightOptions();
+              forceUpdate();
+            }}
+          />
+        </RN.View>
+        <HighlightColorPicker
+          title="Replies and mentions"
+          value={pingValue}
+          choices={HIGHLIGHT_PING_CHOICES}
+          fallback="#f0b232"
+          disabled={disabled}
+          onChange={(value) => updateColor("messageHighlightPingColor", value)}
+          onFallback={() => openHexFallback("messageHighlightPingColor")}
+        />
+        <HighlightColorPicker
+          title="Deleted messages"
+          value={deletedValue}
+          choices={HIGHLIGHT_DELETED_CHOICES}
+          fallback="#f23f43"
+          disabled={disabled}
+          onChange={(value) => updateColor("messageHighlightDeletedColor", value)}
+          onFallback={() => openHexFallback("messageHighlightDeletedColor")}
+        />
+        {hexTarget ? (
+          <RN.View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
+            <StableTextInput
+              placeholder="#5865f2"
+              value={hexDraft}
+              onChangeText={setHexDraft}
+              onSubmitEditing={applyHex}
+              returnKeyType="done"
+              autoCorrect={false}
+              maxLength={7}
+              style={{ ...inputStyle, flex: 1 }}
+            />
+            <RN.TouchableOpacity
+              accessibilityRole="button"
+              disabled={!validHex || disabled}
+              onPress={applyHex}
+              style={{ minHeight: 40, justifyContent: "center", paddingHorizontal: 12, borderRadius: 8, backgroundColor: validHex && !disabled ? "#5865f2" : "#4e5058" }}
+            >
+              <Text style={{ color: "#ffffff", fontWeight: "600" }}>Use</Text>
+            </RN.TouchableOpacity>
+          </RN.View>
+        ) : null}
+      </RN.View>
+      <TableRow
+        label="Reset to defaults"
+        subLabel="Use a 4 dp bar, yellow for replies and mentions, and red for deleted messages."
+        trailing={<Text style={{ color: changed && !disabled ? "#f2f3f5" : "#72767d", fontSize: 13 }}>Reset</Text>}
+        onPress={() => {
+          if (!changed || disabled) return;
+          storage.messageHighlightThickness = 2;
+          storage.messageHighlightPingColor = "default";
+          storage.messageHighlightDeletedColor = "default";
+          setHexTarget("");
+          setHexDraft("");
+          syncMessageHighlightOptions();
+          forceUpdate();
+        }}
+      />
+    </TableRowGroup>
+  );
+}
+
 function DeletedMessagesPreview({
   showHistory,
   showDeletedMessages,
+  highlightEnabled,
+  pingColor,
+  deletedColor,
+  thickness,
 }: {
   showHistory: boolean;
   showDeletedMessages: boolean;
+  highlightEnabled: boolean;
+  pingColor: string;
+  deletedColor: string;
+  thickness: number;
 }) {
   const reduceMotion = useReducedMotion();
   const versions = ["See you at 6", "See you at 7"];
@@ -672,9 +1001,19 @@ function DeletedMessagesPreview({
             <Text style={{ color: "#dbdee1", fontSize: 15, lineHeight: 20 }}>See you at 8<Text style={{ color: "#949ba4", fontSize: 12 }}> (edited)</Text></Text>
           </RN.View>
         </PreviewMessage>
-        <RN.View style={{ position: "relative", backgroundColor: showDeletedMessages ? "#f23f431a" : "transparent" }}>
-          {showDeletedMessages ? <RN.View style={{ position: "absolute", left: 0, top: 0, bottom: 0, width: 4, backgroundColor: "#f23f43" }} /> : null}
+        <RN.View style={{ position: "relative", backgroundColor: highlightEnabled ? `${pingColor}1a` : "transparent" }}>
+          {highlightEnabled ? <HighlightGlow color={pingColor} thickness={thickness} /> : null}
+          {highlightEnabled ? <RN.View style={{ position: "absolute", left: 0, top: 0, bottom: 0, width: thickness * 2, backgroundColor: pingColor }} /> : null}
           <PreviewMessage name="Sam" color="#eb459e" time="Today at 4:03 PM">
+            <Text style={{ color: "#dbdee1", fontSize: 15, lineHeight: 20 }}>
+              <Text style={{ color: highlightEnabled ? pingColor : "#dbdee1", fontWeight: "600" }}>@you </Text>Yes, it looks great!
+            </Text>
+          </PreviewMessage>
+        </RN.View>
+        <RN.View style={{ position: "relative", backgroundColor: showDeletedMessages && highlightEnabled ? `${deletedColor}1a` : "transparent" }}>
+          {showDeletedMessages && highlightEnabled ? <HighlightGlow color={deletedColor} thickness={thickness} /> : null}
+          {showDeletedMessages && highlightEnabled ? <RN.View style={{ position: "absolute", left: 0, top: 0, bottom: 0, width: thickness * 2, backgroundColor: deletedColor }} /> : null}
+          <PreviewMessage name="Alex" color="#3ba55c" time="Today at 4:05 PM">
             <Text style={{ color: "#dbdee1", fontSize: 15, lineHeight: 20 }}>
               {showDeletedMessages ? "Oops, wrong chat. Deleting this." : "I’ll send the link right after this."}
             </Text>
@@ -690,7 +1029,7 @@ export function DeletedMessagesSettings() {
   useProxy(storage);
   const [, forceUpdate] = React.useReducer((value: number) => value + 1, 0);
   const keepAfterRestart = Boolean(storage.messageLoggerKeepAfterRestart);
-  const limit = Number(storage.messageLoggerLimit) || 512;
+  const limit = Number(storage.messageLoggerLimit) || 500;
   const deletedCount = Number(storage.messageLoggerDeletedCount) || 0;
   const editCount = Number(storage.messageLoggerEditCount) || 0;
   const hasStoredHistory = deletedCount > 0 || editCount > 0 || hasMessageHistory();
@@ -727,6 +1066,10 @@ export function DeletedMessagesSettings() {
           <DeletedMessagesPreview
             showHistory={storage.keepEditHistory !== false}
             showDeletedMessages={Boolean(storage.keepDeletedMessages)}
+            highlightEnabled={storage.enabled !== false && storage.messageHighlightEnabled !== false}
+            pingColor={getHighlightColor(storage.messageHighlightPingColor, HIGHLIGHT_PING_CHOICES, "#f0b232")}
+            deletedColor={getHighlightColor(storage.messageHighlightDeletedColor, HIGHLIGHT_DELETED_CHOICES, "#f23f43")}
+            thickness={Number(storage.messageHighlightThickness) || 2}
           />
         </TableRowGroup>
 
@@ -779,6 +1122,7 @@ export function DeletedMessagesSettings() {
             onPress={confirmClear}
           />
         </TableRowGroup>}
+        <MessageHighlightSettings forceUpdate={forceUpdate} />
       </Stack>
     </ScrollView>
   );
@@ -798,6 +1142,7 @@ export default function Settings() {
             value={storage.enabled !== false}
             onValueChange={(value: boolean) => {
               storage.enabled = value;
+              syncMessageHighlightOptions();
               if (!value) clearMessageLoggerCache();
               setMessageHistoryFeatureEnabled(value && (storage.keepDeletedMessages !== false || storage.keepEditHistory !== false));
               setServerInfoFeatureEnabled(value && storage.enableServerInfo !== false);

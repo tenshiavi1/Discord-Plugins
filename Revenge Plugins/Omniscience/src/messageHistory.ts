@@ -305,6 +305,10 @@ export function hasMessageHistory(): boolean {
 	return deletedMessages.size > 0 || editHistory.size > 0;
 }
 
+export function isRetainedDeletedMessage(channelId: string, messageId: string): boolean {
+	return deletedMessages.has(getMessageKey(channelId, messageId));
+}
+
 export function clearMessageHistory(removeDeletedMessagesFromChat = false) {
 	for (const noticeId of [...editNotices.keys()]) dismissEditNotice(noticeId);
 	if (removeDeletedMessagesFromChat) {
