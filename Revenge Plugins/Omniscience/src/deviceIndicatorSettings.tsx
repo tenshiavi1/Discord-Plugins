@@ -146,7 +146,7 @@ function DevicePreview({ enabled, options }: { enabled: boolean; options: Record
 	return (
 		<RN.View style={{ gap: 8 }}>
 			<RN.View style={{ overflow: "hidden", borderRadius: 12, borderWidth: 1, borderColor: "#ffffff14", backgroundColor: "#1a1a1e" }}>
-				<PreviewHeader title={screen === "dm" ? "Alex" : screen === "members" ? "general" : "Profile"} user="Alex" clients={clients} options={{ ...options, dmHeader: enabled && options.dmHeader, hideMobileBadge: enabled && options.hideMobileBadge }} />
+				<PreviewHeader title={screen === "dm" ? "Alex" : screen === "members" ? "general" : "Profile"} user="Alex" clients={clients} options={{ ...options, dmHeader: enabled && screen === "dm" && options.dmHeader, hideMobileBadge: enabled && options.hideMobileBadge }} />
 				<SmoothPreviewSwap revision={`${enabled}:${screen}:${demo}:${options.dmHeader}:${options.lists}:${options.profiles}:${options.hideMobileBadge}`}>{screenContent}</SmoothPreviewSwap>
 				<RN.View style={{ height: 48, flexDirection: "row", alignItems: "center", paddingHorizontal: 12, borderTopWidth: 1, borderTopColor: "#ffffff0f" }}><Text style={{ color: "#949ba4", fontSize: 13 }}>Message #{screen === "dm" ? "@Alex" : "general"}</Text></RN.View>
 			</RN.View>

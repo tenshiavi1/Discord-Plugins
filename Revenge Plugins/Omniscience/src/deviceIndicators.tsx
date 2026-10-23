@@ -2,7 +2,7 @@ import { React, ReactNative as RN } from "@vendetta/metro/common";
 import { storage } from "@vendetta/plugin";
 import { after, instead } from "@vendetta/patcher";
 import { getAssetIDByName } from "@vendetta/ui/assets";
-import { find, findByProps } from "../../compat";
+import { find, findByName, findByProps, findByStoreName } from "../../compat";
 
 export type DeviceIndicatorOptions = {
 	enabled: boolean;
@@ -25,16 +25,16 @@ const LABELS: Record<string, string> = {
 	vr: "VR",
 };
 const ASSETS: Record<string, string> = {
-	desktop: "LaptopIcon",
+	desktop: "LaptopPhoneIcon",
 	mobile: "MobilePhoneIcon",
-	web: "GlobeIcon",
+	web: "GlobeEarthIcon",
 	embedded: "GameControllerIcon",
 	vr: "VRHeadsetIcon",
 };
 const GLYPHS: Record<string, string> = {
-	desktop: "▰",
+	desktop: "▱",
 	mobile: "▯",
-	web: "◎",
+	web: "🌐",
 	embedded: "⌘",
 	vr: "◉",
 };
@@ -71,11 +71,43 @@ function moduleExports(id: number) {
 	}
 }
 
+function componentModule(id: number, key: string, names: string[]) {
+	const direct = moduleExports(id);
+	if (typeof direct?.[key] === "function") return direct;
+	for (const name of names) {
+		const candidate = findByName(name, false);
+		if (typeof candidate?.[key] === "function") return candidate;
+		if (key === "default" && typeof candidate === "function") return { default: candidate };
+		if (key === "default" && typeof candidate?.default === "function") return candidate;
+	}
+	return null;
+}
+
 function getStores() {
-	presenceStore ??= moduleExports(4930)?.default ?? findByProps("getClientStatus");
-	sessionsStore ??= moduleExports(4908)?.default ?? findByProps("getSessions");
-	userStore ??= moduleExports(1377)?.default ?? findByProps("getCurrentUser");
-	channelStore ??= moduleExports(2051)?.default ?? findByProps("getChannel");
+	if (!presenceStore) {
+		const candidate = moduleExports(4930)?.default;
+		presenceStore = typeof candidate?.getClientStatus === "function"
+			? candidate
+			: findByStoreName("PresenceStore") ?? findByProps("getClientStatus");
+	}
+	if (!sessionsStore) {
+		const candidate = moduleExports(4908)?.default;
+		sessionsStore = typeof candidate?.getSessions === "function"
+			? candidate
+			: findByStoreName("SessionsStore") ?? findByProps("getSessions");
+	}
+	if (!userStore || typeof userStore.getCurrentUser !== "function") {
+		const candidate = moduleExports(1377)?.default;
+		userStore = typeof candidate?.getCurrentUser === "function"
+			? candidate
+			: findByStoreName("UserStore") ?? findByProps("getCurrentUser");
+	}
+	if (!channelStore || typeof channelStore.getChannel !== "function") {
+		const candidate = moduleExports(2051)?.default;
+		channelStore = typeof candidate?.getChannel === "function"
+			? candidate
+			: findByStoreName("ChannelStore") ?? findByProps("getChannel");
+	}
 }
 
 function currentUserId() {
@@ -176,8 +208,8 @@ function placeBadge(tree: any, props: any, placement: "dmHeader" | "lists" | "pr
 	return visit(tree, 0);
 }
 
-function patchComponent(moduleId: number, key: string, placement: "dmHeader" | "lists" | "profiles") {
-	const module = moduleExports(moduleId);
+function patchComponent(moduleId: number, key: string, placement: "dmHeader" | "lists" | "profiles", names: string[] = []) {
+	const module = componentModule(moduleId, key, names);
 	if (!module || typeof module[key] !== "function") return false;
 	const patchKey = `${moduleId}:${key}`;
 	if (patched.has(patchKey)) return true;
@@ -199,8 +231,8 @@ function patchComponent(moduleId: number, key: string, placement: "dmHeader" | "
 	return true;
 }
 
-function patchAvatar(moduleId: number, key: string) {
-	const module = moduleExports(moduleId);
+function patchAvatar(moduleId: number, key: string, names: string[] = []) {
+	const module = componentModule(moduleId, key, names);
 	if (!module || typeof module[key] !== "function") return false;
 	const patchKey = `${moduleId}:${key}`;
 	if (patched.has(patchKey)) return true;
@@ -216,7 +248,7 @@ function patchAvatar(moduleId: number, key: string) {
 }
 
 function patchVoiceMemberRows() {
-	const module = moduleExports(12849);
+	const module = componentModule(12849, "default", ["UserProfileActivityVoiceChannelUsers"]);
 	if (!module || typeof module.default !== "function" || patched.has("12849:voiceRows")) return false;
 	patched.add("12849:voiceRows");
 	unpatches.push(after("default", module, (args: any[], result: any) => {
@@ -251,14 +283,14 @@ function patchVoiceMemberRows() {
 
 function installPatches() {
 	let found = false;
-	found = patchComponent(13107, "default", "dmHeader") || found;
-	found = patchComponent(15962, "default", "lists") || found;
-	found = patchComponent(10602, "default", "lists") || found;
-	found = patchComponent(9334, "MemberRowItem", "lists") || found;
-	found = patchComponent(10843, "DisplayName", "profiles") || found;
+	found = patchComponent(13107, "default", "dmHeader", ["PrivateChannelHeader"]) || found;
+	found = patchComponent(15962, "default", "lists", ["MessagesItemChannelContent"]) || found;
+	found = patchComponent(10602, "default", "lists", ["UserRow"]) || found;
+	found = patchComponent(9334, "MemberRowItem", "lists", ["MemberRowItem"]) || found;
+	found = patchComponent(10843, "DisplayName", "profiles", ["DisplayName"]) || found;
 	found = patchVoiceMemberRows() || found;
-	found = patchAvatar(13920, "default") || found;
-	found = patchAvatar(13920, "StatusWithTyping") || found;
+	found = patchAvatar(13920, "default", ["Status"]) || found;
+	found = patchAvatar(13920, "StatusWithTyping", ["StatusWithTyping"]) || found;
 	return found;
 }
 
