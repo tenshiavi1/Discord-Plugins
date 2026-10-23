@@ -25,6 +25,10 @@ export function getMessageHighlightType(
 	return undefined;
 }
 
+export function shouldClearHistoryForNewSession(sessionInitialized: boolean, saveAfterRestart: boolean) {
+	return !sessionInitialized && !saveAfterRestart;
+}
+
 export function prependEditHistory(content: unknown, versions: readonly EditHistoryVersion[]) {
 	if (!Array.isArray(content) || versions.length === 0) return content;
 	const lines = versions.flatMap((version, index) => [

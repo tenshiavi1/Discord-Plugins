@@ -3,19 +3,17 @@ import { FluxDispatcher } from "@vendetta/metro/common";
 import { storage } from "@vendetta/plugin";
 import { instead } from "@vendetta/patcher";
 import { showToast } from "../../shared/toast";
-import { forgetChannelMessageHistory, forgetDeletedMessage, recordMessageDelete, recordMessageUpdate } from "./chatLogger";
-import { canRetainDeletedMessage, markDeletedMessage, mergeRetainedMessages, truncateEditVersion } from "./messageHistoryPresentation";
+import { recordMessageDelete, recordMessageUpdate } from "./chatLogger";
+import { canRetainDeletedMessage, markDeletedMessage, mergeRetainedMessages, shouldClearHistoryForNewSession, truncateEditVersion } from "./messageHistoryPresentation";
 
 const channelMessages = findByProps("_channelMessages");
-const channelStore = findByProps("getChannel");
-const messageActions = findByProps("deleteMessage");
 const messageStore = findByProps("getMessage", "getMessages");
 const messageRecords = findByProps("createMessageRecord");
-const snowflakeUtils = findByProps("extractTimestamp");
 const userStore = findByProps("getCurrentUser");
 const MAX_EDIT_HISTORY = 2000;
 const MAX_EDIT_VERSIONS = 10;
 const HISTORY_STORAGE_KEY = "omniscienceMessageHistory";
+const HISTORY_RUNTIME_KEY = "__omniscienceMessageHistoryRuntime";
 
 type MessageRecord = {
 	id: string;
@@ -54,8 +52,20 @@ type MessageHistorySettings = {
 	keepEditHistory: boolean;
 };
 
-const deletedMessages = new Map<string, DeletedRecord>();
-const editHistory = new Map<string, EditRecord>();
+type HistoryRuntimeState = {
+	deletedMessages: Map<string, DeletedRecord>;
+	editHistory: Map<string, EditRecord>;
+	sessionInitialized: boolean;
+};
+
+const globalHistoryRuntime = globalThis as typeof globalThis & { [HISTORY_RUNTIME_KEY]?: HistoryRuntimeState };
+const historyRuntime = globalHistoryRuntime[HISTORY_RUNTIME_KEY] ??= {
+	deletedMessages: new Map(),
+	editHistory: new Map(),
+	sessionInitialized: false,
+};
+const deletedMessages = historyRuntime.deletedMessages;
+const editHistory = historyRuntime.editHistory;
 const retainedViews = new Map<string, { original: unknown; revision: number; value: unknown }>();
 const unpatches: (() => void)[] = [];
 let dispatcherPatchInstalled = false;
@@ -79,6 +89,13 @@ function getCurrentAccountId() {
 function getRetainedMessageLimit() {
 	const limit = Number(storage.messageLoggerLimit);
 	return [100, 500, 1000, 5000].includes(limit) ? limit : 500;
+}
+
+function prepareHistorySession() {
+	const shouldClear = shouldClearHistoryForNewSession(historyRuntime.sessionInitialized, Boolean(storage.messageLoggerKeepAfterRestart));
+	if (historyRuntime.sessionInitialized) return;
+	historyRuntime.sessionInitialized = true;
+	if (shouldClear) delete storage[HISTORY_STORAGE_KEY];
 }
 
 function getStoredMessage(channelId: string, messageId: string): MessageRecord | undefined {
@@ -138,47 +155,33 @@ function serializeRetainedMessage(message: MessageRecord) {
 }
 
 function persistMessageHistory() {
-	if (!storage.messageLoggerKeepAfterRestart) {
-		delete storage[HISTORY_STORAGE_KEY];
-		return;
-	}
+	if (!storage.messageLoggerKeepAfterRestart) return;
 	const accountId = getCurrentAccountId();
 	if (!accountId) return;
-	const previous = storage[HISTORY_STORAGE_KEY];
-	const preserveDeleted = !settings.keepDeletedMessages && previous?.accountId === accountId
-		? previous.deleted ?? []
-		: undefined;
 	storage[HISTORY_STORAGE_KEY] = {
 		accountId,
-		deleted: preserveDeleted ?? [...deletedMessages.values()].map(({ channelId, original }) => ({
+		deleted: [...deletedMessages.values()].map(({ channelId, original }) => ({
 			channelId,
 			message: serializeRetainedMessage(original),
 		})),
-		edits: settings.keepEditHistory
-			? [...editHistory.values()].map(({ channelId, messageId, previous: versions, currentContent }) => ({
+		edits: [...editHistory.values()].map(({ channelId, messageId, previous: versions, currentContent }) => ({
 				channelId,
 				messageId,
 				versions,
 				currentContent,
-			}))
-			: [],
+			})),
 	};
 }
 
 function restorePersistedMessageHistory() {
+	prepareHistorySession();
 	const accountId = getCurrentAccountId();
 	if (!accountId || restoredHistoryAccountId === accountId) return false;
-	const accountChanged = restoredHistoryAccountId !== undefined && restoredHistoryAccountId !== accountId;
 	restoredHistoryAccountId = accountId;
-	if (accountChanged) {
-		deletedMessages.clear();
-		editHistory.clear();
-		invalidateRetainedViews();
-	}
 	const snapshot = storage[HISTORY_STORAGE_KEY];
 	if (!storage.messageLoggerKeepAfterRestart || snapshot?.accountId !== accountId) return false;
 	let restored = 0;
-	if (settings.keepDeletedMessages && Array.isArray(snapshot.deleted)) {
+	if (Array.isArray(snapshot.deleted)) {
 		for (const entry of snapshot.deleted) {
 			if (!entry || typeof entry.channelId !== "string" || !entry.message || typeof entry.message.id !== "string") continue;
 			try {
@@ -197,7 +200,7 @@ function restorePersistedMessageHistory() {
 			}
 		}
 	}
-	if (settings.keepEditHistory && Array.isArray(snapshot.edits)) {
+	if (Array.isArray(snapshot.edits)) {
 		for (const entry of snapshot.edits.slice(-MAX_EDIT_HISTORY)) {
 			if (!entry || typeof entry.channelId !== "string" || typeof entry.messageId !== "string" || !Array.isArray(entry.versions)) continue;
 			const previous = entry.versions
@@ -258,102 +261,10 @@ function installMessageStorePatches() {
 	return true;
 }
 
-function dismissRetainedMessage(channelId: string, messageId: string) {
-	if (!deletedMessages.delete(getMessageKey(channelId, messageId))) return false;
-	invalidateRetainedViews();
-	forgetDeletedMessage(channelId, messageId);
-	persistMessageHistory();
-	try {
-		FluxDispatcher.dispatch({ type: "MESSAGE_DELETE", channelId, id: messageId, otherPluginBypass: true });
-	} catch (error) {
-		console.error("[Omniscience] Could not dismiss a retained message from chat.", error);
-	}
-	return true;
-}
-
-function installMessageActionPatch() {
-	if (typeof messageActions?.deleteMessage !== "function") return;
-	unpatches.push(instead("deleteMessage", messageActions, (args, original) => {
-		const channelId = String(args[0] ?? "");
-		const messageId = String(args[1] ?? "");
-		if (settings.enabled && settings.keepDeletedMessages && dismissRetainedMessage(channelId, messageId)) {
-			return Promise.resolve();
-		}
-		return original(...args);
-	}));
-}
-
-function dispatchRetainedMessageRemovals(retained: DeletedRecord[]) {
-	for (const { channelId, original } of retained) {
-		try {
-			FluxDispatcher.dispatch({ type: "MESSAGE_DELETE", channelId, id: original.id, otherPluginBypass: true });
-		} catch (error) {
-			console.error("[Omniscience] Could not remove a retained message from chat.", error);
-		}
-	}
-}
-
-function clearRetainedRowsFromChat() {
-	const retained = [...deletedMessages.values()];
-	deletedMessages.clear();
-	invalidateRetainedViews();
-	dispatchRetainedMessageRemovals(retained);
-}
-
-function clearLiveHistory(removeDeletedRows: boolean) {
-	const retained = [...deletedMessages.values()];
-	deletedMessages.clear();
-	editHistory.clear();
-	invalidateRetainedViews();
-	if (removeDeletedRows) dispatchRetainedMessageRemovals(retained);
-}
-
-function clearChannelHistory(channelId: string) {
-	let changed = false;
-	for (const [key, entry] of deletedMessages) {
-		if (entry.channelId === channelId) {
-			deletedMessages.delete(key);
-			changed = true;
-		}
-	}
-	for (const [key, entry] of editHistory) {
-		if (entry.channelId === channelId) {
-			editHistory.delete(key);
-			changed = true;
-		}
-	}
-	forgetChannelMessageHistory(channelId);
-	if (!changed) return;
-	invalidateRetainedViews();
-	persistMessageHistory();
-}
-
 function handleLifecycleEvent(event: Record<string, any>) {
-	if (event.type === "LOGOUT") {
-		clearLiveHistory(true);
-		restoredHistoryAccountId = undefined;
-		return;
-	}
 	if (event.type === "CONNECTION_OPEN" || event.type === "CACHE_LOADED") {
 		if (restorePersistedMessageHistory()) persistMessageHistory();
-		return;
 	}
-	if (event.type === "CHANNEL_DELETE") {
-		const channelId = String(event.channel?.id ?? event.channelId ?? event.channel_id ?? event.id ?? "");
-		if (channelId) clearChannelHistory(channelId);
-		return;
-	}
-	if (event.type !== "GUILD_DELETE" || !event.guild?.id || event.guild.unavailable) return;
-	const channelIds = new Set<string>();
-	for (const entry of deletedMessages.values()) {
-		const channel = channelStore?.getChannel?.(entry.channelId);
-		if (channel?.guild_id === event.guild.id) channelIds.add(entry.channelId);
-	}
-	for (const entry of editHistory.values()) {
-		const channel = channelStore?.getChannel?.(entry.channelId);
-		if (channel?.guild_id === event.guild.id) channelIds.add(entry.channelId);
-	}
-	for (const channelId of channelIds) clearChannelHistory(channelId);
 }
 
 function createRetainedMessageUpdate(channelId: string, messageId: string) {
@@ -475,7 +386,7 @@ export function initializeMessageHistory(pluginSettings: {
 			console.warn("[Omniscience] Discord's message-list store was not found; deleted messages cannot be retained in chat.");
 			return false;
 		}
-		installMessageActionPatch();
+		prepareHistorySession();
 		restorePersistedMessageHistory();
 		unpatches.push(instead("dispatch", FluxDispatcher, (args, original) => {
 			try {
@@ -494,11 +405,17 @@ export function initializeMessageHistory(pluginSettings: {
 }
 
 export function setMessageHistoryFeatureEnabled(enabled: boolean) {
+	prepareHistorySession();
 	if (dispatcherPatchInstalled) {
 		updateMessageHistorySettings({ enabled });
 		return;
 	}
-	if (!enabled) return;
+	const snapshot = storage[HISTORY_STORAGE_KEY];
+	const hasSavedHistory = Boolean(
+		storage.messageLoggerKeepAfterRestart &&
+		snapshot?.accountId === getCurrentAccountId(),
+	);
+	if (!enabled && !hasSavedHistory && !deletedMessages.size && !editHistory.size) return;
 	if (!initializeMessageHistory({
 		enabled,
 		keepDeletedMessages: storage.keepDeletedMessages !== false,
@@ -514,16 +431,6 @@ export function setMessageHistoryFeatureEnabled(enabled: boolean) {
 export function updateMessageHistorySettings(patch: Partial<MessageHistorySettings>) {
 	const previous = settings;
 	settings = { ...settings, ...patch };
-	if (!settings.enabled) {
-		clearLiveHistory(true);
-		restoredHistoryAccountId = undefined;
-		return;
-	}
-	if (!settings.keepDeletedMessages && previous.keepDeletedMessages) {
-		clearRetainedRowsFromChat();
-		editHistory.clear();
-	}
-	if (!settings.keepEditHistory) editHistory.clear();
 	if (
 		(!previous.enabled && settings.enabled) ||
 		(!previous.keepDeletedMessages && settings.keepDeletedMessages) ||
@@ -536,11 +443,7 @@ export function updateMessageHistorySettings(patch: Partial<MessageHistorySettin
 }
 
 export function setMessageHistoryPersistenceEnabled(enabled: boolean) {
-	if (!enabled) {
-		delete storage[HISTORY_STORAGE_KEY];
-		return;
-	}
-	persistMessageHistory();
+	if (enabled) persistMessageHistory();
 }
 
 export function setMessageHistoryLimit(limit: number) {
@@ -590,8 +493,7 @@ export function clearMessageHistory(removeDeletedMessagesFromChat = false) {
 	delete storage[HISTORY_STORAGE_KEY];
 }
 
-export function removeMessageHistoryPatch(clearHistory = true) {
+export function removeMessageHistoryPatch() {
 	for (const unpatch of unpatches.splice(0).reverse()) unpatch();
 	dispatcherPatchInstalled = false;
-	if (clearHistory) clearLiveHistory(true);
 }

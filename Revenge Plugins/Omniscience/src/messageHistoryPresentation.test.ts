@@ -1,5 +1,5 @@
 import { expect, test } from "bun:test";
-import { canRetainDeletedMessage, getDeletedMessageHighlight, getMessageHighlightType, markDeletedMessage, mergeRetainedMessages, prependEditHistory, truncateEditVersion } from "./messageHistoryPresentation";
+import { canRetainDeletedMessage, getDeletedMessageHighlight, getMessageHighlightType, markDeletedMessage, mergeRetainedMessages, prependEditHistory, shouldClearHistoryForNewSession, truncateEditVersion } from "./messageHistoryPresentation";
 
 test("prepends plain struck-through versions to one rendered message", () => {
 	const current = [{ type: "text", content: "new text" }];
@@ -37,6 +37,12 @@ test("keeps deleted rows red when mention highlighting is disabled", () => {
 		color: "#00a8fc",
 		thickness: 3,
 	});
+});
+
+test("clears unsaved history only at the start of a new app session", () => {
+	expect(shouldClearHistoryForNewSession(false, false)).toBe(true);
+	expect(shouldClearHistoryForNewSession(true, false)).toBe(false);
+	expect(shouldClearHistoryForNewSession(false, true)).toBe(false);
 });
 
 test("retains sent messages but rejects ephemeral and unsent messages", () => {

@@ -27,6 +27,7 @@ const COLORS: Record<string, string> = {
 };
 const MAX_REMEMBERED_ROWS = 80;
 const FluxDispatcher = findByProps("dispatch");
+const messageStore = findByProps("getMessage", "getMessages");
 const UserStore = findByProps("getCurrentUser");
 const rememberedRows = new Map<string, { channelId: string; message: any }>();
 let options: HighlightOptions = {
@@ -130,6 +131,10 @@ function installRowPatch() {
 }
 
 function redrawRememberedRows() {
+	if (typeof messageStore?.emitChange === "function") {
+		messageStore.emitChange();
+		return;
+	}
 	if (typeof FluxDispatcher?.dispatch !== "function") return;
 	for (const { channelId, message } of rememberedRows.values()) {
 		if (!message || typeof message.id !== "string") continue;
@@ -137,12 +142,8 @@ function redrawRememberedRows() {
 		const update = { id: message.id, channel_id: channelId } as Record<string, unknown>;
 		if (Array.isArray(message.embeds) && message.embeds.length) update.embeds = message.embeds.slice();
 		if (Array.isArray(message.components) && message.components.length) update.components = message.components.slice();
-		if (content) {
-			FluxDispatcher.dispatch({ type: "MESSAGE_UPDATE", otherPluginBypass: true, message: { ...update, content: `${content}\u200b` } });
-			setTimeout(() => FluxDispatcher.dispatch({ type: "MESSAGE_UPDATE", otherPluginBypass: true, message: { ...update, content } }), 60);
-		} else {
-			FluxDispatcher.dispatch({ type: "MESSAGE_UPDATE", otherPluginBypass: true, message: update });
-		}
+		if (content) update.content = content;
+		FluxDispatcher.dispatch({ type: "MESSAGE_UPDATE", otherPluginBypass: true, message: update });
 	}
 }
 
