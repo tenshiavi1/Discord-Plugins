@@ -1,5 +1,5 @@
 import { expect, test } from "bun:test";
-import { canRetainDeletedMessage, getDeletedMessageHighlight, getMessageHighlightType, markDeletedMessage, mergeRetainedMessages, prependEditHistory, shouldClearHistoryForNewSession, truncateEditVersion } from "./messageHistoryPresentation";
+import { canRetainDeletedMessage, getDeletedMessageHighlight, getMessageHighlightType, hasEditedTimestamp, markDeletedMessage, mergeRetainedMessages, prependEditHistory, shouldClearHistoryForNewSession, truncateEditVersion } from "./messageHistoryPresentation";
 
 test("prepends plain struck-through versions to one rendered message", () => {
 	const current = [{ type: "text", content: "new text" }];
@@ -24,6 +24,12 @@ test("caps retained edit text at 4,000 characters with a truncation marker", () 
 	expect(truncated).toHaveLength(4_001);
 	expect(truncated.endsWith("\u2026")).toBe(true);
 	expect(truncateEditVersion("short text")).toBe("short text");
+});
+
+test("recognizes snake_case and camelCase edit timestamps", () => {
+	expect(hasEditedTimestamp({ edited_timestamp: "2026-10-23T00:00:00Z" })).toBe(true);
+	expect(hasEditedTimestamp({ editedTimestamp: "2026-10-23T00:00:00Z" })).toBe(true);
+	expect(hasEditedTimestamp({ edited_timestamp: null })).toBe(false);
 });
 
 test("keeps deleted rows red when mention highlighting is disabled", () => {

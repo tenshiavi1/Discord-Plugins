@@ -1,6 +1,10 @@
 export type EditHistoryVersion = { content: string };
 export const MAX_EDIT_VERSION_LENGTH = 4000;
 
+export function hasEditedTimestamp(message: any) {
+	return Boolean(message?.edited_timestamp ?? message?.editedTimestamp);
+}
+
 export function truncateEditVersion(content: string) {
 	return content.length > MAX_EDIT_VERSION_LENGTH
 		? `${content.slice(0, MAX_EDIT_VERSION_LENGTH)}\u2026`

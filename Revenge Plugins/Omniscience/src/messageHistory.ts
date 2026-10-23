@@ -4,7 +4,7 @@ import { storage } from "@vendetta/plugin";
 import { instead } from "@vendetta/patcher";
 import { showToast } from "../../shared/toast";
 import { recordMessageDelete, recordMessageUpdate } from "./chatLogger";
-import { canRetainDeletedMessage, markDeletedMessage, mergeRetainedMessages, shouldClearHistoryForNewSession, truncateEditVersion } from "./messageHistoryPresentation";
+import { canRetainDeletedMessage, hasEditedTimestamp, markDeletedMessage, mergeRetainedMessages, shouldClearHistoryForNewSession, truncateEditVersion } from "./messageHistoryPresentation";
 
 const channelMessages = findByProps("_channelMessages");
 const messageStore = findByProps("getMessage", "getMessages");
@@ -283,19 +283,21 @@ function createRetainedMessageUpdate(channelId: string, messageId: string) {
 	};
 }
 
-function rememberEdit(update: any) {
-	if (!settings.enabled || !settings.keepDeletedMessages || !settings.keepEditHistory || typeof update?.content !== "string" || !update.edited_timestamp) return;
-	const channelId = String(update.channel_id ?? update.channelId ?? "");
-	const messageId = String(update.id ?? "");
+function rememberEdit(event: any) {
+	const update = event?.message ?? event;
+	const content = typeof update?.content === "string" ? update.content : event?.content;
+	if (!settings.enabled || !settings.keepEditHistory || typeof content !== "string" || (!hasEditedTimestamp(update) && !hasEditedTimestamp(event))) return;
+	const channelId = String(update.channel_id ?? update.channelId ?? event?.channel_id ?? event?.channelId ?? "");
+	const messageId = String(update.id ?? event?.id ?? "");
 	if (!channelId || !messageId) return;
 	const key = getMessageKey(channelId, messageId);
 	const record = editHistory.get(key);
 	const original = getStoredMessage(channelId, messageId);
 	const previousContent = record?.currentContent ?? original?.content;
-	if (typeof previousContent !== "string" || previousContent === update.content) return;
+	if (typeof previousContent !== "string" || previousContent === content) return;
 	const next: EditRecord = record ?? { channelId, messageId, previous: [], currentContent: previousContent };
 	next.previous = [...next.previous, { content: truncateEditVersion(previousContent) }].slice(-MAX_EDIT_VERSIONS);
-	next.currentContent = update.content;
+	next.currentContent = content;
 	rememberMessage(editHistory, key, next, MAX_EDIT_HISTORY);
 	persistMessageHistory();
 }
@@ -307,7 +309,7 @@ function dispatchWithHistory(args: unknown[], original: (...args: any[]) => any)
 	if (event.otherPluginBypass) return original(...args);
 	if (event.type === "MESSAGE_UPDATE") {
 		recordMessageUpdate(event);
-		rememberEdit(event.message);
+		rememberEdit(event);
 		return original(...args);
 	}
 

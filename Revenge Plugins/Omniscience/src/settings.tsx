@@ -87,7 +87,6 @@ function syncMessageHighlightOptions() {
       storage.enabled !== false && storage.keepDeletedMessages !== false,
     historyEnabled:
       storage.enabled !== false &&
-      storage.keepDeletedMessages !== false &&
       storage.keepEditHistory !== false,
     thickness: Number(storage.messageHighlightThickness) || 2,
     pingColor: String(storage.messageHighlightPingColor ?? "default"),
@@ -1573,8 +1572,16 @@ function DeletedMessagesPreview({
       <RN.View style={{ paddingVertical: 4 }}>
         <PreviewMessage name="Alex" color="#3ba55c" time="Today at 4:01 PM">
           <RN.View>
-            {showHistory &&
-              versions.map((version, index) => (
+            {showHistory ? (
+              <RN.View
+                style={{
+                  borderLeftWidth: 2,
+                  borderLeftColor: "#4e5058",
+                  paddingLeft: 8,
+                  marginBottom: 4,
+                }}
+              >
+                {versions.map((version, index) => (
                 <PreviewPopIn
                   key={`${version}-${index}`}
                   reduceMotion={reduceMotion}
@@ -1582,14 +1589,17 @@ function DeletedMessagesPreview({
                   <Text
                     style={{
                       color: "#949ba4",
-                      fontSize: 14,
+                      fontSize: 13,
+                      lineHeight: 18,
                       textDecorationLine: "line-through",
                     }}
                   >
                     {version}
                   </Text>
                 </PreviewPopIn>
-              ))}
+                ))}
+              </RN.View>
+            ) : null}
             <Text style={{ color: "#dbdee1", fontSize: 15, lineHeight: 20 }}>
               See you at 8
               <Text style={{ color: "#949ba4", fontSize: 12 }}> (edited)</Text>
