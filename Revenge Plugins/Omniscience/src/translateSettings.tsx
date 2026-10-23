@@ -22,6 +22,7 @@ const { TableRowGroup, TableRow, TableSwitchRow, Stack } = findByProps(
 );
 const { Text } = findByProps("Text", "View");
 const Press = RN.Pressable || RN.TouchableOpacity;
+const WATCH_PREVIEW_SCENE_DURATION = 3000;
 
 function useTranslationStatus() {
 	const [status, setStatus] = React.useState(getTranslationStatus);
@@ -101,8 +102,7 @@ function TranslationPreview({ enabled }: { enabled: boolean }) {
 
 	React.useEffect(() => {
 		if (mode !== "watch" || !playing || !enabled) return undefined;
-		const duration = watchedStep === 0 ? 1800 : watchedStep === 1 ? 1200 : 2400;
-		const timer = setTimeout(() => setStep((current) => current + 1), duration);
+		const timer = setTimeout(() => setStep((current) => current + 1), WATCH_PREVIEW_SCENE_DURATION);
 		return () => clearTimeout(timer);
 	}, [enabled, manual, mode, playing, watchedStep]);
 
@@ -126,26 +126,28 @@ function TranslationPreview({ enabled }: { enabled: boolean }) {
 		</SmoothPreviewSwap>
 	);
 	const frame = (
-		<RN.View style={{ overflow: "hidden", borderRadius: 12, borderWidth: 1, borderColor: "#ffffff14", backgroundColor: "#1a1a1e" }}>
+		<RN.View style={{ height: 280, overflow: "hidden", borderRadius: 12, borderWidth: 1, borderColor: "#ffffff14", backgroundColor: "#1a1a1e" }}>
 			<RN.View style={{ minHeight: 48, flexDirection: "row", alignItems: "center", gap: 10, paddingHorizontal: 12, borderBottomWidth: 1, borderBottomColor: "#ffffff14" }}>
 				<Text style={{ color: "#b5bac1", fontSize: 24 }}>‹</Text>
 				<Text style={{ flex: 1, color: "#f2f3f5", fontSize: 15, fontWeight: "700" }}>#  general  ›</Text>
 				<Icon name="ThreadIcon" fallback="⋯" />
 				<Icon name="MagnifyingGlassIcon" fallback="⌕" />
 			</RN.View>
-			{mode === "try" && enabled ? (
-				<Press
-					accessibilityRole="button"
-					accessibilityLabel="Open message actions"
-					accessibilityHint="Hold the message to open its menu"
-					onLongPress={() => setMenuOpen(true)}
-					onPress={() => setMenuOpen((open) => !open)}
-				>
-					{message}
-				</Press>
-			) : message}
+			<RN.View style={{ height: 174, justifyContent: "center", overflow: "hidden" }}>
+				{mode === "try" && enabled ? (
+					<Press
+						accessibilityRole="button"
+						accessibilityLabel="Open message actions"
+						accessibilityHint="Hold the message to open its menu"
+						onLongPress={() => setMenuOpen(true)}
+						onPress={() => setMenuOpen((open) => !open)}
+					>
+						{message}
+					</Press>
+				) : message}
+			</RN.View>
 			{(watchedMenu || menuOpen) ? (
-				<RN.View style={{ marginHorizontal: 14, marginBottom: 10, padding: 8, borderRadius: 14, backgroundColor: "#232428" }}>
+				<RN.View style={{ position: "absolute", left: 14, right: 14, bottom: 68, marginHorizontal: 0, marginBottom: 0, padding: 8, borderRadius: 14, backgroundColor: "#232428", zIndex: 1 }}>
 					{["Reply", "Copy Text", done ? "Show Original" : "Translate"].map((label) => (
 						<Press key={label} accessibilityRole="button" onPress={() => {
 							if (label === "Translate" || label === "Show Original") {
