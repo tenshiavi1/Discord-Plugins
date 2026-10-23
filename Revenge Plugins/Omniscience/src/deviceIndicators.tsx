@@ -3,7 +3,7 @@ import { storage } from "@vendetta/plugin";
 import { after, instead } from "@vendetta/patcher";
 import { find, findByProps, findByStoreName } from "../../compat";
 import platformIcons from "./deviceIndicatorIcons";
-import { resolveComponentModule } from "./deviceIndicatorDiscovery";
+import { resolveComponentModule, resolveComponentTarget } from "./deviceIndicatorDiscovery";
 
 export type DeviceIndicatorOptions = {
 	enabled: boolean;
@@ -192,11 +192,13 @@ function placeBadge(tree: any, props: any, placement: "dmHeader" | "lists" | "pr
 
 function patchComponent(moduleId: number, key: string, placement: "dmHeader" | "lists" | "profiles", names: string[] = []) {
 	const module = componentModule(moduleId, key, names);
-	if (!module || typeof module[key] !== "function") return false;
+	if (!module) return false;
+	const component = resolveComponentTarget(module, key);
+	if (!component) return false;
 	const patchKey = `${moduleId}:${key}`;
 	if (patched.has(patchKey)) return true;
 	patched.add(patchKey);
-	unpatches.push(after(key, module, (args: any[], result: any) => {
+	unpatches.push(after(component.key, component.target, (args: any[], result: any) => {
 		const props = args[0] ?? {};
 		if (placement === "profiles") {
 			const userId = userIdFrom(props);
@@ -215,11 +217,13 @@ function patchComponent(moduleId: number, key: string, placement: "dmHeader" | "
 
 function patchAvatar(moduleId: number, key: string, names: string[] = []) {
 	const module = componentModule(moduleId, key, names);
-	if (!module || typeof module[key] !== "function") return false;
+	if (!module) return false;
+	const component = resolveComponentTarget(module, key);
+	if (!component) return false;
 	const patchKey = `${moduleId}:${key}`;
 	if (patched.has(patchKey)) return true;
 	patched.add(patchKey);
-	unpatches.push(instead(key, module, (args: any[], original: (...args: any[]) => any) => {
+	unpatches.push(instead(component.key, component.target, (args: any[], original: (...args: any[]) => any) => {
 		const props = args[0];
 		if (!options.enabled || !options.hideMobileBadge || !props?.isMobileOnline) return original(...args);
 		const next = Array.from(args);
