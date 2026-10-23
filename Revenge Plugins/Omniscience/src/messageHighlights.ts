@@ -2,11 +2,12 @@ import { ReactNative as RN } from "@vendetta/metro/common";
 import { after } from "@vendetta/patcher";
 import { findByName, findByProps } from "../../compat";
 import { getMessageEditHistory, isRetainedDeletedMessage } from "./messageHistory";
-import { prependEditHistory } from "./messageHistoryPresentation";
+import { getDeletedMessageHighlight, prependEditHistory } from "./messageHistoryPresentation";
 
 type HighlightColor = string;
 type HighlightOptions = {
 	enabled: boolean;
+	deletedEnabled: boolean;
 	historyEnabled: boolean;
 	thickness: number;
 	pingColor: HighlightColor;
@@ -30,6 +31,7 @@ const UserStore = findByProps("getCurrentUser");
 const rememberedRows = new Map<string, { channelId: string; message: any }>();
 let options: HighlightOptions = {
 	enabled: false,
+	deletedEnabled: false,
 	historyEnabled: false,
 	thickness: 2,
 	pingColor: "default",
@@ -92,11 +94,14 @@ function highlightRow(args: any[], result: any) {
 	}
 	if (!options.enabled) return next;
 
-	const deleted = isRetainedDeletedMessage(channelId, messageId) || Boolean(message.was_deleted);
-	const mentioned = !deleted && isMentionForCurrentUser(source, message);
+	const deleted = options.deletedEnabled && (isRetainedDeletedMessage(channelId, messageId) || Boolean(message.was_deleted));
+	const mentioned = options.enabled && !deleted && isMentionForCurrentUser(source, message);
 	if (!deleted && !mentioned) return next;
 
-	const color = normalizeColor(deleted ? options.deletedColor : options.pingColor, deleted ? "#f23f43" : "#f0b232");
+	const deletedHighlight = deleted
+		? getDeletedMessageHighlight(options.enabled, normalizeColor(options.deletedColor, "#f23f43"), options.thickness)
+		: undefined;
+	const color = deletedHighlight?.color ?? normalizeColor(options.pingColor, "#f0b232");
 	const gutter = processedColor(color);
 	const background = processedColor(`${color}1a`);
 	if (gutter === undefined || background === undefined) return next;
@@ -105,7 +110,7 @@ function highlightRow(args: any[], result: any) {
 		...next,
 		backgroundHighlight: {
 			backgroundColor: background,
-			gutterColor: encodeGutter(gutter, options.thickness),
+			gutterColor: encodeGutter(gutter, deletedHighlight?.thickness ?? options.thickness),
 		},
 	};
 }
@@ -143,8 +148,8 @@ export function setMessageHighlightOptions(next: Partial<HighlightOptions>) {
 		...next,
 		thickness: Math.max(1, Math.min(4, Math.floor(Number(next.thickness ?? options.thickness) || 1))),
 	};
-	if ((options.enabled || options.historyEnabled) && !unpatch) installRowPatch();
-	if (!options.enabled && !options.historyEnabled && unpatch) {
+	if ((options.enabled || options.deletedEnabled || options.historyEnabled) && !unpatch) installRowPatch();
+	if (!options.enabled && !options.deletedEnabled && !options.historyEnabled && unpatch) {
 		unpatch();
 		unpatch = undefined;
 	}

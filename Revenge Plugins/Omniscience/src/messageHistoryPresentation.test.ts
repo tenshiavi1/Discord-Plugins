@@ -1,5 +1,5 @@
 import { expect, test } from "bun:test";
-import { canRetainDeletedMessage, markDeletedMessage, mergeRetainedMessages, prependEditHistory, truncateEditVersion } from "./messageHistoryPresentation";
+import { canRetainDeletedMessage, getDeletedMessageHighlight, markDeletedMessage, mergeRetainedMessages, prependEditHistory, truncateEditVersion } from "./messageHistoryPresentation";
 
 test("prepends plain struck-through versions to one rendered message", () => {
 	const current = [{ type: "text", content: "new text" }];
@@ -24,6 +24,17 @@ test("caps retained edit text at 4,000 characters with a truncation marker", () 
 	expect(truncated).toHaveLength(4_001);
 	expect(truncated.endsWith("\u2026")).toBe(true);
 	expect(truncateEditVersion("short text")).toBe("short text");
+});
+
+test("keeps deleted rows red when mention highlighting is disabled", () => {
+	expect(getDeletedMessageHighlight(false, "#00a8fc", 4)).toEqual({
+		color: "#f23f43",
+		thickness: 1,
+	});
+	expect(getDeletedMessageHighlight(true, "#00a8fc", 3)).toEqual({
+		color: "#00a8fc",
+		thickness: 3,
+	});
 });
 
 test("retains sent messages but rejects ephemeral and unsent messages", () => {

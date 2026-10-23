@@ -83,6 +83,8 @@ function syncMessageHighlightOptions() {
   setMessageHighlightOptions({
     enabled:
       storage.enabled !== false && storage.messageHighlightEnabled !== false,
+    deletedEnabled:
+      storage.enabled !== false && storage.keepDeletedMessages !== false,
     historyEnabled:
       storage.enabled !== false && storage.keepEditHistory !== false,
     thickness: Number(storage.messageHighlightThickness) || 2,
@@ -1833,6 +1835,7 @@ export default function Settings() {
             onValueChange={(value: boolean) => {
               storage.keepDeletedMessages = value;
               updateMessageHistorySettings({ keepDeletedMessages: value });
+              syncMessageHighlightOptions();
               setMessageHistoryFeatureEnabled(
                 storage.enabled !== false &&
                   (value || storage.keepEditHistory !== false),

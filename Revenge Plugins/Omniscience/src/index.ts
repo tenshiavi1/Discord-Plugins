@@ -97,6 +97,7 @@ export default {
     setMessageHistoryFeatureEnabled(storage.enabled !== false && (storage.keepDeletedMessages !== false || storage.keepEditHistory !== false));
     setMessageHighlightOptions({
       enabled: storage.enabled !== false && storage.messageHighlightEnabled !== false,
+	  deletedEnabled: storage.enabled !== false && storage.keepDeletedMessages !== false,
 	  historyEnabled: storage.enabled !== false && storage.keepEditHistory !== false,
       thickness: Number(storage.messageHighlightThickness) || 2,
       pingColor: String(storage.messageHighlightPingColor ?? "default"),

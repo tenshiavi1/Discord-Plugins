@@ -7,6 +7,13 @@ export function truncateEditVersion(content: string) {
 		: content;
 }
 
+export function getDeletedMessageHighlight(enabled: boolean, color: string, thickness: number) {
+	return {
+		color: enabled ? color : "#f23f43",
+		thickness: enabled ? thickness : 1,
+	};
+}
+
 export function prependEditHistory(content: unknown, versions: readonly EditHistoryVersion[]) {
 	if (!Array.isArray(content) || versions.length === 0) return content;
 	const lines = versions.flatMap((version, index) => [
