@@ -14,6 +14,27 @@ export function resolveMessageRowGenerator(module: any) {
 	return typeof candidate?.prototype?.generate === "function" ? candidate : undefined;
 }
 
+export function isLegacyEditNotice(message: any) {
+	return typeof message?.omniscienceOriginalMessageId === "string";
+}
+
+export function removeLegacyEditNotices<T>(collection: T): T {
+	if (!collection) return collection;
+	if (Array.isArray(collection)) return collection.filter((message) => !isLegacyEditNotice(message)) as T;
+	const source = collection as T & {
+		_array?: unknown[];
+		clone?: () => typeof source;
+		mutate?: (callback: (copy: { _array: unknown[] }) => void, force?: boolean) => typeof source;
+	};
+	if (!Array.isArray(source._array) || typeof source.mutate !== "function") return collection;
+	const retained = source._array.filter((message) => !isLegacyEditNotice(message));
+	if (retained.length === source._array.length) return collection;
+	const clone = source.clone;
+	const base = clone ? clone.call(source) : source;
+	if (typeof base.mutate !== "function") return collection;
+	return base.mutate((copy) => { copy._array = retained; }, true) as T;
+}
+
 export const RECENT_MESSAGE_LOG_WINDOW_MS = 5 * 60 * 1000;
 export const MAX_EDIT_VERSION_LENGTH = 4000;
 

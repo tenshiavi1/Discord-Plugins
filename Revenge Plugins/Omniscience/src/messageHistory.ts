@@ -4,7 +4,7 @@ import { storage } from "@vendetta/plugin";
 import { instead } from "@vendetta/patcher";
 import { showToast } from "../../shared/toast";
 import { recordMessageDelete, recordMessageUpdate } from "./chatLogger";
-import { canRetainDeletedMessage, hasEditedTimestamp, markDeletedMessage, mergeRetainedMessages, pruneRecentMessageLogs, shouldClearHistoryForNewSession, truncateEditVersion, type RecentMessageLog } from "./messageHistoryPresentation";
+import { canRetainDeletedMessage, hasEditedTimestamp, isLegacyEditNotice, markDeletedMessage, mergeRetainedMessages, pruneRecentMessageLogs, removeLegacyEditNotices, shouldClearHistoryForNewSession, truncateEditVersion, type RecentMessageLog } from "./messageHistoryPresentation";
 
 const channelMessages = findByProps("_channelMessages");
 const messageStore = findByProps("getMessage", "getMessages");
@@ -70,6 +70,7 @@ historyRuntime.recentLogs ??= [];
 const deletedMessages = historyRuntime.deletedMessages;
 const editHistory = historyRuntime.editHistory;
 const retainedViews = new Map<string, { original: unknown; revision: number; value: unknown }>();
+const legacyEditNoticeIds = new Set<string>();
 const unpatches: (() => void)[] = [];
 const recentProcessLogKeys = new Map<string, number>();
 let dispatcherPatchInstalled = false;
@@ -262,12 +263,16 @@ function installMessageStorePatches() {
 	unpatches.push(instead("getMessages", messageStore, (args, original) => {
 		const result = original(...args);
 		const channelId = String(args[0] ?? "");
-		if (!channelId) return result;
+		for (const message of Array.isArray(result) ? result : ((result as { _array?: unknown[] } | undefined)?._array ?? [])) {
+			if (isLegacyEditNotice(message) && typeof (message as { id?: unknown }).id === "string") legacyEditNoticeIds.add((message as { id: string }).id);
+		}
+		const visible = removeLegacyEditNotices(result);
+		if (!channelId) return visible;
 		const retained = getRetainedMessages(channelId);
-		if (!retained.length) return result;
+		if (!retained.length) return visible;
 		const cached = retainedViews.get(channelId);
 		if (cached?.original === result && cached.revision === retainedRevision) return cached.value;
-		const value = mergeRetainedMessages(result, retained);
+		const value = mergeRetainedMessages(visible, retained);
 		retainedViews.set(channelId, { original: result, revision: retainedRevision, value });
 		if (retainedViews.size > 16) retainedViews.delete(retainedViews.keys().next().value!);
 		return value;
@@ -275,7 +280,13 @@ function installMessageStorePatches() {
 	if (typeof messageStore.getMessage === "function") {
 		unpatches.push(instead("getMessage", messageStore, (args, original) => {
 			const retained = deletedMessages.get(getMessageKey(String(args[0] ?? ""), String(args[1] ?? "")))?.retained;
-			return retained ?? original(...args);
+			if (retained) return retained;
+			const message = original(...args);
+			if (isLegacyEditNotice(message)) {
+				if (typeof message.id === "string") legacyEditNoticeIds.add(message.id);
+				return undefined;
+			}
+			return message;
 		}));
 	}
 	return true;
@@ -371,6 +382,19 @@ function dispatchWithHistory(args: unknown[], original: (...args: any[]) => any)
 	const event = args[0] as Record<string, any> | undefined;
 	if (!event || typeof event.type !== "string") return original(...args);
 	handleLifecycleEvent(event);
+	if (event.type === "MESSAGE_CREATE" && isLegacyEditNotice(event.message ?? event)) {
+		const notice = event.message ?? event;
+		if (typeof notice.id === "string") legacyEditNoticeIds.add(notice.id);
+		recordMessageProcess({ operation: "edit", stage: "legacy-notice", result: "skipped", detail: "suppressed synthetic notice from an older plugin build", messageId: typeof notice.id === "string" ? notice.id : undefined });
+		return Promise.resolve();
+	}
+	if (event.type === "MESSAGE_EDIT_FAILED_AUTOMOD") {
+		const noticeId = String(event.messageData?.message?.messageId ?? "");
+		if (noticeId && legacyEditNoticeIds.delete(noticeId)) {
+			recordMessageProcess({ operation: "edit", stage: "legacy-notice", result: "skipped", detail: "suppressed synthetic Automod notice from an older plugin build", messageId: noticeId });
+			return Promise.resolve();
+		}
+	}
 	if (event.otherPluginBypass) return original(...args);
 	if (event.type === "MESSAGE_UPDATE") {
 		recordMessageUpdate(event);

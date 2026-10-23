@@ -1,5 +1,5 @@
 import { expect, test } from "bun:test";
-import { canRetainDeletedMessage, getDeletedMessageHighlight, getMessageHighlightType, hasEditedTimestamp, markDeletedMessage, mergeRetainedMessages, prependEditHistory, pruneRecentMessageLogs, resolveMessageRowGenerator, shouldClearHistoryForNewSession, truncateEditVersion, type RecentMessageLog } from "./messageHistoryPresentation";
+import { canRetainDeletedMessage, getDeletedMessageHighlight, getMessageHighlightType, hasEditedTimestamp, isLegacyEditNotice, markDeletedMessage, mergeRetainedMessages, prependEditHistory, pruneRecentMessageLogs, removeLegacyEditNotices, resolveMessageRowGenerator, shouldClearHistoryForNewSession, truncateEditVersion, type RecentMessageLog } from "./messageHistoryPresentation";
 
 test("prepends plain struck-through versions to one rendered message", () => {
 	const current = [{ type: "text", content: "new text" }];
@@ -40,6 +40,36 @@ test("resolves a row generator from its default module export", () => {
 
 	expect(resolveMessageRowGenerator(module)).toBe(RowGenerator);
 	expect(resolveMessageRowGenerator({ default: {} })).toBeUndefined();
+});
+
+test("filters only legacy synthetic edit notices from message results", () => {
+	const realMessage = { id: "1", content: "real" };
+	const legacyNotice = { id: "2", content: "old", omniscienceOriginalMessageId: "1" };
+
+	expect(isLegacyEditNotice(legacyNotice)).toBe(true);
+	expect(isLegacyEditNotice(realMessage)).toBe(false);
+	expect(removeLegacyEditNotices([realMessage, legacyNotice])).toEqual([realMessage]);
+});
+
+test("filters legacy edit notices from an immutable message collection", () => {
+	const createCollection = (messages: object[]) => ({
+		_array: messages,
+		clone() {
+			return createCollection([...this._array]);
+		},
+		mutate(callback: (copy: { _array: unknown[] }) => void) {
+			const copy = { _array: [...this._array] };
+			callback(copy);
+			return createCollection(copy._array);
+		},
+	});
+	const realMessage = { id: "1", content: "real" };
+	const legacyNotice = { id: "2", content: "old", omniscienceOriginalMessageId: "1" };
+	const source = createCollection([realMessage, legacyNotice]);
+	const result = removeLegacyEditNotices(source) as ReturnType<typeof createCollection>;
+
+	expect(result._array).toEqual([realMessage]);
+	expect(source._array).toEqual([realMessage, legacyNotice]);
 });
 
 test("shows only message logs younger than five minutes", () => {
