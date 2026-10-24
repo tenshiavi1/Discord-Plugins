@@ -25,9 +25,15 @@ test("discovers and targets memo and forwardRef component wrappers", () => {
 });
 
 test("can target a production-minified component by its verified export key", () => {
-	const module = { DisplayName: function e() {} };
+	const module = {
+		default: function e() {},
+		MemberRowItem: function t() {},
+	};
 
-	expect(resolveComponentTarget(module, "DisplayName")).toEqual({ target: module, key: "DisplayName" });
+	expect(resolveComponentModule(module, "default", ["UserRow"], true)).toBe(module);
+	expect(resolveComponentModule(module, "MemberRowItem", ["MemberRowItem"], true)).toBe(module);
+	expect(resolveComponentModule(module, "default", ["UserRow"])).toBeNull();
+	expect(resolveComponentTarget(module, "MemberRowItem")).toEqual({ target: module, key: "MemberRowItem" });
 });
 
 test("finds wrapped components when their module export key differs from their name", () => {

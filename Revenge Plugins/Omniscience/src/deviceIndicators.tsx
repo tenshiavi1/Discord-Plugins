@@ -63,7 +63,7 @@ function moduleExports(id: number) {
 
 function componentModule(id: number, key: string, names: string[], trustExportKey = false) {
 	const direct = moduleExports(id);
-	if (trustExportKey && resolveComponentTarget(direct, key)) return direct;
+	if (trustExportKey && resolveComponentModule(direct, key, names, true)) return direct;
 	const directModule = resolveComponentModule(direct, key, names);
 	if (directModule) return directModule;
 	return find((candidate: any) => resolveComponentModule(candidate, key, names) !== null) ?? null;
@@ -402,10 +402,12 @@ function patchAvatar(moduleId: number, key: string, names: string[] = []) {
 }
 
 function patchVoiceMemberRows() {
-	const module = componentModule(12849, "default", ["UserProfileActivityVoiceChannelUsers"]);
-	if (!module || typeof module.default !== "function" || patched.has("12849:voiceRows")) return false;
+	const module = componentModule(12849, "default", ["UserProfileActivityVoiceChannelUsers"], true);
+	if (!module || patched.has("12849:voiceRows")) return false;
+	const component = resolveComponentTarget(module, "default");
+	if (!component) return false;
 	patched.add("12849:voiceRows");
-	unpatches.push(after("default", module, (args: any[], result: any) => {
+	unpatches.push(after(component.key, component.target, (args: any[], result: any) => {
 		if (!options.enabled || !options.lists || !result) return result;
 		function visit(node: any, depth: number): any {
 			if (!node || depth > 18 || typeof node !== "object" || !node.props) return node;
@@ -452,8 +454,9 @@ function installPatches() {
 		);
 	const profileFound = !options.profiles
 		|| patchProfileDisplayName();
+	let listsFound = true;
 	if (options.lists) {
-		patchComponent(
+		const dmListFound = patchComponent(
 			15962,
 			"default",
 			"lists",
@@ -461,15 +464,16 @@ function installPatches() {
 			(args, result) => placeDmListBadge(result, args[0] ?? {}),
 			true,
 		);
-		patchComponent(10602, "default", "lists", ["UserRow"]);
-		patchComponent(9334, "MemberRowItem", "lists", ["MemberRowItem"]);
-		patchVoiceMemberRows();
+		const friendRowsFound = patchComponent(10602, "default", "lists", ["UserRow"], undefined, true);
+		const memberRowsFound = patchComponent(9334, "MemberRowItem", "lists", ["MemberRowItem"], undefined, true);
+		const voiceRowsFound = patchVoiceMemberRows();
+		listsFound = dmListFound && friendRowsFound && memberRowsFound && voiceRowsFound;
 	}
 	if (options.hideMobileBadge) {
 		patchAvatar(13920, "default", ["Status"]);
 		patchAvatar(13920, "StatusWithTyping", ["StatusWithTyping"]);
 	}
-	return dmHeaderFound && profileFound;
+	return dmHeaderFound && profileFound && listsFound;
 }
 
 function stopPatchRetry() {

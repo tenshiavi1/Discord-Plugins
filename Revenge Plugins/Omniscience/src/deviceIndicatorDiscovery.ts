@@ -9,9 +9,10 @@ function matchesName(value: unknown, names: readonly string[], visited = new Set
 	return matchesName(component.type, names, visited) || matchesName(component.render, names, visited);
 }
 
-export function resolveComponentModule(candidate: unknown, key: string, names: readonly string[]) {
+export function resolveComponentModule(candidate: unknown, key: string, names: readonly string[], trustExportKey = false) {
 	if (!candidate || (typeof candidate !== "object" && typeof candidate !== "function")) return null;
 	const module = candidate as ModuleLike;
+	if (trustExportKey && resolveComponentTarget(module, key)) return module;
 	if (key === "default") {
 		return matchesName(module.default, names) ? module : null;
 	}
