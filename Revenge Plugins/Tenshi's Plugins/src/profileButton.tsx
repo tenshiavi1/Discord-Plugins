@@ -6,63 +6,80 @@ import { getAssetIDByName } from "@vendetta/ui/assets";
 import { find } from "../../compat";
 import Settings from "./settings";
 import { navigateToManager } from "./managerNavigation";
+import { findComponentTarget, findDefaultComponentTarget, selectComponentModule } from "./profileButtonCore";
 
 const YOU_BAR_BUTTONS_MODULE = 16335;
 const YOU_BAR_CONSTANTS_MODULE = 14899;
-const ModuleRequire = globalThis as typeof globalThis & { __r?: (id: number) => any };
+const COMPONENT_NAMES = ["YouBarButtons", "YouBarNotificationsButton"];
+type MetroModuleRecord = {
+	factory?: (...args: any[]) => any;
+	isInitialized?: boolean;
+};
+const MetroRuntime = globalThis as typeof globalThis & {
+	__r?: (id: number) => any;
+	modules?: Record<number, MetroModuleRecord>;
+};
+const reportedRequireFailures = new Set<number>();
 let unpatch: (() => void) | undefined;
+let restoreFactory: (() => void) | undefined;
 let retryTimer: ReturnType<typeof setInterval> | undefined;
 let warnedUnavailable = false;
 let buttonIconSize = 20;
 
 function moduleExports(id: number) {
 	try {
-		return ModuleRequire.__r?.(id);
-	} catch {
+		return MetroRuntime.__r?.(id);
+	} catch (error) {
+		if (!reportedRequireFailures.has(id)) {
+			console.error(`[Tenshi's Plugins] Could not load Discord module ${id}.`, error);
+			reportedRequireFailures.add(id);
+		}
 		return undefined;
 	}
 }
 
-function componentMatches(value: any, names: string[], seen = new Set<object>()): boolean {
-	if (!value || (typeof value !== "object" && typeof value !== "function") || seen.has(value)) return false;
-	seen.add(value);
-	if (names.includes(value.displayName ?? value.name ?? "")) return true;
-	return componentMatches(value.type, names, seen) || componentMatches(value.render, names, seen);
-}
-
-function exportModule(id: number, names: string[], property?: string) {
-	const direct = moduleExports(id);
-	const hasExport = (candidate: any) => {
-		const source = candidate?.default && typeof candidate.default === "object"
-			? candidate.default
-			: candidate;
-		return property
-			? property in Object(source)
-			: componentMatches(source, names)
-				|| componentMatches(source?.default, names)
-				|| names.some((name) => componentMatches(source?.[name], names));
-	};
-	if (direct && hasExport(direct)) return direct;
-	return find((candidate: any) => hasExport(candidate));
-}
-
-function resolveTarget(module: any, key: string) {
-	let target = module;
-	let targetKey = key;
-	let component = target?.[targetKey];
-	while (component && typeof component !== "function") {
-		if (typeof component.type === "function") {
-			target = component;
-			targetKey = "type";
-		} else if (typeof component.render === "function") {
-			target = component;
-			targetKey = "render";
-		} else {
-			return undefined;
-		}
-		component = target[targetKey];
+function patchTarget(target: { target: any; key: string }) {
+	if (unpatch) return;
+	try {
+		unpatch = instead(target.key, target.target, (args: any[], original: (...args: any[]) => any) => {
+			const result = original(...args);
+			return React.createElement(
+				Symbol.for("react.fragment"),
+				null,
+				result,
+				React.createElement(ProfileManagerButton, { hasNameplate: Boolean(args[0]?.hasNameplate) }),
+			);
+		});
+		warnedUnavailable = false;
+		console.info("[Tenshi's Plugins] Patched Discord's profile-bar component.");
+	} catch (error) {
+		console.error("[Tenshi's Plugins] Could not add its profile-bar button.", error);
 	}
-	return typeof component === "function" ? { target, key: targetKey } : undefined;
+}
+
+function installFactoryHook() {
+	if (restoreFactory) return;
+	const record = MetroRuntime.modules?.[YOU_BAR_BUTTONS_MODULE];
+	if (!record || record.isInitialized !== false || typeof record.factory !== "function") return false;
+
+	const originalFactory = record.factory;
+	const wrappedFactory = function (this: unknown, ...args: any[]) {
+		const result = originalFactory.apply(this, args);
+		const module = args[4]?.exports;
+		const target = findDefaultComponentTarget(module);
+		if (target) patchTarget(target);
+		return result;
+	};
+	try {
+		record.factory = wrappedFactory;
+		restoreFactory = () => {
+			if (record.factory === wrappedFactory) record.factory = originalFactory;
+		};
+		return true;
+	} catch (error) {
+		console.error("[Tenshi's Plugins] Could not hook Discord's profile-bar module factory.", error);
+		return false;
+	}
 }
 
 function ProfileManagerButton({ hasNameplate }: { hasNameplate: boolean }) {
@@ -105,15 +122,21 @@ function ProfileManagerButton({ hasNameplate }: { hasNameplate: boolean }) {
 
 function installButtonPatch() {
 	if (unpatch) return true;
+	const factoryHookInstalled = installFactoryHook();
 	const directModule = moduleExports(YOU_BAR_BUTTONS_MODULE);
-	const directTarget = directModule && resolveTarget(directModule, "default");
+	const directTarget = findDefaultComponentTarget(directModule)
+		?? findComponentTarget(directModule, COMPONENT_NAMES);
 	const module = directTarget
-		? directModule
-		: exportModule(YOU_BAR_BUTTONS_MODULE, ["YouBarButtons", "YouBarNotificationsButton"]);
-	const target = directTarget ?? (module && resolveTarget(module, "default"));
-	if (!module || !target) {
+		? undefined
+		: selectComponentModule(undefined, COMPONENT_NAMES, (predicate) => find(predicate));
+	const target = directTarget ?? findComponentTarget(module, COMPONENT_NAMES);
+	if (!target) {
 		if (!warnedUnavailable) {
-			console.warn("[Tenshi's Plugins] Could not locate Discord's profile-bar button components yet.");
+			const record = MetroRuntime.modules?.[YOU_BAR_BUTTONS_MODULE];
+			console.warn(
+				"[Tenshi's Plugins] Could not locate Discord's profile-bar button component.",
+				{ moduleId: YOU_BAR_BUTTONS_MODULE, moduleInitialized: record?.isInitialized, factoryHookInstalled },
+			);
 			warnedUnavailable = true;
 		}
 		return false;
@@ -121,23 +144,8 @@ function installButtonPatch() {
 	const constants = moduleExports(YOU_BAR_CONSTANTS_MODULE);
 	const size = Number(constants?.YOU_BAR_BUTTON_ICON_SIZE);
 	if (Number.isFinite(size) && size > 0) buttonIconSize = size;
-	try {
-		unpatch = instead(target.key, target.target, (args: any[], original: (...args: any[]) => any) => {
-			const result = original(...args);
-			return React.createElement(
-				Symbol.for("react.fragment"),
-				null,
-				result,
-				React.createElement(ProfileManagerButton, { hasNameplate: Boolean(args[0]?.hasNameplate) }),
-			);
-		});
-		warnedUnavailable = false;
-		console.info("[Tenshi's Plugins] Added the profile button to Discord's profile controls.");
-		return true;
-	} catch (error) {
-		console.error("[Tenshi's Plugins] Could not add its profile-bar button.", error);
-		return false;
-	}
+	patchTarget(target);
+	return Boolean(unpatch);
 }
 
 function retryInstall() {
@@ -152,5 +160,7 @@ export function registerProfileButton() {
 		retryTimer = undefined;
 		unpatch?.();
 		unpatch = undefined;
+		restoreFactory?.();
+		restoreFactory = undefined;
 	};
 }
