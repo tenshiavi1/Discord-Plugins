@@ -1,5 +1,36 @@
 type ModuleLike = Record<string, any> & { default?: any };
 
+export function mapDeviceIndicatorTree(
+	node: any,
+	transform: (node: any, props: any) => any,
+	cloneElement: (node: any, props: any) => any,
+	depth = 0,
+	isDone?: () => boolean,
+): any {
+	if (!node || typeof node !== "object" || depth > 24 || isDone?.()) return node;
+	if (Array.isArray(node)) {
+		let next = node;
+		for (let index = 0; index < node.length; index++) {
+			if (isDone?.()) break;
+			const child = mapDeviceIndicatorTree(node[index], transform, cloneElement, depth + 1, isDone);
+			if (child !== node[index]) {
+				if (next === node) next = node.slice();
+				next[index] = child;
+			}
+		}
+		return next;
+	}
+	if (!node.props) return node;
+	const rawChildren = node.props.children;
+	const children = rawChildren && typeof rawChildren === "object"
+		? mapDeviceIndicatorTree(rawChildren, transform, cloneElement, depth + 1, isDone)
+		: rawChildren;
+	let props = children !== rawChildren ? { ...node.props, children } : node.props;
+	if (isDone?.()) return props === node.props ? node : cloneElement(node, props);
+	props = transform(node, props);
+	return props === node.props ? node : cloneElement(node, props);
+}
+
 function matchesName(value: unknown, names: readonly string[], visited = new Set<object>()) {
 	if (!value || (typeof value !== "function" && typeof value !== "object")) return false;
 	if (visited.has(value)) return false;
@@ -65,14 +96,11 @@ function userIdFromValue(value: unknown): string | undefined {
 export function resolveDeviceUserId(props: any, getChannel?: (channelId: string) => any): string | undefined {
 	const direct = userIdFromValue(props?.userId)
 		?? userIdFromValue(props?.user)
-		?? userIdFromValue(props?.author)
 		?? userIdFromValue(props?.recipientId)
 		?? userIdFromValue(props?.recipient)
 		?? userIdFromValue(props?.member?.userId)
 		?? userIdFromValue(props?.member?.user);
 	if (direct) return direct;
-	const messageAuthor = userIdFromValue(props?.message?.author);
-	if (messageAuthor) return messageAuthor;
 	const channel = props?.channel ?? (props?.channelId ? getChannel?.(props.channelId) : null);
 	const recipients = channel?.recipientIds ?? channel?.recipients;
 	if (Array.isArray(recipients) && recipients.length === 1) return userIdFromValue(recipients[0]);
@@ -84,6 +112,13 @@ export function findDeviceUserIdInTree(tree: unknown, getChannel?: (channelId: s
 	function visit(node: any, depth: number): string | undefined {
 		if (!node || depth > 18 || typeof node !== "object" || visited.has(node)) return undefined;
 		visited.add(node);
+		if (Array.isArray(node)) {
+			for (const child of node) {
+				const nestedId = visit(child, depth + 1);
+				if (nestedId) return nestedId;
+			}
+			return undefined;
+		}
 		const userId = resolveDeviceUserId(node.props ?? node, getChannel);
 		if (userId) return userId;
 		const children = node.props?.children ?? node.children;

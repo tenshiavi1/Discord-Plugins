@@ -1,5 +1,5 @@
 import { expect, test } from "bun:test";
-import { findDeviceUserIdInTree, isDmChannelTitleNode, isDmListActionContainer, resolveComponentModule, resolveComponentTarget, resolveDeviceUserId, resolveNamedComponentModule } from "./deviceIndicatorDiscovery";
+import { findDeviceUserIdInTree, isDmChannelTitleNode, isDmListActionContainer, mapDeviceIndicatorTree, resolveComponentModule, resolveComponentTarget, resolveDeviceUserId, resolveNamedComponentModule } from "./deviceIndicatorDiscovery";
 
 test("resolves the containing module for named and default component exports", () => {
 	function DisplayName() {}
@@ -58,11 +58,26 @@ test("resolves DM recipients and nested profile user props", () => {
 	expect(resolveDeviceUserId({ channel: { recipients: [{ id: "recipient-user" }] } })).toBe("recipient-user");
 	expect(resolveDeviceUserId({ recipientId: "recipient-prop-user" })).toBe("recipient-prop-user");
 	expect(resolveDeviceUserId({ recipient: { id: "recipient-object-user" } })).toBe("recipient-object-user");
-	expect(resolveDeviceUserId({ message: { author: { id: "message-author" } } })).toBe("message-author");
-	expect(resolveDeviceUserId({ author: { id: "author-prop" } })).toBe("author-prop");
 	expect(resolveDeviceUserId({ channel: { recipients: ["one", "two"] } })).toBeUndefined();
 	const profileTree = { props: { children: { props: { user: { id: "profile-user" } } } } };
 	expect(findDeviceUserIdInTree(profileTree)).toBe("profile-user");
+	expect(findDeviceUserIdInTree([{ props: { userId: "array-user" } }])).toBe("array-user");
+});
+
+test("matches Venus tree traversal for list rows rooted at arrays", () => {
+	const label = { type: "Text", props: { children: "Alex" } };
+	const row = { type: "UserRow", props: { label } };
+	const tree = [row];
+	const result = mapDeviceIndicatorTree(
+		tree,
+		(node, props) => node.type === "UserRow" ? { ...props, label: { type: "BadgeRow", props: { children: props.label } } } : props,
+		(node, props) => ({ ...node, props }),
+		0,
+	);
+
+	expect(result).not.toBe(tree);
+	expect(result[0].props.label.type).toBe("BadgeRow");
+	expect(tree[0].props.label).toBe(label);
 });
 
 test("identifies the channel title and action area used for DM indicator placement", () => {

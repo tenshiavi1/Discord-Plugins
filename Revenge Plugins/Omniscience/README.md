@@ -14,7 +14,7 @@ Omniscience tracks configured words in selected server channels, group DMs, and 
 - Open separate Word Tracker and Message History settings pages.
 - Show earlier message text after edits and retain deleted messages in chat.
 - Translate messages into Discord's or the phone's language, automatically or on request.
-- Show desktop, mobile, web, console, and VR indicators beside message authors, in DM headers, member/voice lists, and profiles; optionally hide the phone badge on avatars.
+- Show desktop, mobile, web, console, and VR indicators in DM headers, member/voice lists, and profiles; optionally hide the phone badge on avatars.
 - Keep deleted messages and edit history after restarting Discord, choose the retention limit, and clear retained history from settings.
 - Preview and customize highlights for replies, mentions, and deleted messages.
 - Add a Server Info action to server icons for client-visible details such as owner, member counts, roles, channels, boosts, and creation date.

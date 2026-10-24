@@ -3,12 +3,11 @@ import { storage } from "@vendetta/plugin";
 import { after, instead } from "@vendetta/patcher";
 import { find, findByProps, findByStoreName } from "../../compat";
 import platformIcons from "./deviceIndicatorIcons";
-import { findDeviceUserIdInTree, isDmChannelTitleNode, isDmListActionContainer, resolveComponentModule, resolveComponentTarget, resolveDeviceUserId } from "./deviceIndicatorDiscovery";
+import { findDeviceUserIdInTree, isDmChannelTitleNode, isDmListActionContainer, mapDeviceIndicatorTree, resolveComponentModule, resolveComponentTarget, resolveDeviceUserId } from "./deviceIndicatorDiscovery";
 
 export type DeviceIndicatorOptions = {
 	enabled: boolean;
 	dmHeader: boolean;
-	chat: boolean;
 	lists: boolean;
 	profiles: boolean;
 	hideMobileBadge: boolean;
@@ -41,7 +40,6 @@ let channelStore: any = findByProps("getChannel");
 let options: DeviceIndicatorOptions = {
 	enabled: false,
 	dmHeader: true,
-	chat: true,
 	lists: true,
 	profiles: true,
 	hideMobileBadge: true,
@@ -213,18 +211,6 @@ function placeProfileNameBadge(tree: any, props: any) {
 	);
 }
 
-function placeChatAuthorBadge(tree: any, props: any) {
-	if (!options.enabled || !options.chat || !React || !tree) return tree;
-	const userId = userIdFrom(props);
-	if (!userId) return tree;
-	return React.createElement(
-		RN.View,
-		{ style: { flexDirection: "row", alignItems: "center", gap: 6, flexShrink: 1 } },
-		tree,
-		React.createElement(DeviceBadges, { userId }),
-	);
-}
-
 function wrapProfileNameTree(tree: any, original: (...args: any[]) => any, patchedDisplayName: (...args: any[]) => any) {
 	if (!tree) return tree;
 	let wrapper = profileNameRenderers.get(original);
@@ -305,38 +291,48 @@ function placeBadge(tree: any, props: any, placement: "dmHeader" | "lists") {
 	if (!options.enabled || !options[placement] || !React || !tree) return tree;
 	const userId = userIdFrom(props) ?? findDeviceUserIdInTree(tree, (channelId) => channelStore?.getChannel?.(channelId));
 	let added = false;
-	function visit(node: any, depth: number): any {
-		if (!node || depth > 18 || typeof node !== "object" || !node.props) return node;
-		const nodeProps = node.props;
-		const id = userId ?? userIdFrom(nodeProps);
-		if (!added && id && node.type !== RN.Text && nodeProps.label != null && typeof nodeProps.label !== "string" && typeof nodeProps.label !== "number") {
-			added = true;
-			const label = nodeProps.label;
-			return React.cloneElement(node, {
-				label: React.createElement(RN.View, { style: { flexDirection: "row", alignItems: "center", gap: 6, flexShrink: 1 } }, label, React.createElement(DeviceBadges, { userId: id })),
-			});
-		}
-		const children = nodeProps.children;
-		if (Array.isArray(children)) {
+	const result = mapDeviceIndicatorTree(
+		tree,
+		(node, nodeProps) => {
+			if (added) return nodeProps;
+			const id = userId ?? userIdFrom(nodeProps);
+			if (!id) return nodeProps;
+			if (node.type !== RN.Text && nodeProps.label != null && typeof nodeProps.label !== "string" && typeof nodeProps.label !== "number") {
+				added = true;
+				return {
+					...nodeProps,
+					label: React.createElement(
+						RN.View,
+						{ style: { flexDirection: "row", alignItems: "center", gap: 6, flexShrink: 1 } },
+						nodeProps.label,
+						React.createElement(DeviceBadges, { userId: id }),
+					),
+				};
+			}
+			const children = Array.isArray(nodeProps.children) ? nodeProps.children : [nodeProps.children];
 			const title = children.find((child: any) => child?.props && (
 				child.type === RN.Text && typeof child.props.children === "string" ||
 				typeof child.props.variant === "string" && /(?:channel-title|heading|semibold)/.test(child.props.variant) ||
 				typeof child.props.userName === "string" && "userId" in child.props
 			));
-			if (!added && id && title && node.type !== RN.Text) {
-				added = true;
-				const next = children.map((child: any) => child === title
-					? React.createElement(RN.View, { key: "omniscience-device-title", style: { flexDirection: "row", alignItems: "center", gap: 6, flexShrink: 1 } }, child, React.createElement(DeviceBadges, { userId: id }))
-					: visit(child, depth + 1));
-				return React.cloneElement(node, { children: next });
-			}
-			const next = children.map((child: any) => visit(child, depth + 1));
-			return next.some((child: any, index: number) => child !== children[index]) ? React.cloneElement(node, { children: next }) : node;
-		}
-		const child = visit(children, depth + 1);
-		return child !== children ? React.cloneElement(node, { children: child }) : node;
-	}
-	const result = visit(tree, 0);
+			if (!title || node.type === RN.Text) return nodeProps;
+			added = true;
+			return {
+				...nodeProps,
+				children: children.map((child: any) => child === title
+					? React.createElement(
+						RN.View,
+						{ key: "omniscience-device-title", style: { flexDirection: "row", alignItems: "center", gap: 6, flexShrink: 1 } },
+						child,
+						React.createElement(DeviceBadges, { userId: id }),
+					)
+					: child),
+			};
+		},
+		(node, nextProps) => React.cloneElement(node, nextProps),
+		0,
+		() => added,
+	);
 	if (!added && userId && placement === "dmHeader") {
 		return React.createElement(
 			RN.View,
@@ -363,7 +359,8 @@ function patchComponent(
 	const patchKey = `${moduleId}:${key}`;
 	if (patched.has(patchKey)) return true;
 	patched.add(patchKey);
-	unpatches.push(after(component.key, component.target, (args: any[], result: any) => {
+	unpatches.push(instead(component.key, component.target, (args: any[], original: (...args: any[]) => any) => {
+		const result = original(...args);
 		if (transform) return transform(args, result);
 		const props = args[0] ?? {};
 		return placeBadge(result, props, placement);
@@ -376,20 +373,18 @@ function patchProfileDisplayName() {
 	if (!module) return false;
 	const component = resolveComponentTarget(module, "DisplayName");
 	if (!component) return false;
-	const patchKey = "10843:DisplayName";
+	const patchKey = "10843:DisplayName:profiles";
 	const original = component.target[component.key];
 	if (!patched.has(patchKey)) {
 		patched.add(patchKey);
-		unpatches.push(after(component.key, component.target, (args: any[], result: any) => {
-			const props = args[0] ?? {};
-			if (options.chat && userIdFrom(props)) return placeChatAuthorBadge(result, props);
-			return placeProfileNameBadge(result, props);
-		}));
+		unpatches.push(after(component.key, component.target, (args: any[], result: any) =>
+			placeProfileNameBadge(result, args[0] ?? {}),
+		));
 	}
 
 	const profileTarget = resolveComponentTarget(module, "default");
 	const profilePatchKey = "10843:default:profiles";
-	if (options.profiles && profileTarget && !patched.has(profilePatchKey)) {
+	if (profileTarget && !patched.has(profilePatchKey)) {
 		patched.add(profilePatchKey);
 		const patchedDisplayName = component.target[component.key];
 		unpatches.push(after(profileTarget.key, profileTarget.target, (_args: any[], result: any) =>
@@ -423,7 +418,8 @@ function patchVoiceMemberRows() {
 	const component = resolveComponentTarget(module, "default");
 	if (!component) return false;
 	patched.add("12849:voiceRows");
-	unpatches.push(after(component.key, component.target, (args: any[], result: any) => {
+	unpatches.push(instead(component.key, component.target, (args: any[], original: (...args: any[]) => any) => {
+		const result = original(...args);
 		if (!options.enabled || !options.lists || !result) return result;
 		function visit(node: any, depth: number): any {
 			if (!node || depth > 18 || typeof node !== "object" || !node.props) return node;
@@ -468,7 +464,7 @@ function installPatches() {
 			},
 			true,
 		);
-	const nameFound = (!options.profiles && !options.chat) || patchProfileDisplayName();
+	const profileFound = !options.profiles || patchProfileDisplayName();
 	let listsFound = true;
 	if (options.lists) {
 		const dmListFound = patchComponent(
@@ -488,7 +484,7 @@ function installPatches() {
 		patchAvatar(13920, "default", ["Status"]);
 		patchAvatar(13920, "StatusWithTyping", ["StatusWithTyping"]);
 	}
-	return dmHeaderFound && nameFound && listsFound;
+	return dmHeaderFound && profileFound && listsFound;
 }
 
 function stopPatchRetry() {
@@ -501,7 +497,7 @@ function retryPatches() {
 }
 
 function ensurePatchRetry() {
-	if (!options.enabled || (!options.dmHeader && !options.chat && !options.profiles)) {
+	if (!options.enabled || (!options.dmHeader && !options.profiles && !options.lists)) {
 		stopPatchRetry();
 		return;
 	}
@@ -534,7 +530,6 @@ export function updateDeviceIndicatorOptions(next: Partial<DeviceIndicatorOption
 	options = { ...options, ...next };
 	storage.deviceIndicatorsEnabled = options.enabled;
 	storage.deviceIndicatorDmHeader = options.dmHeader;
-	storage.deviceIndicatorChat = options.chat;
 	storage.deviceIndicatorLists = options.lists;
 	storage.deviceIndicatorProfiles = options.profiles;
 	storage.deviceIndicatorHideMobileBadge = options.hideMobileBadge;
