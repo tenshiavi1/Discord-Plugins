@@ -1,4 +1,4 @@
-import { after } from "@vendetta/patcher";
+import { instead } from "@vendetta/patcher";
 import { NavigationNative, React, ReactNative as RN } from "@vendetta/metro/common";
 import { storage } from "@vendetta/plugin";
 import { useProxy } from "@vendetta/storage";
@@ -129,8 +129,12 @@ function ProfileManagerButton({ hasNameplate }: { hasNameplate: boolean }) {
 
 function installButtonPatch() {
 	if (unpatch) return true;
-	const module = exportModule(YOU_BAR_BUTTONS_MODULE, ["YouBarButtons", "YouBarNotificationsButton"]);
-	const target = module && resolveTarget(module, "default");
+	const directModule = moduleExports(YOU_BAR_BUTTONS_MODULE);
+	const directTarget = directModule && resolveTarget(directModule, "default");
+	const module = directTarget
+		? directModule
+		: exportModule(YOU_BAR_BUTTONS_MODULE, ["YouBarButtons", "YouBarNotificationsButton"]);
+	const target = directTarget ?? (module && resolveTarget(module, "default"));
 	const Button = getButtonComponent();
 	const Icon = getSettingsIcon();
 	if (!module || !target || !Button || !Icon) {
@@ -144,13 +148,17 @@ function installButtonPatch() {
 	const size = Number(constants?.YOU_BAR_BUTTON_ICON_SIZE);
 	if (Number.isFinite(size) && size > 0) buttonIconSize = size;
 	try {
-		unpatch = after(target.key, target.target, (args: any[], result: any) => React.createElement(
-			Symbol.for("react.fragment"),
-			null,
-			result,
-			React.createElement(ProfileManagerButton, { hasNameplate: Boolean(args[0]?.hasNameplate) }),
-		));
+		unpatch = instead(target.key, target.target, (args: any[], original: (...args: any[]) => any) => {
+			const result = original(...args);
+			return React.createElement(
+				Symbol.for("react.fragment"),
+				null,
+				result,
+				React.createElement(ProfileManagerButton, { hasNameplate: Boolean(args[0]?.hasNameplate) }),
+			);
+		});
 		warnedUnavailable = false;
+		console.info("[Tenshi's Plugins] Added the profile button to Discord's profile controls.");
 		return true;
 	} catch (error) {
 		console.error("[Tenshi's Plugins] Could not add its profile-bar button.", error);
