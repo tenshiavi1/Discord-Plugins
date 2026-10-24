@@ -1,1 +1,1 @@
-{"name":"God Console","description":"Mark channels as read, jump to chat history, and resolve uncached user mentions.","authors":[{"name":"tenshiavi"}],"main":"index.js","vendetta":{"icon":"ic_check"},"hash":"bf8f04caf63071db021fea6f5ee82ffada2a45c354f9aef2129be3de3ccfd4a2"}
+{"name":"God Console","description":"Mark channels as read, jump to chat history, resolve uncached mentions, and complete supported Quests.","authors":[{"name":"tenshiavi"}],"main":"index.js","vendetta":{"icon":"ic_check"},"hash":"9005d6efab93f19de1913d0c70537fdfc90b0005f0958bceca60b7d28e00407f"}
