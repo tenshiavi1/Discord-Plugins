@@ -96,16 +96,22 @@ export function findDeviceUserIdInTree(tree: unknown, getChannel?: (channelId: s
 	return visit(tree, 0);
 }
 
-export function isDeviceStatusNode(node: any) {
-	if (!node || typeof node !== "object" || !node.props) return false;
-	if ("isMobileOnline" in node.props) return true;
-	const names = new Set(["Status", "StatusWithTyping"]);
-	return componentMatchesName(node.type, names);
+export function isDmChannelTitleNode(node: any) {
+	if (!node || typeof node.type !== "function" || !node.props) return false;
+	return "accessibleTitle" in node.props
+		&& "title" in node.props
+		&& typeof node.props.userId === "string";
 }
 
-export function isDeviceAvatarNode(node: any) {
-	if (!node || typeof node !== "object" || !node.props) return false;
-	return componentMatchesName(node.type, new Set(["Avatar", "UserAvatar", "ProfileAvatar"]));
+export function isDmListActionContainer(node: any) {
+	if (!node || !node.props) return false;
+	const children = Array.isArray(node.props.children) ? node.props.children : [node.props.children];
+	return children.some((child: any) =>
+		child?.props
+		&& "muted" in child.props
+		&& "selected" in child.props
+		&& "blocked" in child.props,
+	);
 }
 
 function componentMatchesName(value: any, names: Set<string>, visited = new Set<object>()): boolean {

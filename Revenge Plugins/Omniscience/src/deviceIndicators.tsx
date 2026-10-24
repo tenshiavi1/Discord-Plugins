@@ -3,7 +3,7 @@ import { storage } from "@vendetta/plugin";
 import { after, instead } from "@vendetta/patcher";
 import { find, findByProps, findByStoreName } from "../../compat";
 import platformIcons from "./deviceIndicatorIcons";
-import { findDeviceUserIdInTree, isDeviceAvatarNode, isDeviceStatusNode, resolveComponentModule, resolveComponentTarget, resolveDeviceUserId, resolveNamedComponentModule } from "./deviceIndicatorDiscovery";
+import { findDeviceUserIdInTree, isDmChannelTitleNode, isDmListActionContainer, resolveComponentModule, resolveComponentTarget, resolveDeviceUserId } from "./deviceIndicatorDiscovery";
 
 export type DeviceIndicatorOptions = {
 	enabled: boolean;
@@ -47,6 +47,8 @@ let options: DeviceIndicatorOptions = {
 const patched = new Set<string>();
 const unpatches: (() => void)[] = [];
 const voiceRenderers = new WeakMap<(...args: any[]) => any, (...args: any[]) => any>();
+const dmTitleRenderers = new WeakMap<(...args: any[]) => any, (...args: any[]) => any>();
+const profileNameRenderers = new WeakMap<(...args: any[]) => any, (...args: any[]) => any>();
 let retryUnsubscribe: (() => void) | undefined;
 let retryTimer: ReturnType<typeof setInterval> | undefined;
 
@@ -59,8 +61,9 @@ function moduleExports(id: number) {
 	}
 }
 
-function componentModule(id: number, key: string, names: string[]) {
+function componentModule(id: number, key: string, names: string[], trustExportKey = false) {
 	const direct = moduleExports(id);
+	if (trustExportKey && resolveComponentTarget(direct, key)) return direct;
 	const directModule = resolveComponentModule(direct, key, names);
 	if (directModule) return directModule;
 	return find((candidate: any) => resolveComponentModule(candidate, key, names) !== null) ?? null;
@@ -152,108 +155,141 @@ function userIdFrom(props: any) {
 	return resolveDeviceUserId(props, (channelId) => channelStore?.getChannel?.(channelId));
 }
 
-function profileStatusOverlay(userId: string) {
-	return React.createElement(
-		RN.View,
-		{
-			key: "omniscience-profile-device-status",
-			pointerEvents: "none",
-			style: {
-				position: "absolute",
-				right: 0,
-				bottom: 0,
-				alignItems: "center",
-				justifyContent: "center",
-				padding: 2,
-				borderRadius: 10,
-				borderWidth: 2,
-				borderColor: "#313338",
-				backgroundColor: "#313338",
-				zIndex: 1,
-			},
-		},
-		React.createElement(DeviceBadges, { userId, size: 10 }),
-	);
-}
-
-function placeProfileStatusBadge(tree: any, userId: string) {
+function placeDmChannelTitleBadge(tree: any) {
 	let added = false;
 	function visit(node: any, depth: number): any {
-		if (!node || depth > 18 || typeof node !== "object" || !node.props) return node;
-		if (!added && isDeviceAvatarNode(node) && userIdFrom(node.props) === userId) {
+		if (!node || depth > 18 || typeof node !== "object") return node;
+		if (Array.isArray(node)) {
+			const next = node.map((child) => visit(child, depth + 1));
+			return next.some((child, index) => child !== node[index]) ? next : node;
+		}
+		if (!node.props) return node;
+		if (!added && isDmChannelTitleNode(node)) {
 			added = true;
-			return React.createElement(
-				RN.View,
-				{ style: { position: "relative", alignSelf: "flex-start" } },
-				node,
-				profileStatusOverlay(userId),
-			);
+			const target = node.type;
+			let wrapper = dmTitleRenderers.get(target);
+			if (!wrapper) {
+				wrapper = function DmChannelTitleWithDeviceBadges(props: any) {
+					const title = React.createElement(target, props);
+					if (!options.enabled || !options.dmHeader || typeof props.userId !== "string") return title;
+					return React.createElement(
+						RN.View,
+						{ style: { flexDirection: "row", alignItems: "center", gap: 6, flexShrink: 1 } },
+						title,
+						React.createElement(DeviceBadges, { userId: props.userId }),
+					);
+				};
+				dmTitleRenderers.set(target, wrapper);
+			}
+			return React.createElement(wrapper, { ...node.props, key: node.key });
 		}
 		const children = node.props.children;
 		if (Array.isArray(children)) {
-			const next: any[] = [];
-			for (const child of children) {
-				next.push(visit(child, depth + 1));
-				if (!added && isDeviceStatusNode(child)) {
-					added = true;
-					next.push(profileStatusOverlay(userId));
-				}
-			}
+			const next = children.map((child: any) => visit(child, depth + 1));
 			return next.some((child: any, index: number) => child !== children[index])
 				? React.cloneElement(node, { children: next })
 				: node;
 		}
 		if (children && typeof children === "object") {
 			const child = visit(children, depth + 1);
-			if (!added && isDeviceStatusNode(children)) {
-				added = true;
-				return React.cloneElement(node, {
-					children: [child, profileStatusOverlay(userId)],
-				});
-			}
 			if (child !== children) return React.cloneElement(node, { children: child });
 		}
 		return node;
 	}
-	const result = visit(tree, 0);
-	if (added) return result;
-	function placeBesideName(node: any, depth: number): any {
-		if (!node || depth > 18 || typeof node !== "object" || !node.props) return node;
+	return visit(tree, 0);
+}
+
+function placeProfileNameBadge(tree: any, props: any) {
+	if (!options.enabled || !options.profiles || !tree) return tree;
+	const userId = props?.user?.id;
+	if (typeof userId !== "string") return tree;
+	return React.createElement(
+		RN.View,
+		{ style: { flexDirection: "row", flexWrap: "wrap", gap: 6, alignItems: "center" } },
+		tree,
+		React.createElement(DeviceBadges, { userId }),
+	);
+}
+
+function wrapProfileNameTree(tree: any, original: (...args: any[]) => any, patchedDisplayName: (...args: any[]) => any) {
+	if (!tree) return tree;
+	let wrapper = profileNameRenderers.get(original);
+	if (!wrapper) {
+		wrapper = function ProfileDisplayNameWithDeviceBadges(props: any) {
+			return placeProfileNameBadge(React.createElement(original, props), props);
+		};
+		profileNameRenderers.set(original, wrapper);
+	}
+	function visit(node: any, depth: number): any {
+		if (!node || depth > 18 || typeof node !== "object") return node;
+		if (Array.isArray(node)) {
+			const next = node.map((child) => visit(child, depth + 1));
+			return next.some((child, index) => child !== node[index]) ? next : node;
+		}
+		if (!node.props) return node;
+		if (node.type === original || node.type === patchedDisplayName) {
+			return React.createElement(wrapper, { ...node.props, key: node.key });
+		}
 		const children = node.props.children;
 		if (Array.isArray(children)) {
-			const title = children.find((child: any) => child?.props && (
-				child.type === RN.Text && typeof child.props.children === "string"
-				|| typeof child.props.variant === "string" && /(?:channel-title|heading|semibold)/.test(child.props.variant)
-			));
-			if (title) {
-				return React.cloneElement(node, {
-					children: children.map((child: any) => child === title
-						? React.createElement(
-							RN.View,
-							{ key: "omniscience-profile-device-title", style: { flexDirection: "row", alignItems: "center", gap: 6, flexShrink: 1 } },
-							child,
-							React.createElement(DeviceBadges, { userId }),
-						)
-						: placeBesideName(child, depth + 1)),
-				});
-			}
-			const next = children.map((child: any) => placeBesideName(child, depth + 1));
+			const next = children.map((child: any) => visit(child, depth + 1));
 			return next.some((child: any, index: number) => child !== children[index])
 				? React.cloneElement(node, { children: next })
 				: node;
 		}
-		const child = placeBesideName(children, depth + 1);
+		const child = visit(children, depth + 1);
 		return child !== children ? React.cloneElement(node, { children: child }) : node;
 	}
-	return placeBesideName(result, 0);
+	return visit(tree, 0);
 }
 
-function placeBadge(tree: any, props: any, placement: "dmHeader" | "lists" | "profiles") {
+function placeDmListBadge(tree: any, props: any) {
+	if (!options.enabled || !options.lists || !tree) return tree;
+	const channel = props?.channel ?? (props?.channelId ? channelStore?.getChannel?.(props.channelId) : undefined);
+	if (channel?.type !== 1 || !Array.isArray(channel.recipients) || channel.recipients.length !== 1) {
+		return placeBadge(tree, props, "lists");
+	}
+	const userId = userIdFrom({ channel });
+	if (!userId) return tree;
+	let added = false;
+	function visit(node: any, depth: number): any {
+		if (!node || depth > 24 || typeof node !== "object") return node;
+		if (Array.isArray(node)) {
+			const next = node.map((child) => visit(child, depth + 1));
+			return next.some((child, index) => child !== node[index]) ? next : node;
+		}
+		if (!node.props) return node;
+		if (!added && isDmListActionContainer(node)) {
+			added = true;
+			const children = Array.isArray(node.props.children) ? node.props.children : [node.props.children];
+			return React.cloneElement(node, {
+				children: [
+					...children,
+					React.createElement(
+						RN.View,
+						{ key: "omniscience-device-dm-list", style: { marginRight: 4 } },
+						React.createElement(DeviceBadges, { userId }),
+					),
+				],
+			});
+		}
+		const children = node.props.children;
+		if (Array.isArray(children)) {
+			const next = children.map((child: any) => visit(child, depth + 1));
+			return next.some((child: any, index: number) => child !== children[index])
+				? React.cloneElement(node, { children: next })
+				: node;
+		}
+		const child = visit(children, depth + 1);
+		return child !== children ? React.cloneElement(node, { children: child }) : node;
+	}
+	const result = visit(tree, 0);
+	return added ? result : placeBadge(tree, props, "lists");
+}
+
+function placeBadge(tree: any, props: any, placement: "dmHeader" | "lists") {
 	if (!options.enabled || !options[placement] || !React || !tree) return tree;
 	const userId = userIdFrom(props) ?? findDeviceUserIdInTree(tree, (channelId) => channelStore?.getChannel?.(channelId));
-	if (placement === "profiles") {
-		return userId ? placeProfileStatusBadge(tree, userId) : tree;
-	}
 	let added = false;
 	function visit(node: any, depth: number): any {
 		if (!node || depth > 18 || typeof node !== "object" || !node.props) return node;
@@ -298,8 +334,15 @@ function placeBadge(tree: any, props: any, placement: "dmHeader" | "lists" | "pr
 	return result;
 }
 
-function patchComponent(moduleId: number, key: string, placement: "dmHeader" | "lists" | "profiles", names: string[] = []) {
-	const module = componentModule(moduleId, key, names);
+function patchComponent(
+	moduleId: number,
+	key: string,
+	placement: "dmHeader" | "lists",
+	names: string[] = [],
+	transform?: (args: any[], result: any) => any,
+	trustExportKey = false,
+) {
+	const module = componentModule(moduleId, key, names, trustExportKey);
 	if (!module) return false;
 	const component = resolveComponentTarget(module, key);
 	if (!component) return false;
@@ -307,25 +350,36 @@ function patchComponent(moduleId: number, key: string, placement: "dmHeader" | "
 	if (patched.has(patchKey)) return true;
 	patched.add(patchKey);
 	unpatches.push(after(component.key, component.target, (args: any[], result: any) => {
+		if (transform) return transform(args, result);
 		const props = args[0] ?? {};
 		return placeBadge(result, props, placement);
 	}));
 	return true;
 }
 
-function patchNamedComponent(names: string[], placement: "dmHeader" | "profiles") {
-	const module = find((candidate: any) => resolveNamedComponentModule(candidate, names) !== null);
+function patchProfileDisplayName() {
+	const module = componentModule(10843, "DisplayName", ["DisplayName"], true);
 	if (!module) return false;
-	const component = resolveNamedComponentModule(module, names);
+	const component = resolveComponentTarget(module, "DisplayName");
 	if (!component) return false;
-	const target = resolveComponentTarget(component.module, component.key);
-	if (!target) return false;
-	const patchKey = `named:${placement}:${component.key}:${names[0]}`;
-	if (patched.has(patchKey)) return true;
-	patched.add(patchKey);
-	unpatches.push(after(target.key, target.target, (args: any[], result: any) =>
-		placeBadge(result, args[0] ?? {}, placement),
-	));
+	const patchKey = "10843:DisplayName:profiles";
+	const original = component.target[component.key];
+	if (!patched.has(patchKey)) {
+		patched.add(patchKey);
+		unpatches.push(after(component.key, component.target, (args: any[], result: any) =>
+			placeProfileNameBadge(result, args[0] ?? {}),
+		));
+	}
+
+	const profileTarget = resolveComponentTarget(module, "default");
+	const profilePatchKey = "10843:default:profiles";
+	if (profileTarget && !patched.has(profilePatchKey)) {
+		patched.add(profilePatchKey);
+		const patchedDisplayName = component.target[component.key];
+		unpatches.push(after(profileTarget.key, profileTarget.target, (_args: any[], result: any) =>
+			wrapProfileNameTree(result, original, patchedDisplayName),
+		));
+	}
 	return true;
 }
 
@@ -383,13 +437,30 @@ function patchVoiceMemberRows() {
 
 function installPatches() {
 	const dmHeaderFound = !options.dmHeader
-		|| patchNamedComponent(["PrivateChannelHeader", "PrivateChannelHeaderContent", "DMHeader", "DirectMessageHeader"], "dmHeader")
-		|| patchComponent(13107, "default", "dmHeader", ["PrivateChannelHeader", "PrivateChannelHeaderContent", "DMHeader", "DirectMessageHeader"]);
+		|| patchComponent(
+			13107,
+			"default",
+			"dmHeader",
+			["PrivateChannelHeader"],
+			(args, result) => {
+				const placed = placeDmChannelTitleBadge(result);
+				return placed === result
+					? placeBadge(result, args[0] ?? {}, "dmHeader")
+					: placed;
+			},
+			true,
+		);
 	const profileFound = !options.profiles
-		|| patchNamedComponent(["UserProfileHeader", "UserProfileModalHeader", "ProfileHeader", "UserProfileCard"], "profiles")
-		|| patchComponent(10843, "DisplayName", "profiles", ["DisplayName"]);
+		|| patchProfileDisplayName();
 	if (options.lists) {
-		patchComponent(15962, "default", "lists", ["MessagesItemChannelContent"]);
+		patchComponent(
+			15962,
+			"default",
+			"lists",
+			["MessagesItemChannelContent"],
+			(args, result) => placeDmListBadge(result, args[0] ?? {}),
+			true,
+		);
 		patchComponent(10602, "default", "lists", ["UserRow"]);
 		patchComponent(9334, "MemberRowItem", "lists", ["MemberRowItem"]);
 		patchVoiceMemberRows();

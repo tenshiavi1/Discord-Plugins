@@ -1,5 +1,5 @@
 import { expect, test } from "bun:test";
-import { findDeviceUserIdInTree, isDeviceAvatarNode, isDeviceStatusNode, resolveComponentModule, resolveComponentTarget, resolveDeviceUserId, resolveNamedComponentModule } from "./deviceIndicatorDiscovery";
+import { findDeviceUserIdInTree, isDmChannelTitleNode, isDmListActionContainer, resolveComponentModule, resolveComponentTarget, resolveDeviceUserId, resolveNamedComponentModule } from "./deviceIndicatorDiscovery";
 
 test("resolves the containing module for named and default component exports", () => {
 	function DisplayName() {}
@@ -22,6 +22,12 @@ test("discovers and targets memo and forwardRef component wrappers", () => {
 	expect(resolveComponentModule(forwardRef, "default", ["ProfileHeader"])).toBe(forwardRef);
 	expect(resolveComponentTarget(memo, "default")).toEqual({ target: memo.default, key: "type" });
 	expect(resolveComponentTarget(forwardRef, "default")).toEqual({ target: forwardRef.default, key: "render" });
+});
+
+test("can target a production-minified component by its verified export key", () => {
+	const module = { DisplayName: function e() {} };
+
+	expect(resolveComponentTarget(module, "DisplayName")).toEqual({ target: module, key: "DisplayName" });
 });
 
 test("finds wrapped components when their module export key differs from their name", () => {
@@ -51,13 +57,14 @@ test("resolves DM recipients and nested profile user props", () => {
 	expect(findDeviceUserIdInTree(profileTree)).toBe("profile-user");
 });
 
-test("identifies avatar status elements in profile trees", () => {
-	function Status() {}
-	function Unrelated() {}
+test("identifies the channel title and action area used for DM indicator placement", () => {
+	function ChannelTitle() {}
+	const actionIcon = { props: { muted: false, selected: true, blocked: false } };
+	const title = { type: ChannelTitle, props: { accessibleTitle: "Alex", title: "Alex", userId: "dm-user" } };
+	const actionArea = { type: "View", props: { children: [actionIcon] } };
 
-	expect(isDeviceStatusNode({ type: Status, props: { status: "online" } })).toBe(true);
-	expect(isDeviceStatusNode({ type: Unrelated, props: { isMobileOnline: false } })).toBe(true);
-	expect(isDeviceStatusNode({ type: Unrelated, props: {} })).toBe(false);
-	expect(isDeviceAvatarNode({ type: { displayName: "Avatar" }, props: { userId: "profile-user" } })).toBe(true);
-	expect(isDeviceAvatarNode({ type: Unrelated, props: { userId: "profile-user" } })).toBe(false);
+	expect(isDmChannelTitleNode(title)).toBe(true);
+	expect(isDmChannelTitleNode({ ...title, props: { ...title.props, userId: undefined } })).toBe(false);
+	expect(isDmListActionContainer(actionArea)).toBe(true);
+	expect(isDmListActionContainer({ type: "View", props: { children: [] } })).toBe(false);
 });
