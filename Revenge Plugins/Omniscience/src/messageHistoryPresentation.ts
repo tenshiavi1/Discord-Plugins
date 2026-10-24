@@ -9,7 +9,55 @@ export function isEphemeralMessage(message: any) {
 
 export function canRetainDeletedMessage(message: { flags?: unknown; state?: unknown } | null | undefined) {
 	if (!message || (message.state != null && message.state !== "SENT")) return false;
+	if ((message as { author?: { id?: unknown } }).author?.id === "1") return false;
 	return !isEphemeralMessage(message);
+}
+
+export function createDeletedMessageUpdate<T extends {
+	id?: unknown;
+	channel_id?: unknown;
+	flags?: unknown;
+	state?: unknown;
+	author?: { id?: unknown };
+}>(message: T) {
+	if (
+		typeof message?.id !== "string" ||
+		typeof message.channel_id !== "string" ||
+		!canRetainDeletedMessage(message)
+	) return undefined;
+	return {
+		type: "MESSAGE_UPDATE" as const,
+		message: { ...message, __omniscienceDeleted: true },
+	};
+}
+
+export function getMessageFromChannelStore(store: any, channelId: string, messageId: string) {
+	const channel =
+		store?.get?.(channelId) ??
+		store?._channelMessages?.get?.(channelId) ??
+		store?._channelMessages?.[channelId];
+	return channel?.get?.(messageId) ??
+		channel?._array?.find?.((entry: any) => String(entry?.id) === messageId);
+}
+
+export function getMessageUpdateDetails(event: any) {
+	const message = event?.message ?? event;
+	return {
+		message,
+		channelId: String(message?.channel_id ?? message?.channelId ?? event?.channelId ?? event?.channel_id ?? ""),
+		messageId: String(message?.id ?? event?.id ?? ""),
+		editedTimestamp: message?.edited_timestamp ?? message?.editedTimestamp,
+	};
+}
+
+export function toPlainMessageRecord(message: any) {
+	try {
+		const value = typeof message?.toJS === "function" ? message.toJS() : message;
+		return value && typeof value === "object" ? { ...value } : undefined;
+	} catch (error) {
+		console.warn("[Omniscience] Could not convert a message record.", error);
+		return undefined;
+	}
 }
 
 export function truncateEditVersion(content: string) {
@@ -66,67 +114,17 @@ export function getMessageHighlightType(
 	return undefined;
 }
 
-function compareMessageIds(left: unknown, right: unknown) {
-	const leftId = String((left as { id?: unknown } | null)?.id ?? "");
-	const rightId = String((right as { id?: unknown } | null)?.id ?? "");
-	if (!/^\d+$/.test(leftId) || !/^\d+$/.test(rightId)) return 0;
-	return leftId.length - rightId.length || (leftId === rightId ? 0 : leftId < rightId ? -1 : 1);
-}
-
-export function markDeletedMessage<T extends object>(message: T): T & { was_deleted: boolean } {
-	let retained: T & { was_deleted: boolean };
+export function markDeletedMessage<T extends object>(message: T): T & { __omniscienceDeleted: boolean } {
+	let retained: T & { __omniscienceDeleted: boolean };
 	try {
 		retained = Object.create(Object.getPrototypeOf(message), Object.getOwnPropertyDescriptors(message));
 	} catch {
-		retained = { ...message } as T & { was_deleted: boolean };
+		retained = { ...message } as T & { __omniscienceDeleted: boolean };
 	}
 	try {
-		Object.defineProperty(retained, "was_deleted", { value: true, enumerable: true, configurable: true });
+		Object.defineProperty(retained, "__omniscienceDeleted", { value: true, enumerable: true, configurable: true });
 	} catch {
-		retained.was_deleted = true;
+		retained.__omniscienceDeleted = true;
 	}
 	return retained;
-}
-
-export function mergeRetainedMessages<T>(collection: T, retained: readonly object[]): T {
-	if (!retained.length || !collection) return collection;
-	if (Array.isArray(collection)) {
-		const messages = [...collection];
-		for (const message of retained) {
-			const id = (message as { id?: unknown }).id;
-			const existing = messages.findIndex((item) => (item as { id?: unknown } | null)?.id === id);
-			if (existing < 0) messages.push(message);
-			else messages[existing] = message;
-		}
-		return messages.sort(compareMessageIds) as T;
-	}
-
-	const source = collection as T & {
-		_array?: unknown[];
-		hasMoreBefore?: boolean;
-		hasMoreAfter?: boolean;
-		clone?: () => typeof source;
-		merge?: (messages: readonly object[]) => typeof source;
-		mutate?: (callback: (copy: { _array: unknown[] }) => void, force?: boolean) => typeof source;
-	};
-	if (typeof source.merge !== "function") return collection;
-	const firstId = String((source._array?.[0] && (source._array[0] as { id?: unknown }).id) ?? "");
-	const lastId = String((source._array?.[source._array.length - 1] as { id?: unknown } | undefined)?.id ?? "");
-	const bounded = /^\d+$/.test(firstId);
-	const inWindow = retained.filter((message) => {
-		const id = String((message as { id?: unknown }).id ?? "");
-		if (!bounded || !/^\d+$/.test(id)) return true;
-		if (compareMessageIds({ id }, { id: firstId }) < 0 && source.hasMoreBefore === true) return false;
-		if (compareMessageIds({ id }, { id: lastId }) > 0 && source.hasMoreAfter === true) return false;
-		return true;
-	});
-	if (!inWindow.length) return collection;
-
-	const base = typeof source.clone === "function" ? source.clone() : source;
-	if (typeof base.merge !== "function") return collection;
-	let merged = base.merge(inWindow);
-	if (typeof merged.mutate === "function" && Array.isArray(merged._array)) {
-		merged = merged.mutate((copy) => copy._array.sort(compareMessageIds), true);
-	}
-	return merged as T;
 }

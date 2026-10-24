@@ -1,6 +1,6 @@
 import { ReactNative as RN } from "@vendetta/metro/common";
 import { after } from "@vendetta/patcher";
-import { find, findByProps } from "../../compat";
+import { find, findByName, findByProps } from "../../compat";
 import { getMessageEditHistory, isRetainedDeletedMessage } from "./messageHistory";
 import { getDeletedMessageHighlight, getMessageHighlightType, isEphemeralMessage, prependEditHistory, resolveMessageRowGenerator } from "./messageHistoryPresentation";
 
@@ -95,7 +95,8 @@ function highlightRow(args: any[], result: any) {
 			rememberRow(channelId, source);
 		}
 	}
-	const isDeleted = isRetainedDeletedMessage(channelId, messageId);
+	const isDeleted = Boolean(source.__omniscienceDeleted || message.__omniscienceDeleted) ||
+		isRetainedDeletedMessage(channelId, messageId);
 	const highlightType = getMessageHighlightType(
 		options.deletedEnabled,
 		isDeleted,
@@ -127,6 +128,9 @@ function isRowGenerator(candidate: any) {
 }
 
 function findRowGenerator() {
+	const named = resolveMessageRowGenerator(findByName("RowManager"));
+	if (named) return named;
+
 	const metroRequire = (globalThis as typeof globalThis & { __r?: (id: number) => any }).__r;
 	if (typeof metroRequire === "function") {
 		try {

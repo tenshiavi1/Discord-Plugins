@@ -2,13 +2,16 @@ import { expect, test } from "bun:test";
 import {
 	appendEditHistoryVersion,
 	canRetainDeletedMessage,
+	createDeletedMessageUpdate,
+	getMessageFromChannelStore,
+	getMessageUpdateDetails,
 	getDeletedMessageHighlight,
 	getMessageHighlightType,
 	isEphemeralMessage,
 	markDeletedMessage,
-	mergeRetainedMessages,
 	prependEditHistory,
 	resolveMessageRowGenerator,
+	toPlainMessageRecord,
 	truncateEditVersion,
 } from "./messageHistoryPresentation";
 
@@ -40,11 +43,80 @@ test("stores changed prior text and retains only the latest ten versions", () =>
 test("keeps only sent, non-ephemeral deleted messages", () => {
 	expect(canRetainDeletedMessage({ flags: 0, state: "SENT" })).toBe(true);
 	expect(canRetainDeletedMessage({ flags: 0, state: "SENT", author: { id: "self" } })).toBe(true);
+	expect(canRetainDeletedMessage({ flags: 0, state: "SENT", author: { id: "1" } })).toBe(false);
 	expect(canRetainDeletedMessage({ flags: 64, state: "SENT" })).toBe(false);
 	expect(canRetainDeletedMessage({ flags: 0, state: "FAILED" })).toBe(false);
 	expect(canRetainDeletedMessage(undefined)).toBe(false);
 	expect(isEphemeralMessage({ flags: 64 })).toBe(true);
 	expect(isEphemeralMessage({ flags: 0 })).toBe(false);
+});
+
+test("replaces only retainable deletes with a full marked message update", () => {
+	const message = {
+		id: "123",
+		channel_id: "456",
+		content: "deleted text",
+		state: "SENT",
+		author: { id: "789" },
+		attachments: [{ id: "a" }],
+	};
+	expect(createDeletedMessageUpdate(message)).toEqual({
+		type: "MESSAGE_UPDATE",
+		message: { ...message, __omniscienceDeleted: true },
+	});
+	expect(createDeletedMessageUpdate({ ...message, state: "SEND_FAILED" })).toBeUndefined();
+	expect(createDeletedMessageUpdate({ ...message, author: { id: "1" } })).toBeUndefined();
+});
+
+test("reads ChannelMessages through its public channel and message getters", () => {
+	const message = { id: "123", content: "cached" };
+	const store = {
+		get(channelId: string) {
+			return channelId === "456" ? {
+				get(messageId: string) {
+					return messageId === "123" ? message : undefined;
+				},
+			} : undefined;
+		},
+	};
+
+	expect(getMessageFromChannelStore(store, "456", "123")).toBe(message);
+	expect(getMessageFromChannelStore(store, "456", "missing")).toBeUndefined();
+	expect(getMessageFromChannelStore({ _channelMessages: { "456": { _array: [message] } } }, "456", "123")).toBe(message);
+});
+
+test("resolves identity from Discord's nested MESSAGE_UPDATE event shape", () => {
+	const details = getMessageUpdateDetails({
+		type: "MESSAGE_UPDATE",
+		message: {
+			id: "123",
+			channel_id: "456",
+			content: "edited",
+			edited_timestamp: "2026-10-24T00:00:00.000Z",
+		},
+	});
+
+	expect(details).toEqual({
+		message: {
+			id: "123",
+			channel_id: "456",
+			content: "edited",
+			edited_timestamp: "2026-10-24T00:00:00.000Z",
+		},
+		channelId: "456",
+		messageId: "123",
+		editedTimestamp: "2026-10-24T00:00:00.000Z",
+	});
+});
+
+test("converts immutable Discord message records before adding logger metadata", () => {
+	const source = {
+		id: "123",
+		toJS: () => ({ id: "123", content: "deleted" }),
+	};
+
+	expect(toPlainMessageRecord(source)).toEqual({ id: "123", content: "deleted" });
+	expect(toPlainMessageRecord(undefined)).toBeUndefined();
 });
 
 test("resolves the message row generator from its default export", () => {
@@ -74,63 +146,7 @@ test("marks an immutable copy so the original store record stays untouched", () 
 	const retained = markDeletedMessage(original);
 
 	expect(retained).not.toBe(original);
-	expect(retained.was_deleted).toBe(true);
+	expect(retained.__omniscienceDeleted).toBe(true);
 	expect(retained.content).toBe(original.content);
-	expect(original).not.toHaveProperty("was_deleted");
-});
-
-test("replaces the matching row and sorts retained records by snowflake", () => {
-	const messages = [{ id: "20", content: "newer" }, { id: "10", content: "older" }];
-	const deleted = { id: "15", content: "retained", was_deleted: true };
-
-	expect(mergeRetainedMessages(messages, [deleted])).toEqual([
-		{ id: "10", content: "older" },
-		deleted,
-		{ id: "20", content: "newer" },
-	]);
-	expect(mergeRetainedMessages([{ id: "15", content: "live" }], [deleted])).toEqual([deleted]);
-});
-
-test("merges retained rows into Discord-style immutable message collections", () => {
-	const createCollection = (messages: { id: string; content: string }[]) => ({
-		_array: messages,
-		hasMoreBefore: false,
-		hasMoreAfter: false,
-		clone() {
-			return createCollection([...this._array]);
-		},
-		merge(additions: readonly { id: string; content: string }[]) {
-			const merged = [...this._array];
-			for (const message of additions) {
-				const index = merged.findIndex((entry) => entry.id === message.id);
-				if (index < 0) merged.push(message);
-				else merged[index] = message;
-			}
-			return createCollection(merged);
-		},
-		mutate(callback: (copy: { _array: { id: string; content: string }[] }) => void) {
-			const copy = { _array: [...this._array] };
-			callback(copy);
-			return createCollection(copy._array);
-		},
-	});
-	const source = createCollection([{ id: "20", content: "newer" }, { id: "10", content: "older" }]);
-	const retained = { id: "15", content: "deleted" };
-	const result = mergeRetainedMessages(source, [retained]) as ReturnType<typeof createCollection>;
-
-	expect(result._array.map(({ id }) => id)).toEqual(["10", "15", "20"]);
-	expect(source._array.map(({ id }) => id)).toEqual(["20", "10"]);
-});
-
-test("does not merge an out-of-window retained row into a paginated result", () => {
-	const source = {
-		_array: [{ id: "20" }, { id: "30" }],
-		hasMoreBefore: true,
-		hasMoreAfter: false,
-		merge() {
-			throw new Error("out-of-window row should not be merged");
-		},
-	};
-
-	expect(mergeRetainedMessages(source, [{ id: "10" }])).toBe(source);
+	expect(original).not.toHaveProperty("__omniscienceDeleted");
 });
