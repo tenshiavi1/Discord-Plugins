@@ -36,4 +36,5 @@ export default {
 		unpatchDeveloperMode = undefined;
 		stopDeveloperModeRetries();
 	},
+	settings: Settings,
 };
