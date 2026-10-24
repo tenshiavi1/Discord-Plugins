@@ -16,3 +16,4 @@
 *.pfx
 *.jks
 *.keystore
+node_modules/
