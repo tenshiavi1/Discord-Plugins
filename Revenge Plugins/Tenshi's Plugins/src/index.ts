@@ -5,9 +5,9 @@ import { settleManagerRestartOnStartup } from "./restartState";
 import Settings from "./settings";
 import { resumeManagerAfterReload } from "./managerNavigation";
 import { enableDeveloperMode, installDeveloperModeGuard, stopDeveloperModeRetries } from "./developerMode";
-import { registerProfileButton } from "./profileButton";
+import { registerPluginSettingsShortcut } from "../../shared/pluginSettings";
 
-let unregisterProfileButton: (() => void) | undefined;
+let unregisterSettingsShortcut: (() => void) | undefined;
 let unpatchCrashCapture: (() => void) | undefined;
 let unpatchDeveloperMode: (() => void) | undefined;
 
@@ -15,9 +15,15 @@ export default {
 	onLoad() {
 		clearStaleAutoFetchState();
 		settleManagerRestartOnStartup();
-		storage.showInProfile ??= storage.showInSettings !== false;
-		delete storage.showInSettings;
-		unregisterProfileButton = registerProfileButton();
+		storage.showInSettings ??= storage.showInProfile !== false;
+		delete storage.showInProfile;
+		unregisterSettingsShortcut = registerPluginSettingsShortcut({
+			id: "tenshi-plugins",
+			title: "Tenshi's Plugins",
+			icon: "ChatCheckIcon",
+			page: Settings,
+			visible: storage.showInSettings !== false,
+		});
 		unpatchCrashCapture = installCrashCapture();
 		unpatchDeveloperMode = installDeveloperModeGuard();
 		enableDeveloperMode();
@@ -28,8 +34,8 @@ export default {
 	},
 	onUnload() {
 		cancelScheduledAutoFetch();
-		unregisterProfileButton?.();
-		unregisterProfileButton = undefined;
+		unregisterSettingsShortcut?.();
+		unregisterSettingsShortcut = undefined;
 		unpatchCrashCapture?.();
 		unpatchCrashCapture = undefined;
 		unpatchDeveloperMode?.();

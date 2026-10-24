@@ -8,6 +8,7 @@ import { showConfirmationAlert } from "@vendetta/ui/alerts";
 import { getAssetIDByName } from "@vendetta/ui/assets";
 import StableTextInput from "../../StableTextInput";
 import { showToast } from "../../shared/toast";
+import { PluginSettingsToggle } from "../../shared/pluginSettings";
 import { MANAGED_PLUGINS, type ManagedPlugin } from "./catalog";
 import { clearManagerActivityFailures, getManagerActivity, recordManagerActivity, type ManagerActivityMetrics, type ManagerActivityRecord, type ManagerActivityStatus } from "./activityLog";
 import { clearLastCrash, getLastCrash } from "./crashLog";
@@ -18,7 +19,7 @@ import { formatAutoFetchProgress } from "./autoFetchGate";
 import { getPendingManagerRestart } from "./restartState";
 import { formatActivityConsoleHeader, formatLatestError, summarizeActivityConsole, type ActivityConsoleAction, type ActivityConsolePhase } from "./activityConsole";
 
-const { TableRow, TableRowGroup, TableSwitchRow } = findByProps("TableRow", "TableRowGroup", "TableSwitchRow");
+const { TableRow, TableRowGroup } = findByProps("TableRow", "TableRowGroup");
 const showSimpleActionSheet = findByProps("showSimpleActionSheet")?.showSimpleActionSheet;
 const hideActionSheet = findByProps("openLazy", "hideActionSheet")?.hideActionSheet;
 
@@ -1023,13 +1024,8 @@ export default function Settings() {
 					/>
 				)}
 			</TableRowGroup>
-			<TableRowGroup title="Profile Button">
-				<TableSwitchRow
-					label="Show in Profile"
-					subLabel="Add a button beside your profile controls to open Tenshi's Plugins."
-					value={storage.showInProfile !== false}
-					onValueChange={(value: boolean) => { storage.showInProfile = value; }}
-				/>
+			<TableRowGroup title="Plugin Settings">
+				<PluginSettingsToggle id="tenshi-plugins" />
 			</TableRowGroup>
 		</RN.ScrollView>
 	);

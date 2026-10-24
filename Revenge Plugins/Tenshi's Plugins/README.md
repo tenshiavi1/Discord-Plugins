@@ -9,7 +9,7 @@ Tenshi's Plugins adds a searchable catalog of published Revenge plugins to Reven
 - Use bulk actions to install, refetch, remove, or clear data. The manager processes itself last.
 - Review the latest 50 manager operations and copy the activity log.
 - The **Auto On** button refetches installed plugins after each Revenge startup or restart. New plugins are never installed automatically.
-- Open Tenshi's Plugins from the button beside your profile controls.
+- Toggle **Show in Settings** to add or remove Tenshi's Plugins from Discord's main Settings screen.
 - Restart Revenge and return to the manager page.
 
 Each installed plugin includes its own crash guard, so fatal JavaScript errors are recorded even when Tenshi's Plugins is not installed. When the manager is present, it also shows crash records and recent attributed fatal errors. The affected plugin applies queued feature disables on its next load; the manager also migrates older recovery records. Use **Copy Latest Error Log** to copy the full diagnostic entry.
