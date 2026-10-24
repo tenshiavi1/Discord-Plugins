@@ -2,20 +2,17 @@ import { instead } from "@vendetta/patcher";
 import { NavigationNative, React, ReactNative as RN } from "@vendetta/metro/common";
 import { storage } from "@vendetta/plugin";
 import { useProxy } from "@vendetta/storage";
+import { getAssetIDByName } from "@vendetta/ui/assets";
 import { find } from "../../compat";
 import Settings from "./settings";
 import { navigateToManager } from "./managerNavigation";
 
-const YOU_BAR_BUTTON_MODULE = 16334;
 const YOU_BAR_BUTTONS_MODULE = 16335;
-const SETTINGS_ICON_MODULE = 6883;
 const YOU_BAR_CONSTANTS_MODULE = 14899;
 const ModuleRequire = globalThis as typeof globalThis & { __r?: (id: number) => any };
 let unpatch: (() => void) | undefined;
 let retryTimer: ReturnType<typeof setInterval> | undefined;
 let warnedUnavailable = false;
-let buttonComponent: any;
-let settingsIcon: any;
 let buttonIconSize = 20;
 
 function moduleExports(id: number) {
@@ -33,11 +30,6 @@ function componentMatches(value: any, names: string[], seen = new Set<object>())
 	return componentMatches(value.type, names, seen) || componentMatches(value.render, names, seen);
 }
 
-function isComponent(value: any): boolean {
-	return typeof value === "function"
-		|| Boolean(value && typeof value === "object" && (typeof value.type === "function" || typeof value.render === "function"));
-}
-
 function exportModule(id: number, names: string[], property?: string) {
 	const direct = moduleExports(id);
 	const hasExport = (candidate: any) => {
@@ -50,7 +42,7 @@ function exportModule(id: number, names: string[], property?: string) {
 				|| componentMatches(source?.default, names)
 				|| names.some((name) => componentMatches(source?.[name], names));
 	};
-	if (direct && (hasExport(direct) || isComponent(direct.default) || isComponent(direct))) return direct;
+	if (direct && hasExport(direct)) return direct;
 	return find((candidate: any) => hasExport(candidate));
 }
 
@@ -73,58 +65,42 @@ function resolveTarget(module: any, key: string) {
 	return typeof component === "function" ? { target, key: targetKey } : undefined;
 }
 
-function getButtonComponent() {
-	if (!buttonComponent) {
-		const direct = moduleExports(YOU_BAR_BUTTON_MODULE);
-		const module = direct && (isComponent(direct.default) || isComponent(direct) || componentMatches(direct, ["YouBarButton"]))
-			? direct
-			: exportModule(YOU_BAR_BUTTON_MODULE, ["YouBarButton"]);
-		const candidate = module?.YouBarButton
-			?? module?.default?.YouBarButton
-			?? module?.default
-			?? module;
-		buttonComponent = isComponent(candidate) ? candidate : undefined;
-	}
-	return buttonComponent;
-}
-
-function getSettingsIcon() {
-	if (!settingsIcon) {
-		const direct = moduleExports(SETTINGS_ICON_MODULE);
-		const module = direct?.SettingsIcon || direct?.default?.SettingsIcon
-			? direct
-			: exportModule(SETTINGS_ICON_MODULE, [], "SettingsIcon");
-		settingsIcon = module?.SettingsIcon ?? module?.default?.SettingsIcon;
-	}
-	return settingsIcon;
-}
-
 function ProfileManagerButton({ hasNameplate }: { hasNameplate: boolean }) {
 	useProxy(storage);
 	const navigation = NavigationNative.useNavigation();
 	if (storage.showInProfile === false) return null;
-	const Button = getButtonComponent();
-	const Icon = getSettingsIcon();
-	if (!Button || !Icon) return null;
-	return React.createElement(Button, {
-		hasNameplate,
-		hasBadge: false,
-		accessibilityLabel: "Open Tenshi's Plugins",
-		onPress: () => {
-			try {
-				if (!navigateToManager(Settings, navigation)) {
-					console.warn("[Tenshi's Plugins] Profile button could not open the manager because navigation is unavailable.");
+	const Pressable = RN.Pressable ?? RN.TouchableOpacity;
+	const icon = getAssetIDByName("SettingsIcon") ?? getAssetIDByName("WrenchIcon");
+	return React.createElement(
+		Pressable,
+		{
+			accessibilityRole: "button",
+			accessibilityLabel: "Open Tenshi's Plugins",
+			onPress: () => {
+				try {
+					if (!navigateToManager(Settings, navigation)) {
+						console.warn("[Tenshi's Plugins] Profile button could not open the manager because navigation is unavailable.");
+					}
+				} catch (error) {
+					console.error("[Tenshi's Plugins] Profile button could not open the manager.", error);
 				}
-			} catch (error) {
-				console.error("[Tenshi's Plugins] Profile button could not open the manager.", error);
-			}
+			},
+			style: {
+				width: buttonIconSize + 24,
+				height: buttonIconSize + 24,
+				alignItems: "center",
+				justifyContent: "center",
+				borderRadius: 16,
+				backgroundColor: hasNameplate ? "#ffffff18" : "#1e1f22",
+			},
 		},
-		icon: React.createElement(Icon, {
-			size: "custom",
-			style: { width: buttonIconSize, height: buttonIconSize },
-			color: hasNameplate ? "white" : undefined,
-		}),
-	});
+		icon
+			? React.createElement(RN.Image, {
+				source: icon,
+				style: { width: buttonIconSize, height: buttonIconSize, tintColor: hasNameplate ? "white" : "#f2f3f5" },
+			})
+			: React.createElement(RN.Text, { style: { color: hasNameplate ? "white" : "#f2f3f5", fontSize: buttonIconSize } }, "⚙"),
+	);
 }
 
 function installButtonPatch() {
@@ -135,9 +111,7 @@ function installButtonPatch() {
 		? directModule
 		: exportModule(YOU_BAR_BUTTONS_MODULE, ["YouBarButtons", "YouBarNotificationsButton"]);
 	const target = directTarget ?? (module && resolveTarget(module, "default"));
-	const Button = getButtonComponent();
-	const Icon = getSettingsIcon();
-	if (!module || !target || !Button || !Icon) {
+	if (!module || !target) {
 		if (!warnedUnavailable) {
 			console.warn("[Tenshi's Plugins] Could not locate Discord's profile-bar button components yet.");
 			warnedUnavailable = true;
@@ -178,7 +152,5 @@ export function registerProfileButton() {
 		retryTimer = undefined;
 		unpatch?.();
 		unpatch = undefined;
-		buttonComponent = undefined;
-		settingsIcon = undefined;
 	};
 }
