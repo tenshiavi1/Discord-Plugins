@@ -79,6 +79,7 @@ const defaults = {
   translateMessagesShowOriginal: false,
   deviceIndicatorsEnabled: false,
   deviceIndicatorDmHeader: true,
+  deviceIndicatorChat: true,
   deviceIndicatorLists: true,
   deviceIndicatorProfiles: true,
   deviceIndicatorHideMobileBadge: true,
@@ -123,6 +124,7 @@ export default {
     initializeDeviceIndicators({
       enabled: storage.enabled !== false && storage.deviceIndicatorsEnabled === true,
       dmHeader: storage.deviceIndicatorDmHeader !== false,
+      chat: storage.deviceIndicatorChat !== false,
       lists: storage.deviceIndicatorLists !== false,
       profiles: storage.deviceIndicatorProfiles !== false,
       hideMobileBadge: storage.deviceIndicatorHideMobileBadge !== false,

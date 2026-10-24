@@ -58,10 +58,11 @@ test("resolves DM recipients and nested profile user props", () => {
 	expect(resolveDeviceUserId({ channel: { recipients: [{ id: "recipient-user" }] } })).toBe("recipient-user");
 	expect(resolveDeviceUserId({ recipientId: "recipient-prop-user" })).toBe("recipient-prop-user");
 	expect(resolveDeviceUserId({ recipient: { id: "recipient-object-user" } })).toBe("recipient-object-user");
+	expect(resolveDeviceUserId({ message: { author: { id: "message-author" } } })).toBe("message-author");
+	expect(resolveDeviceUserId({ author: { id: "author-prop" } })).toBe("author-prop");
 	expect(resolveDeviceUserId({ channel: { recipients: ["one", "two"] } })).toBeUndefined();
 	const profileTree = { props: { children: { props: { user: { id: "profile-user" } } } } };
 	expect(findDeviceUserIdInTree(profileTree)).toBe("profile-user");
-	expect(findDeviceUserIdInTree([{ props: { userId: "array-user" } }])).toBe("array-user");
 });
 
 test("identifies the channel title and action area used for DM indicator placement", () => {

@@ -15,7 +15,7 @@ const { TableRowGroup, TableRow, TableSwitchRow, Stack } = findByProps(
 );
 const { Text } = findByProps("Text", "View");
 const Press = RN.Pressable || RN.TouchableOpacity;
-const SCREENS: [string, string][] = [["dm", "DM"], ["members", "Members"], ["profile", "Profile"]];
+const SCREENS: [string, string][] = [["chat", "Chat"], ["dm", "DM"], ["members", "Members"], ["profile", "Profile"]];
 const DEMOS: Record<string, string>[] = [
 	{ desktop: "online", mobile: "idle" },
 	{ mobile: "online" },
@@ -106,11 +106,34 @@ function PersonRow({ name, color, clients, hideMobile, showDevices }: { name: st
 }
 
 function DevicePreview({ enabled, options }: { enabled: boolean; options: Record<string, boolean> }) {
-	const [screen, setScreen] = React.useState("dm");
+	const [screen, setScreen] = React.useState("chat");
 	const [demo, setDemo] = React.useState(0);
 	const clients = DEMOS[demo % DEMOS.length];
 	const colors = ["#3ba55c", "#eb459e", "#faa61a"];
-	const screenContent = screen === "dm" ? (
+	const screenContent = screen === "chat" ? (
+		<RN.View style={{ paddingVertical: 8 }}>
+			<RN.View style={{ flexDirection: "row", gap: 10, paddingHorizontal: 14, paddingVertical: 6 }}>
+				<PreviewAvatar letter="A" color={colors[0]} clients={{ desktop: "online" }} hideMobile={false} />
+				<RN.View style={{ flex: 1 }}>
+					<RN.View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
+						<Text style={{ color: "#f2f3f5", fontSize: 14, fontWeight: "600" }}>Alex</Text>
+						{enabled && options.chat ? <DeviceBadges clients={clients} /> : null}
+					</RN.View>
+					<Text style={{ color: "#dbdee1", fontSize: 14 }}>Are you coming to the game tonight?</Text>
+				</RN.View>
+			</RN.View>
+			<RN.View style={{ flexDirection: "row", gap: 10, paddingHorizontal: 14, paddingVertical: 6 }}>
+				<PreviewAvatar letter="Y" color="#5865f2" clients={{ mobile: "online" }} hideMobile={false} />
+				<RN.View style={{ flex: 1 }}>
+					<RN.View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
+						<Text style={{ color: "#f2f3f5", fontSize: 14, fontWeight: "600" }}>You</Text>
+						{enabled && options.chat ? <DeviceBadges clients={{ mobile: "online" }} /> : null}
+					</RN.View>
+					<Text style={{ color: "#dbdee1", fontSize: 14 }}>Yes, see you there!</Text>
+				</RN.View>
+			</RN.View>
+		</RN.View>
+	) : screen === "dm" ? (
 		<RN.View style={{ paddingVertical: 8 }}>
 			<RN.View style={{ flexDirection: "row", gap: 10, paddingHorizontal: 14, paddingVertical: 6 }}>
 				<PreviewAvatar letter="A" color={colors[0]} clients={{ desktop: "online" }} hideMobile={false} />
@@ -146,8 +169,8 @@ function DevicePreview({ enabled, options }: { enabled: boolean; options: Record
 	return (
 		<RN.View style={{ gap: 8 }}>
 			<RN.View style={{ overflow: "hidden", borderRadius: 12, borderWidth: 1, borderColor: "#ffffff14", backgroundColor: "#1a1a1e" }}>
-				<PreviewHeader title={screen === "dm" ? "Alex" : screen === "members" ? "general" : "Profile"} user="Alex" clients={clients} options={{ ...options, dmHeader: enabled && screen === "dm" && options.dmHeader, hideMobileBadge: enabled && options.hideMobileBadge }} />
-				<SmoothPreviewSwap revision={`${enabled}:${screen}:${demo}:${options.dmHeader}:${options.lists}:${options.profiles}:${options.hideMobileBadge}`}>{screenContent}</SmoothPreviewSwap>
+				<PreviewHeader title={screen === "dm" ? "Alex" : screen === "members" || screen === "chat" ? "general" : "Profile"} user="Alex" clients={clients} options={{ ...options, dmHeader: enabled && screen === "dm" && options.dmHeader, hideMobileBadge: enabled && options.hideMobileBadge }} />
+				<SmoothPreviewSwap revision={`${enabled}:${screen}:${demo}:${options.dmHeader}:${options.chat}:${options.lists}:${options.profiles}:${options.hideMobileBadge}`}>{screenContent}</SmoothPreviewSwap>
 				<RN.View style={{ height: 48, flexDirection: "row", alignItems: "center", paddingHorizontal: 12, borderTopWidth: 1, borderTopColor: "#ffffff0f" }}><Text style={{ color: "#949ba4", fontSize: 13 }}>Message #{screen === "dm" ? "@Alex" : "general"}</Text></RN.View>
 			</RN.View>
 			<RN.View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 8 }}>
@@ -168,6 +191,7 @@ export default function DeviceIndicatorSettings() {
 	const enabled = storage.enabled !== false && storage.deviceIndicatorsEnabled === true;
 	const options = {
 		dmHeader: storage.deviceIndicatorDmHeader !== false,
+		chat: storage.deviceIndicatorChat !== false,
 		lists: storage.deviceIndicatorLists !== false,
 		profiles: storage.deviceIndicatorProfiles !== false,
 		hideMobileBadge: storage.deviceIndicatorHideMobileBadge !== false,
@@ -177,6 +201,7 @@ export default function DeviceIndicatorSettings() {
 		updateDeviceIndicatorOptions({
 			enabled: storage.enabled !== false && storage.deviceIndicatorsEnabled === true,
 			dmHeader: storage.deviceIndicatorDmHeader !== false,
+			chat: storage.deviceIndicatorChat !== false,
 			lists: storage.deviceIndicatorLists !== false,
 			profiles: storage.deviceIndicatorProfiles !== false,
 			hideMobileBadge: storage.deviceIndicatorHideMobileBadge !== false,
@@ -200,6 +225,7 @@ export default function DeviceIndicatorSettings() {
 				</TableRowGroup>
 				<TableRowGroup title="Show Icons">
 					<TableSwitchRow disabled={!enabled} label="In DMs" subLabel="Next to the name at the top of a direct message." value={options.dmHeader} onValueChange={(value: boolean) => update({ deviceIndicatorDmHeader: value })} />
+					<TableSwitchRow disabled={!enabled} label="In Chat" subLabel="Next to each author's name above their messages." value={options.chat} onValueChange={(value: boolean) => update({ deviceIndicatorChat: value })} />
 					<TableSwitchRow disabled={!enabled} label="In Lists" subLabel="Show indicators in member and friend lists, DM lists, and voice channels." value={options.lists} onValueChange={(value: boolean) => update({ deviceIndicatorLists: value })} />
 					<TableSwitchRow disabled={!enabled} label="On Profiles" subLabel="Next to the name on a profile." value={options.profiles} onValueChange={(value: boolean) => update({ deviceIndicatorProfiles: value })} />
 				</TableRowGroup>

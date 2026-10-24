@@ -65,11 +65,14 @@ function userIdFromValue(value: unknown): string | undefined {
 export function resolveDeviceUserId(props: any, getChannel?: (channelId: string) => any): string | undefined {
 	const direct = userIdFromValue(props?.userId)
 		?? userIdFromValue(props?.user)
+		?? userIdFromValue(props?.author)
 		?? userIdFromValue(props?.recipientId)
 		?? userIdFromValue(props?.recipient)
 		?? userIdFromValue(props?.member?.userId)
 		?? userIdFromValue(props?.member?.user);
 	if (direct) return direct;
+	const messageAuthor = userIdFromValue(props?.message?.author);
+	if (messageAuthor) return messageAuthor;
 	const channel = props?.channel ?? (props?.channelId ? getChannel?.(props.channelId) : null);
 	const recipients = channel?.recipientIds ?? channel?.recipients;
 	if (Array.isArray(recipients) && recipients.length === 1) return userIdFromValue(recipients[0]);
@@ -81,13 +84,6 @@ export function findDeviceUserIdInTree(tree: unknown, getChannel?: (channelId: s
 	function visit(node: any, depth: number): string | undefined {
 		if (!node || depth > 18 || typeof node !== "object" || visited.has(node)) return undefined;
 		visited.add(node);
-		if (Array.isArray(node)) {
-			for (const child of node) {
-				const nestedId = visit(child, depth + 1);
-				if (nestedId) return nestedId;
-			}
-			return undefined;
-		}
 		const userId = resolveDeviceUserId(node.props ?? node, getChannel);
 		if (userId) return userId;
 		const children = node.props?.children ?? node.children;

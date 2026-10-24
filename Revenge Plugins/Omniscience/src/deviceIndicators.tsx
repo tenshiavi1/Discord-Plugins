@@ -8,6 +8,7 @@ import { findDeviceUserIdInTree, isDmChannelTitleNode, isDmListActionContainer, 
 export type DeviceIndicatorOptions = {
 	enabled: boolean;
 	dmHeader: boolean;
+	chat: boolean;
 	lists: boolean;
 	profiles: boolean;
 	hideMobileBadge: boolean;
@@ -40,6 +41,7 @@ let channelStore: any = findByProps("getChannel");
 let options: DeviceIndicatorOptions = {
 	enabled: false,
 	dmHeader: true,
+	chat: true,
 	lists: true,
 	profiles: true,
 	hideMobileBadge: true,
@@ -211,6 +213,18 @@ function placeProfileNameBadge(tree: any, props: any) {
 	);
 }
 
+function placeChatAuthorBadge(tree: any, props: any) {
+	if (!options.enabled || !options.chat || !React || !tree) return tree;
+	const userId = userIdFrom(props);
+	if (!userId) return tree;
+	return React.createElement(
+		RN.View,
+		{ style: { flexDirection: "row", alignItems: "center", gap: 6, flexShrink: 1 } },
+		tree,
+		React.createElement(DeviceBadges, { userId }),
+	);
+}
+
 function wrapProfileNameTree(tree: any, original: (...args: any[]) => any, patchedDisplayName: (...args: any[]) => any) {
 	if (!tree) return tree;
 	let wrapper = profileNameRenderers.get(original);
@@ -292,12 +306,7 @@ function placeBadge(tree: any, props: any, placement: "dmHeader" | "lists") {
 	const userId = userIdFrom(props) ?? findDeviceUserIdInTree(tree, (channelId) => channelStore?.getChannel?.(channelId));
 	let added = false;
 	function visit(node: any, depth: number): any {
-		if (!node || depth > 18 || typeof node !== "object") return node;
-		if (Array.isArray(node)) {
-			const next = node.map((child) => visit(child, depth + 1));
-			return next.some((child, index) => child !== node[index]) ? next : node;
-		}
-		if (!node.props) return node;
+		if (!node || depth > 18 || typeof node !== "object" || !node.props) return node;
 		const nodeProps = node.props;
 		const id = userId ?? userIdFrom(nodeProps);
 		if (!added && id && node.type !== RN.Text && nodeProps.label != null && typeof nodeProps.label !== "string" && typeof nodeProps.label !== "number") {
@@ -367,18 +376,20 @@ function patchProfileDisplayName() {
 	if (!module) return false;
 	const component = resolveComponentTarget(module, "DisplayName");
 	if (!component) return false;
-	const patchKey = "10843:DisplayName:profiles";
+	const patchKey = "10843:DisplayName";
 	const original = component.target[component.key];
 	if (!patched.has(patchKey)) {
 		patched.add(patchKey);
-		unpatches.push(after(component.key, component.target, (args: any[], result: any) =>
-			placeProfileNameBadge(result, args[0] ?? {}),
-		));
+		unpatches.push(after(component.key, component.target, (args: any[], result: any) => {
+			const props = args[0] ?? {};
+			if (options.chat && userIdFrom(props)) return placeChatAuthorBadge(result, props);
+			return placeProfileNameBadge(result, props);
+		}));
 	}
 
 	const profileTarget = resolveComponentTarget(module, "default");
 	const profilePatchKey = "10843:default:profiles";
-	if (profileTarget && !patched.has(profilePatchKey)) {
+	if (options.profiles && profileTarget && !patched.has(profilePatchKey)) {
 		patched.add(profilePatchKey);
 		const patchedDisplayName = component.target[component.key];
 		unpatches.push(after(profileTarget.key, profileTarget.target, (_args: any[], result: any) =>
@@ -457,8 +468,7 @@ function installPatches() {
 			},
 			true,
 		);
-	const profileFound = !options.profiles
-		|| patchProfileDisplayName();
+	const nameFound = (!options.profiles && !options.chat) || patchProfileDisplayName();
 	let listsFound = true;
 	if (options.lists) {
 		const dmListFound = patchComponent(
@@ -478,7 +488,7 @@ function installPatches() {
 		patchAvatar(13920, "default", ["Status"]);
 		patchAvatar(13920, "StatusWithTyping", ["StatusWithTyping"]);
 	}
-	return dmHeaderFound && profileFound && listsFound;
+	return dmHeaderFound && nameFound && listsFound;
 }
 
 function stopPatchRetry() {
@@ -491,7 +501,7 @@ function retryPatches() {
 }
 
 function ensurePatchRetry() {
-	if (!options.enabled || (!options.dmHeader && !options.profiles && !options.lists)) {
+	if (!options.enabled || (!options.dmHeader && !options.chat && !options.profiles)) {
 		stopPatchRetry();
 		return;
 	}
@@ -524,6 +534,7 @@ export function updateDeviceIndicatorOptions(next: Partial<DeviceIndicatorOption
 	options = { ...options, ...next };
 	storage.deviceIndicatorsEnabled = options.enabled;
 	storage.deviceIndicatorDmHeader = options.dmHeader;
+	storage.deviceIndicatorChat = options.chat;
 	storage.deviceIndicatorLists = options.lists;
 	storage.deviceIndicatorProfiles = options.profiles;
 	storage.deviceIndicatorHideMobileBadge = options.hideMobileBadge;
