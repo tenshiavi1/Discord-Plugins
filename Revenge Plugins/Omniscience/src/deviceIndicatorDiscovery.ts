@@ -81,6 +81,13 @@ export function findDeviceUserIdInTree(tree: unknown, getChannel?: (channelId: s
 	function visit(node: any, depth: number): string | undefined {
 		if (!node || depth > 18 || typeof node !== "object" || visited.has(node)) return undefined;
 		visited.add(node);
+		if (Array.isArray(node)) {
+			for (const child of node) {
+				const nestedId = visit(child, depth + 1);
+				if (nestedId) return nestedId;
+			}
+			return undefined;
+		}
 		const userId = resolveDeviceUserId(node.props ?? node, getChannel);
 		if (userId) return userId;
 		const children = node.props?.children ?? node.children;

@@ -292,7 +292,12 @@ function placeBadge(tree: any, props: any, placement: "dmHeader" | "lists") {
 	const userId = userIdFrom(props) ?? findDeviceUserIdInTree(tree, (channelId) => channelStore?.getChannel?.(channelId));
 	let added = false;
 	function visit(node: any, depth: number): any {
-		if (!node || depth > 18 || typeof node !== "object" || !node.props) return node;
+		if (!node || depth > 18 || typeof node !== "object") return node;
+		if (Array.isArray(node)) {
+			const next = node.map((child) => visit(child, depth + 1));
+			return next.some((child, index) => child !== node[index]) ? next : node;
+		}
+		if (!node.props) return node;
 		const nodeProps = node.props;
 		const id = userId ?? userIdFrom(nodeProps);
 		if (!added && id && node.type !== RN.Text && nodeProps.label != null && typeof nodeProps.label !== "string" && typeof nodeProps.label !== "number") {
@@ -486,7 +491,7 @@ function retryPatches() {
 }
 
 function ensurePatchRetry() {
-	if (!options.enabled || (!options.dmHeader && !options.profiles)) {
+	if (!options.enabled || (!options.dmHeader && !options.profiles && !options.lists)) {
 		stopPatchRetry();
 		return;
 	}
