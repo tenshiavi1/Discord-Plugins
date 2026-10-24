@@ -507,10 +507,11 @@ export default function Settings() {
 	};
 
 	const openPluginSettings = (entry: ManagedPlugin) => {
+		const isManager = entry.name === "Tenshi's Plugins";
 		const installed = findInstalledPlugin(entry);
-		if (!installed) return;
+		if (!installed && !isManager) return;
 
-		const PluginSettings = entry.name === "Tenshi's Plugins" ? Settings : getPluginSettings(installed);
+		const PluginSettings = isManager ? Settings : installed ? getPluginSettings(installed) : undefined;
 		if (!PluginSettings) {
 			showToast(`${entry.name} does not provide a settings page.`, getAssetIDByName("Warning"));
 			return;
@@ -563,11 +564,10 @@ export default function Settings() {
 		}
 
 		const options = [];
-		const PluginSettings = installed
-			? entry.name === "Tenshi's Plugins" ? Settings : getPluginSettings(installed)
-			: undefined;
+		const isManager = entry.name === "Tenshi's Plugins";
+		const PluginSettings = isManager ? Settings : installed ? getPluginSettings(installed) : undefined;
 
-		if (PluginSettings && installed) {
+		if (PluginSettings && (installed || isManager)) {
 			options.push({
 				label: "Configure",
 				icon: getAssetIDByName("WrenchIcon"),
