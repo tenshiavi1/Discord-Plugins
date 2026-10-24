@@ -33,6 +33,11 @@ function componentMatches(value: any, names: string[], seen = new Set<object>())
 	return componentMatches(value.type, names, seen) || componentMatches(value.render, names, seen);
 }
 
+function isComponent(value: any): boolean {
+	return typeof value === "function"
+		|| Boolean(value && typeof value === "object" && (typeof value.type === "function" || typeof value.render === "function"));
+}
+
 function exportModule(id: number, names: string[], property?: string) {
 	const direct = moduleExports(id);
 	const hasExport = (candidate: any) => {
@@ -45,7 +50,7 @@ function exportModule(id: number, names: string[], property?: string) {
 				|| componentMatches(source?.default, names)
 				|| names.some((name) => componentMatches(source?.[name], names));
 	};
-	if (direct && hasExport(direct)) return direct;
+	if (direct && (hasExport(direct) || isComponent(direct.default) || isComponent(direct))) return direct;
 	return find((candidate: any) => hasExport(candidate));
 }
 
@@ -70,15 +75,25 @@ function resolveTarget(module: any, key: string) {
 
 function getButtonComponent() {
 	if (!buttonComponent) {
-		const module = exportModule(YOU_BAR_BUTTON_MODULE, ["YouBarButton"]);
-		buttonComponent = module?.default ?? module?.YouBarButton;
+		const direct = moduleExports(YOU_BAR_BUTTON_MODULE);
+		const module = direct && (isComponent(direct.default) || isComponent(direct) || componentMatches(direct, ["YouBarButton"]))
+			? direct
+			: exportModule(YOU_BAR_BUTTON_MODULE, ["YouBarButton"]);
+		const candidate = module?.YouBarButton
+			?? module?.default?.YouBarButton
+			?? module?.default
+			?? module;
+		buttonComponent = isComponent(candidate) ? candidate : undefined;
 	}
 	return buttonComponent;
 }
 
 function getSettingsIcon() {
 	if (!settingsIcon) {
-		const module = exportModule(SETTINGS_ICON_MODULE, [], "SettingsIcon");
+		const direct = moduleExports(SETTINGS_ICON_MODULE);
+		const module = direct?.SettingsIcon || direct?.default?.SettingsIcon
+			? direct
+			: exportModule(SETTINGS_ICON_MODULE, [], "SettingsIcon");
 		settingsIcon = module?.SettingsIcon ?? module?.default?.SettingsIcon;
 	}
 	return settingsIcon;
