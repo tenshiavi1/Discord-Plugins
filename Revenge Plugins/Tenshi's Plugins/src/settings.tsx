@@ -563,7 +563,9 @@ export default function Settings() {
 		}
 
 		const options = [];
-		const PluginSettings = installed ? getPluginSettings(installed) : undefined;
+		const PluginSettings = installed
+			? entry.name === "Tenshi's Plugins" ? Settings : getPluginSettings(installed)
+			: undefined;
 
 		if (PluginSettings && installed) {
 			options.push({
@@ -970,7 +972,7 @@ export default function Settings() {
 										assetNames={["WrenchIcon", "SettingsIcon", "ic_settings_24px"]}
 										fallback="🔧"
 										label={`Open ${entry.name} Settings`}
-										disabled={!PluginSettings || managerBusy}
+										disabled={!PluginSettings}
 										onPress={() => openPluginSettings(entry)}
 									/>
 									<RN.View style={{ width: 8 }} />

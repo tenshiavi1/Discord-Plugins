@@ -1,5 +1,5 @@
 import { after } from "@vendetta/patcher";
-import { React, ReactNative as RN } from "@vendetta/metro/common";
+import { NavigationNative, React, ReactNative as RN } from "@vendetta/metro/common";
 import { storage } from "@vendetta/plugin";
 import { useProxy } from "@vendetta/storage";
 import { find } from "../../compat";
@@ -41,9 +41,11 @@ function exportModule(id: number, names: string[], property?: string) {
 			: candidate;
 		return property
 			? property in Object(source)
-			: componentMatches(source?.default, names) || names.some((name) => componentMatches(source?.[name], names));
+			: componentMatches(source, names)
+				|| componentMatches(source?.default, names)
+				|| names.some((name) => componentMatches(source?.[name], names));
 	};
-	if (direct && (hasExport(direct) || resolveTarget(direct, "default"))) return direct;
+	if (direct && hasExport(direct)) return direct;
 	return find((candidate: any) => hasExport(candidate));
 }
 
@@ -84,6 +86,7 @@ function getSettingsIcon() {
 
 function ProfileManagerButton({ hasNameplate }: { hasNameplate: boolean }) {
 	useProxy(storage);
+	const navigation = NavigationNative.useNavigation();
 	if (storage.showInProfile === false) return null;
 	const Button = getButtonComponent();
 	const Icon = getSettingsIcon();
@@ -93,7 +96,13 @@ function ProfileManagerButton({ hasNameplate }: { hasNameplate: boolean }) {
 		hasBadge: false,
 		accessibilityLabel: "Open Tenshi's Plugins",
 		onPress: () => {
-			if (!navigateToManager(Settings)) console.warn("[Tenshi's Plugins] Profile button could not open the manager.");
+			try {
+				if (!navigateToManager(Settings, navigation)) {
+					console.warn("[Tenshi's Plugins] Profile button could not open the manager because navigation is unavailable.");
+				}
+			} catch (error) {
+				console.error("[Tenshi's Plugins] Profile button could not open the manager.", error);
+			}
 		},
 		icon: React.createElement(Icon, {
 			size: "custom",
@@ -121,8 +130,8 @@ function installButtonPatch() {
 	if (Number.isFinite(size) && size > 0) buttonIconSize = size;
 	try {
 		unpatch = after(target.key, target.target, (args: any[], result: any) => React.createElement(
-			RN.View,
-			{ style: { flexDirection: "row", alignItems: "center", gap: 8 } },
+			Symbol.for("react.fragment"),
+			null,
 			result,
 			React.createElement(ProfileManagerButton, { hasNameplate: Boolean(args[0]?.hasNameplate) }),
 		));

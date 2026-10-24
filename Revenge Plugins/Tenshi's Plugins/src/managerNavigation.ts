@@ -32,15 +32,33 @@ function reloadWithRevengeNativeBridge() {
 	return true;
 }
 
-export function navigateToManager(Settings: React.ComponentType) {
-	const tabsNavigationRef = findByProps("getRootNavigationRef");
-	const navigation = tabsNavigationRef?.getRootNavigationRef?.();
-	if (!navigation || navigation.isReady?.() === false) return false;
+function findStackNavigation(navigation: any) {
+	const visited = new Set<object>();
+	let current = navigation;
+	while (current && typeof current === "object" && !visited.has(current)) {
+		visited.add(current);
+		if (typeof current.push === "function") return current;
+		current = current.getParent?.();
+	}
+	return undefined;
+}
 
-	navigation.navigate("VendettaCustomPage", {
+export function navigateToManager(Settings: React.ComponentType, currentNavigation?: any) {
+	const rootNavigation = currentNavigation
+		?? findByProps("getRootNavigationRef")?.getRootNavigationRef?.();
+	if (!rootNavigation || rootNavigation.isReady?.() === false) return false;
+
+	const page = {
 		title: "Tenshi's Plugins",
 		render: () => React.createElement(Settings),
-	});
+	};
+	const stackNavigation = findStackNavigation(rootNavigation);
+	if (stackNavigation) {
+		stackNavigation.push("VendettaCustomPage", page);
+		return true;
+	}
+	if (typeof rootNavigation.navigate !== "function") return false;
+	rootNavigation.navigate("VendettaCustomPage", page);
 	return true;
 }
 
