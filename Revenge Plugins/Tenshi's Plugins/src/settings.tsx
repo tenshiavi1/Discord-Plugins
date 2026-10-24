@@ -924,9 +924,8 @@ export default function Settings() {
 			<TableRowGroup title="Revenge Plugins">
 				{visiblePlugins.map((entry) => {
 					const installed = findInstalledPlugin(entry);
-					const PluginSettings = installed
-						? entry.name === "Tenshi's Plugins" ? Settings : getPluginSettings(installed)
-						: undefined;
+					const isManager = entry.name === "Tenshi's Plugins";
+					const PluginSettings = isManager ? Settings : installed ? getPluginSettings(installed) : undefined;
 					const isBusy = !!busy[entry.url];
 					const contentWidth = Math.max(0, screenWidth - 60);
 					const titleFontSize = Math.max(
