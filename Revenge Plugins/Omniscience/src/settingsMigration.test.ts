@@ -47,7 +47,7 @@ test("removes retired DM and forwarded message logger settings", () => {
 	expect(storage.omniscienceSettingsVersion).toBe(7);
 });
 
-test("preserves saved edit history while migrating deleted messages", () => {
+test("removes retired logger caches while preserving the account history archive", () => {
 	const storage: Record<string, unknown> = {
 		omniscienceSettingsVersion: 5,
 		keepEditHistory: true,
@@ -64,8 +64,8 @@ test("preserves saved edit history while migrating deleted messages", () => {
 
 	expect(storage.keepEditHistory).toBe(true);
 	expect(storage.messageLoggerEditCount).toBeUndefined();
-	expect(storage.messageLoggerCache).toEqual([{ id: "1", editHistory: [{ content: "old" }] }]);
-	expect(storage.messageLoggerDeletedCache).toEqual([{ id: "2", editHistory: [{ content: "old" }] }]);
+	expect(storage.messageLoggerCache).toBeUndefined();
+	expect(storage.messageLoggerDeletedCache).toBeUndefined();
 	expect(storage.omniscienceMessageHistory).toEqual({
 		deleted: [{ id: "3" }],
 		edits: [{ messageId: "4", versions: [{ content: "old" }] }],
@@ -81,4 +81,17 @@ test("does not overwrite settings after migration", () => {
 	migrateOmniscienceSettings(storage);
 	expect(storage.enabled).toBe(false);
 	expect(storage.wordTrackerEnabled).toBe(true);
+});
+
+test("removes retired logger caches from already-migrated settings", () => {
+	const storage: Record<string, unknown> = {
+		omniscienceSettingsVersion: 7,
+		messageLoggerCache: [{ id: "1" }],
+		messageLoggerDeletedCache: [{ id: "2" }],
+	};
+
+	migrateOmniscienceSettings(storage);
+
+	expect(storage.messageLoggerCache).toBeUndefined();
+	expect(storage.messageLoggerDeletedCache).toBeUndefined();
 });

@@ -11,12 +11,6 @@ import { getAssetIDByName } from "@vendetta/ui/assets";
 import StableTextInput from "../../StableTextInput";
 import { PluginSettingsSection } from "../../shared/pluginSettings";
 import {
-  clearDeletedMessageHistory,
-  clearMessageLoggerCache,
-  setMessageLoggerKeepAfterRestart,
-  setMessageLoggerLimit,
-} from "./chatLogger";
-import {
   clearMessageHistory,
   getMessageEditCount,
   hasMessageHistory,
@@ -1727,7 +1721,6 @@ export function DeletedMessagesSettings() {
           style: "destructive",
           onPress: () => {
             clearMessageHistory(true);
-            clearDeletedMessageHistory();
             showToast(
               "Cleared kept messages and edit history.",
               getAssetIDByName("Check"),
@@ -1797,7 +1790,6 @@ export function DeletedMessagesSettings() {
             subLabel="Deleted and edited messages survive closing Discord. Saved only on this phone, for this account."
             value={keepAfterRestart}
             onValueChange={(value: boolean) => {
-              setMessageLoggerKeepAfterRestart(value);
               setMessageHistoryPersistenceEnabled(value);
               forceUpdate();
             }}
@@ -1810,7 +1802,6 @@ export function DeletedMessagesSettings() {
               value={limit}
               disabled={!storage.keepDeletedMessages}
               onChange={(value: number) => {
-                setMessageLoggerLimit(value);
                 setMessageHistoryLimit(value);
                 forceUpdate();
               }}
@@ -1851,7 +1842,6 @@ export default function Settings() {
               syncMessageHighlightOptions();
               syncTranslationOptions();
               syncDeviceIndicatorOptions();
-              if (!value) clearMessageLoggerCache();
               setMessageHistoryFeatureEnabled(
                 value &&
                   (storage.keepDeletedMessages !== false ||

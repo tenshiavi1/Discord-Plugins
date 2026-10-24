@@ -5,7 +5,6 @@ import { installPluginCrashGuard } from "../../shared/crashGuard";
 import { getAssetIDByName } from "@vendetta/ui/assets";
 import Settings from "./settings";
 import { registerPluginSettingsShortcut } from "../../shared/pluginSettings";
-import { clearMessageLoggerCache, installChatLogger } from "./chatLogger";
 import { linkedEmbedField, parseChannelId, parseDiscordWebhookUrl, toDiscordTimestamp, toEmbedTimestamp, underlineFirstMatch } from "./logFormatting";
 import { removeMessageHistoryPatch, setMessageHistoryFeatureEnabled } from "./messageHistory";
 import { removeMessageHighlightPatch, setMessageHighlightOptions } from "./messageHighlights";
@@ -21,7 +20,7 @@ const registerCrashGuard = () => installPluginCrashGuard("Omniscience", storage,
     { storageKey: "keepEditHistory", patterns: [/MESSAGE_UPDATE|edit.?history/i] },
     { storageKey: "enableServerInfo", patterns: [/server.?info|ServerInfoSheet/i] },
     { storageKey: "deviceIndicatorsEnabled", patterns: [/DeviceBadges|platformIndicators|deviceIndicator/i] },
-    { storageKey: "enabled", patterns: [/installChatLogger|Omniscience.*settings/i] },
+    { storageKey: "enabled", patterns: [/initializeMessageHistory|Omniscience.*settings/i] },
     { storageKey: "showInSettings", patterns: [/registerPluginSettingsShortcut|pluginSettings/i] },
   ],
   fallbackKeys: ["enabled", "showInSettings"],
@@ -97,12 +96,10 @@ if (!Array.isArray(storage.keywords) || !storage.keywords.every((keyword: unknow
 storage.keywords = [...new Set(storage.keywords.map((keyword: string) => keyword.trim()).filter(Boolean))];
 let unsubMessage: (() => void) | null = null;
 let unregisterSettingsShortcut: (() => void) | undefined;
-let removeChatLogger: (() => void) | undefined;
 
 export default {
   onLoad() {
     removeCrashGuard ??= registerCrashGuard();
-    removeChatLogger = installChatLogger();
     setMessageHistoryFeatureEnabled(storage.enabled !== false && (storage.keepDeletedMessages !== false || storage.keepEditHistory !== false));
     setMessageHighlightOptions({
       enabled: storage.enabled !== false && storage.messageHighlightEnabled !== false,
@@ -360,8 +357,6 @@ export default {
   onUnload() {
     removeCrashGuard?.();
     removeCrashGuard = undefined;
-    removeChatLogger?.();
-    removeChatLogger = undefined;
     removeMessageHistoryPatch();
     removeMessageHighlightPatch();
     removeTranslationPatches();

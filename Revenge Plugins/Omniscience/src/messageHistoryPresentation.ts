@@ -3,25 +3,13 @@ export type EditHistoryVersion = { content: string; timestamp?: string };
 export const MAX_EDIT_VERSION_LENGTH = 4000;
 export const MAX_EDIT_VERSIONS = 10;
 
-export function hasEditedTimestamp(message: any) {
-	return Boolean(message?.edited_timestamp ?? message?.editedTimestamp);
-}
-
-export function getEditedMessageUpdate(event: any) {
-	const message = event?.message ?? event;
-	if (
-		!message ||
-		!hasEditedTimestamp(message) ||
-		isEphemeralMessage(message) ||
-		(typeof message.content !== "string" &&
-			!Array.isArray(message.attachments) &&
-			!Array.isArray(message.embeds))
-	) return undefined;
-	return message;
-}
-
 export function isEphemeralMessage(message: any) {
 	return ((Number(message?.flags) || 0) & 64) !== 0;
+}
+
+export function canRetainDeletedMessage(message: { flags?: unknown; state?: unknown } | null | undefined) {
+	if (!message || (message.state != null && message.state !== "SENT")) return false;
+	return !isEphemeralMessage(message);
 }
 
 export function truncateEditVersion(content: string) {
@@ -60,38 +48,6 @@ export function resolveMessageRowGenerator(module: any) {
 	return typeof candidate?.prototype?.generate === "function" ? candidate : undefined;
 }
 
-export function isLegacyEditNotice(message: any) {
-	return typeof message?.omniscienceOriginalMessageId === "string";
-}
-
-export function removeEditedDeletedMessage<T extends { original?: { content?: unknown } }>(
-	messages: Map<string, T>,
-	key: string,
-	editedContent: string,
-) {
-	const deleted = messages.get(key);
-	if (!deleted || typeof deleted.original?.content !== "string" || deleted.original.content === editedContent) return undefined;
-	messages.delete(key);
-	return deleted;
-}
-
-export function removeLegacyEditNotices<T>(collection: T): T {
-	if (!collection) return collection;
-	if (Array.isArray(collection)) return collection.filter((message) => !isLegacyEditNotice(message)) as T;
-	const source = collection as T & {
-		_array?: unknown[];
-		clone?: () => typeof source;
-		mutate?: (callback: (copy: { _array: unknown[] }) => void, force?: boolean) => typeof source;
-	};
-	if (!Array.isArray(source._array) || typeof source.mutate !== "function") return collection;
-	const retained = source._array.filter((message) => !isLegacyEditNotice(message));
-	if (retained.length === source._array.length) return collection;
-	const clone = source.clone;
-	const base = clone ? clone.call(source) : source;
-	if (typeof base.mutate !== "function") return collection;
-	return base.mutate((copy) => { copy._array = retained; }, true) as T;
-}
-
 export function getDeletedMessageHighlight(enabled: boolean, color: string, thickness: number) {
 	return {
 		color: enabled ? color : "#f23f43",
@@ -110,22 +66,11 @@ export function getMessageHighlightType(
 	return undefined;
 }
 
-export function shouldClearHistoryForNewSession(sessionInitialized: boolean, saveAfterRestart: boolean) {
-	return !sessionInitialized && !saveAfterRestart;
-}
-
-
-export function canRetainDeletedMessage(message: { flags?: unknown; state?: unknown } | null | undefined) {
-	if (!message || (message.state != null && message.state !== "SENT")) return false;
-	return ((Number(message.flags) || 0) & 64) === 0;
-}
-
-export function resolveDeletedMessageSource<T extends { flags?: unknown; state?: unknown }>(
-	cached: T | undefined,
-	fallback: T | undefined,
-) {
-	const message = cached ?? fallback;
-	return canRetainDeletedMessage(message) ? message : undefined;
+function compareMessageIds(left: unknown, right: unknown) {
+	const leftId = String((left as { id?: unknown } | null)?.id ?? "");
+	const rightId = String((right as { id?: unknown } | null)?.id ?? "");
+	if (!/^\d+$/.test(leftId) || !/^\d+$/.test(rightId)) return 0;
+	return leftId.length - rightId.length || (leftId === rightId ? 0 : leftId < rightId ? -1 : 1);
 }
 
 export function markDeletedMessage<T extends object>(message: T): T & { was_deleted: boolean } {
@@ -143,13 +88,6 @@ export function markDeletedMessage<T extends object>(message: T): T & { was_dele
 	return retained;
 }
 
-function compareMessageIds(left: unknown, right: unknown) {
-	const leftId = String((left as { id?: unknown } | null)?.id ?? "");
-	const rightId = String((right as { id?: unknown } | null)?.id ?? "");
-	if (!/^\d+$/.test(leftId) || !/^\d+$/.test(rightId)) return 0;
-	return leftId.length - rightId.length || (leftId === rightId ? 0 : leftId < rightId ? -1 : 1);
-}
-
 export function mergeRetainedMessages<T>(collection: T, retained: readonly object[]): T {
 	if (!retained.length || !collection) return collection;
 	if (Array.isArray(collection)) {
@@ -162,6 +100,7 @@ export function mergeRetainedMessages<T>(collection: T, retained: readonly objec
 		}
 		return messages.sort(compareMessageIds) as T;
 	}
+
 	const source = collection as T & {
 		_array?: unknown[];
 		hasMoreBefore?: boolean;
@@ -172,19 +111,18 @@ export function mergeRetainedMessages<T>(collection: T, retained: readonly objec
 	};
 	if (typeof source.merge !== "function") return collection;
 	const firstId = String((source._array?.[0] && (source._array[0] as { id?: unknown }).id) ?? "");
-	const lastMessage = source._array?.[source._array.length - 1] as { id?: unknown } | undefined;
-	const lastId = String(lastMessage?.id ?? "");
+	const lastId = String((source._array?.[source._array.length - 1] as { id?: unknown } | undefined)?.id ?? "");
 	const bounded = /^\d+$/.test(firstId);
 	const inWindow = retained.filter((message) => {
 		const id = String((message as { id?: unknown }).id ?? "");
 		if (!bounded || !/^\d+$/.test(id)) return true;
-		if (id.length - firstId.length < 0 || (id.length === firstId.length && id < firstId)) return source.hasMoreBefore !== true;
-		if (/^\d+$/.test(lastId) && (id.length - lastId.length > 0 || (id.length === lastId.length && id > lastId))) return source.hasMoreAfter !== true;
+		if (compareMessageIds({ id }, { id: firstId }) < 0 && source.hasMoreBefore === true) return false;
+		if (compareMessageIds({ id }, { id: lastId }) > 0 && source.hasMoreAfter === true) return false;
 		return true;
 	});
 	if (!inWindow.length) return collection;
-	const clone = source.clone;
-	const base = clone ? clone.call(source) : source;
+
+	const base = typeof source.clone === "function" ? source.clone() : source;
 	if (typeof base.merge !== "function") return collection;
 	let merged = base.merge(inWindow);
 	if (typeof merged.mutate === "function" && Array.isArray(merged._array)) {

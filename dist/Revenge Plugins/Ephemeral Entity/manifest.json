@@ -1,0 +1,1 @@
+{"name":"Ephemeral Entity","description":"Anonymize all file types uploaded to Discord chats, remove tracking parameters from sent URLs, hide typing status, and leave group DMs silently.","authors":[{"name":"tenshiavi"}],"main":"index.js","vendetta":{"icon":"ic_upload"},"hash":"522a3c925bb2c8431a0e2050ccaf09888195624cbe9293d7cf1751bfaf8bba2e"}

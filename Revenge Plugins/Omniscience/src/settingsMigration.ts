@@ -1,6 +1,8 @@
 const SETTINGS_VERSION = 7;
 
 export function migrateOmniscienceSettings(storage: Record<string, unknown>) {
+	delete storage.messageLoggerCache;
+	delete storage.messageLoggerDeletedCache;
 	if (storage.omniscienceSettingsVersion === SETTINGS_VERSION) return;
 	if (storage.wordTrackerEnabled === undefined) {
 		storage.wordTrackerEnabled = storage.enabled !== false;
