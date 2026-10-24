@@ -1,7 +1,7 @@
 import { findByProps } from "../../compat";
 import { storage } from "@vendetta/plugin";
 import { toEmbedTimestamp } from "./logFormatting";
-import { canRetainDeletedMessage, isEphemeralMessage } from "./messageHistoryPresentation";
+import { getEditedMessageUpdate, isEphemeralMessage, resolveDeletedMessageSource } from "./messageHistoryPresentation";
 
 const FluxDispatcher = findByProps("dispatch", "subscribe", "unsubscribe");
 const snowflakeUtils = findByProps("extractTimestamp");
@@ -167,7 +167,7 @@ export function forgetDeletedMessage(channelId: string, messageId: string) {
 }
 
 function getMessageDate(message: any, fallback = Date.now()): Date {
-  const source = message?.edited_timestamp ?? message?.timestamp;
+  const source = message?.edited_timestamp ?? message?.editedTimestamp ?? message?.timestamp;
   const parsed = source === undefined ? Number.NaN : new Date(source).getTime();
   if (Number.isFinite(parsed)) return new Date(parsed);
   if (
@@ -297,17 +297,10 @@ function onMessageUpdate(event: any) {
     event?.otherPluginBypass
   )
     return;
-  const message = event?.message;
-  if (
-    !message?.edited_timestamp ||
-    isEphemeralMessage(message) ||
-    (typeof message.content !== "string" &&
-      !Array.isArray(message.attachments) &&
-      !Array.isArray(message.embeds))
-  )
-    return;
+  const message = getEditedMessageUpdate(event);
+  if (!message) return;
   const channelId = String(
-    message?.channel_id ?? message?.channelId ?? event?.channelId ?? "",
+    message?.channel_id ?? message?.channelId ?? event?.channel_id ?? event?.channelId ?? "",
   );
   const messageId = String(message?.id ?? event?.id ?? "");
   if (!channelId || !messageId) return;
@@ -331,7 +324,7 @@ export function recordMessageUpdate(event: any) {
   onMessageUpdate(event);
 }
 
-function onMessageDelete(event: any) {
+function onMessageDelete(event: any, fallbackMessage?: any) {
   if (
     storage.enabled === false ||
     storage.keepDeletedMessages === false ||
@@ -342,9 +335,13 @@ function onMessageDelete(event: any) {
   const messageId = String(event?.id ?? "");
   if (!channelId || !messageId) return;
   const cached = findCachedMessage(channelId, messageId);
-  if (!canRetainDeletedMessage(cached)) return;
+  const fallback = fallbackMessage
+    ? makeCachedMessage(fallbackMessage, channelId, cached)
+    : undefined;
+  const source = resolveDeletedMessageSource(cached, fallback);
+  if (!source) return;
 
-  const deletedEntry = { ...cached, deletedAt: new Date().toISOString() };
+  const deletedEntry = { ...source, deletedAt: new Date().toISOString() };
   deletedMessages = [
     ...deletedMessages.filter(
       (entry) =>
@@ -357,8 +354,8 @@ function onMessageDelete(event: any) {
   removeCachedMessage(channelId, messageId);
 }
 
-export function recordMessageDelete(event: any) {
-  onMessageDelete(event);
+export function recordMessageDelete(event: any, fallbackMessage?: any) {
+  onMessageDelete(event, fallbackMessage);
 }
 
 function onMessageDeleteBulk(event: any) {

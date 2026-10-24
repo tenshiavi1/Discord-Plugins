@@ -1,5 +1,5 @@
 import { expect, test } from "bun:test";
-import { appendEditHistoryVersion, canRetainDeletedMessage, getDeletedMessageHighlight, getMessageHighlightType, hasEditedTimestamp, isEphemeralMessage, isLegacyEditNotice, markDeletedMessage, mergeRetainedMessages, prependEditHistory, removeEditedDeletedMessage, removeLegacyEditNotices, resolveMessageRowGenerator, shouldClearHistoryForNewSession, truncateEditVersion } from "./messageHistoryPresentation";
+import { appendEditHistoryVersion, canRetainDeletedMessage, getDeletedMessageHighlight, getEditedMessageUpdate, getMessageHighlightType, hasEditedTimestamp, isEphemeralMessage, isLegacyEditNotice, markDeletedMessage, mergeRetainedMessages, prependEditHistory, removeEditedDeletedMessage, removeLegacyEditNotices, resolveDeletedMessageSource, resolveMessageRowGenerator, shouldClearHistoryForNewSession, truncateEditVersion } from "./messageHistoryPresentation";
 
 test("renders previous edits as plain native quote nodes", () => {
 	const current = [{ type: "text", content: "new text" }];
@@ -33,6 +33,16 @@ test("identifies real edits and rejects ephemeral messages", () => {
 	expect(hasEditedTimestamp({ edited_timestamp: "2026-10-23T00:00:00Z" })).toBe(true);
 	expect(hasEditedTimestamp({ editedTimestamp: "2026-10-23T00:00:00Z" })).toBe(true);
 	expect(hasEditedTimestamp({ edited_timestamp: null })).toBe(false);
+	expect(getEditedMessageUpdate({
+		message: { id: "1", content: "edited", edited_timestamp: "2026-10-23T00:00:00Z" },
+	})?.content).toBe("edited");
+	expect(getEditedMessageUpdate({
+		id: "2", content: "edited", editedTimestamp: "2026-10-23T00:00:00Z",
+	})?.content).toBe("edited");
+	expect(getEditedMessageUpdate({
+		message: { content: "ephemeral edit", editedTimestamp: "2026-10-23T00:00:00Z", flags: 64 },
+	})).toBeUndefined();
+	expect(getEditedMessageUpdate({ message: { content: "not edited" } })).toBeUndefined();
 	expect(isEphemeralMessage({ flags: 64 })).toBe(true);
 	expect(isEphemeralMessage({ flags: 0 })).toBe(false);
 });
@@ -112,6 +122,16 @@ test("retains sent messages but rejects ephemeral and unsent messages", () => {
 	expect(canRetainDeletedMessage({ flags: 64, state: "SENT" })).toBe(false);
 	expect(canRetainDeletedMessage({ flags: 0, state: "FAILED" })).toBe(false);
 	expect(canRetainDeletedMessage(undefined)).toBe(false);
+});
+
+test("uses a Discord-store snapshot when a deleted message was not cached", () => {
+	const storeMessage = { id: "123", content: "present before logger started", flags: 0, state: "SENT" };
+	const cachedMessage = { id: "123", content: "latest cached text", flags: 0, state: "SENT" };
+
+	expect(resolveDeletedMessageSource(undefined, storeMessage)).toBe(storeMessage);
+	expect(resolveDeletedMessageSource(cachedMessage, storeMessage)).toBe(cachedMessage);
+	expect(resolveDeletedMessageSource(undefined, { ...storeMessage, flags: 64 })).toBeUndefined();
+	expect(resolveDeletedMessageSource(undefined, { ...storeMessage, state: "FAILED" })).toBeUndefined();
 });
 
 test("marks a copy as deleted without mutating the stored message", () => {

@@ -378,7 +378,7 @@ function installDeleteActionPatch() {
 			persistMessageHistory();
 		};
 		const complete = (value: any) => {
-			recordMessageDelete({ channelId, id: messageId });
+			recordMessageDelete({ channelId, id: messageId }, originalMessage);
 			persistMessageHistory();
 			return value;
 		};
@@ -425,7 +425,10 @@ function dispatchWithHistory(args: unknown[], original: (...args: any[]) => any)
 		const channelId = String(event.channelId ?? event.channel_id ?? "");
 		const messageId = String(event.id ?? "");
 		if (!channelId || !messageId) return original(...args);
-		recordMessageDelete({ ...event, channelId, id: messageId });
+		recordMessageDelete(
+			{ ...event, channelId, id: messageId },
+			getStoredMessage(channelId, messageId),
+		);
 		const update = createRetainedMessageUpdate(channelId, messageId);
 		if (!update) return original(...args);
 		try {
@@ -456,7 +459,7 @@ function dispatchWithHistory(args: unknown[], original: (...args: any[]) => any)
 				remaining.push(rawId);
 				continue;
 			}
-			recordMessageDelete({ channelId, id: messageId });
+			recordMessageDelete({ channelId, id: messageId }, update.message);
 			try {
 				original(update);
 				persistMessageHistory();

@@ -7,6 +7,19 @@ export function hasEditedTimestamp(message: any) {
 	return Boolean(message?.edited_timestamp ?? message?.editedTimestamp);
 }
 
+export function getEditedMessageUpdate(event: any) {
+	const message = event?.message ?? event;
+	if (
+		!message ||
+		!hasEditedTimestamp(message) ||
+		isEphemeralMessage(message) ||
+		(typeof message.content !== "string" &&
+			!Array.isArray(message.attachments) &&
+			!Array.isArray(message.embeds))
+	) return undefined;
+	return message;
+}
+
 export function isEphemeralMessage(message: any) {
 	return ((Number(message?.flags) || 0) & 64) !== 0;
 }
@@ -105,6 +118,14 @@ export function shouldClearHistoryForNewSession(sessionInitialized: boolean, sav
 export function canRetainDeletedMessage(message: { flags?: unknown; state?: unknown } | null | undefined) {
 	if (!message || (message.state != null && message.state !== "SENT")) return false;
 	return ((Number(message.flags) || 0) & 64) === 0;
+}
+
+export function resolveDeletedMessageSource<T extends { flags?: unknown; state?: unknown }>(
+	cached: T | undefined,
+	fallback: T | undefined,
+) {
+	const message = cached ?? fallback;
+	return canRetainDeletedMessage(message) ? message : undefined;
 }
 
 export function markDeletedMessage<T extends object>(message: T): T & { was_deleted: boolean } {
