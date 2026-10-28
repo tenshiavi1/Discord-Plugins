@@ -40,7 +40,10 @@ declare module "@vendetta/metro/common" {
 	export const NavigationNative: { useNavigation(): any };
 	export const clipboard: { getString(): Promise<string>; setString(value: string): void };
 	export const constants: Record<string, any>;
-	export const toasts: any;
+	export const toasts: {
+		open(key: string, options: { text: string }): void;
+		openMana?: (key: string, options: { text: string; icon?: number }) => void;
+	};
 }
 
 declare module "@vendetta/commands" {
@@ -81,13 +84,6 @@ declare module "@vendetta/ui/alerts" {
 
 declare module "@vendetta/ui/assets" {
 	export function getAssetIDByName(name: string): any;
-}
-
-declare module "@revenge-mod/discord/actions" {
-	export const ToastActionCreators: {
-		open(key: string, options: { text: string }): void;
-		openMana?: (key: string, options: { text: string; icon?: number }) => void;
-	};
 }
 
 declare module "@vendetta/utils" {
