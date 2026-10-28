@@ -22,7 +22,8 @@ for (const pluginName of pluginDirectories) {
 
   const bundle = await rollup({
     input: resolve(pluginPath, manifest.main),
-    external: (id) => id === "@vendetta" || id.startsWith("@vendetta/") || id === "react",
+    external: (id) => id === "@vendetta" || id.startsWith("@vendetta/")
+      || id === "@revenge-mod/discord/actions" || id === "react",
     plugins: [
       nodeResolve({ extensions }),
       commonjs(),
@@ -64,6 +65,7 @@ for (const pluginName of pluginDirectories) {
     globals(id) {
       if (id === "@vendetta") return "vendetta";
       if (id.startsWith("@vendetta/")) return id.slice(1).replaceAll("/", ".");
+      if (id === "@revenge-mod/discord/actions") return "revenge.discord.actions";
       if (id === "react") return "window.React";
       return id;
     },

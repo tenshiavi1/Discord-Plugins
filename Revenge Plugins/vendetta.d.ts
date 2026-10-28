@@ -83,8 +83,11 @@ declare module "@vendetta/ui/assets" {
 	export function getAssetIDByName(name: string): any;
 }
 
-declare module "@vendetta/ui/toasts" {
-	export function showToast(message: string, icon?: any): void;
+declare module "@revenge-mod/discord/actions" {
+	export const ToastActionCreators: {
+		open(key: string, options: { text: string }): void;
+		openMana?: (key: string, options: { text: string; icon?: number }) => void;
+	};
 }
 
 declare module "@vendetta/utils" {
